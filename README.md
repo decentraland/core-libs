@@ -8,7 +8,7 @@ This repository is organized as a monorepo using pnpm workspaces with the follow
 
 ```
 core-libs/
-├── libraries/
+├── libs/
 │   ├── http-commons/    # Common middlewares and utils for HTTP Servers
 ```
 
