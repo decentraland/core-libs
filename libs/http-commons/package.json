@@ -1,6 +1,6 @@
 {
   "name": "@dcl/http-commons",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "http server common utils",
   "author": "Decentraland",
   "license": "Apache-2.0",
