@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'crypto'
 import { IHttpServerComponent } from '@well-known-components/interfaces'
 import { NotAuthorizedError } from '../../errors'
 
@@ -5,6 +6,8 @@ export function bearerTokenMiddleware(authSecret: string) {
   if (!authSecret) {
     throw new Error('Bearer token middleware requires a secret')
   }
+
+  const secretBuffer = Buffer.from(authSecret)
 
   return async function (
     ctx: IHttpServerComponent.DefaultContext<any>,
@@ -16,7 +19,8 @@ export function bearerTokenMiddleware(authSecret: string) {
     }
 
     const [type, value] = header.split(' ')
-    if (type !== 'Bearer' || value !== authSecret) {
+    const valueBuffer = Buffer.from(value ?? '')
+    if (type !== 'Bearer' || valueBuffer.length !== secretBuffer.length || !timingSafeEqual(valueBuffer, secretBuffer)) {
       throw new NotAuthorizedError('Invalid authorization header')
     }
 
