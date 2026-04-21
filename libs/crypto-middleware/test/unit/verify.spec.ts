@@ -1,9 +1,9 @@
 import { AuthChain, AuthIdentity, AuthLinkType, Authenticator } from '@dcl/crypto'
 import { IFetchComponent } from '@well-known-components/interfaces'
-import createAuthChainHeaders from '../../src/createAuthChainHeader'
+import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import RequestError from '../../src/errors'
 import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER, DEFAULT_EXPIRATION } from '../../src/types'
-import verifyAuthChainHeaders, { isEIP1664AuthChain, verifyEIP1654Sign, verifyPersonalSign } from '../../src/verify'
+import verifyAuthChainHeaders, { isEIP1654AuthChain, verifyEIP1654Sign, verifyPersonalSign } from '../../src/verify'
 
 const identity: AuthIdentity = {
   ephemeralIdentity: {
@@ -28,28 +28,28 @@ const identity: AuthIdentity = {
   ]
 }
 
-const authChainEIP1664: AuthChain = [
+const authChainEIP1654: AuthChain = [
   { type: AuthLinkType.SIGNER, payload: '', signature: '' },
   { type: AuthLinkType.ECDSA_EIP_1654_EPHEMERAL, payload: '', signature: '' },
   { type: AuthLinkType.ECDSA_EIP_1654_SIGNED_ENTITY, payload: '', signature: '' }
 ]
 
-describe('isEIP1664AuthChain', () => {
+describe('isEIP1654AuthChain', () => {
   describe('when the auth chain is EIP-1654', () => {
     it('should return true', () => {
-      expect(isEIP1664AuthChain(authChainEIP1664)).toBe(true)
+      expect(isEIP1654AuthChain(authChainEIP1654)).toBe(true)
     })
   })
 
   describe('when the auth chain is a personal signature chain', () => {
     it('should return false', () => {
-      expect(isEIP1664AuthChain(identity.authChain)).toBe(false)
+      expect(isEIP1654AuthChain(identity.authChain)).toBe(false)
     })
   })
 
   describe('when the auth chain is empty', () => {
     it('should return false', () => {
-      expect(isEIP1664AuthChain([])).toBe(false)
+      expect(isEIP1654AuthChain([])).toBe(false)
     })
   })
 })

@@ -13,6 +13,8 @@ import {
   VerifyAuthChainHeadersOptions
 } from './types'
 import { DecentralandStrategy } from './strategy'
+import RequestError from './errors'
+import createAuthChainHeaders from './createAuthChainHeaders'
 import verify from './verify'
 
 export {
@@ -25,11 +27,13 @@ export {
   AUTH_TIMESTAMP_HEADER,
   AUTH_METADATA_HEADER,
   DecentralandStrategy,
+  RequestError,
+  createAuthChainHeaders,
   verify
 }
 
 function errorToResponse(err: any, options: Pick<Options, 'onError'>): { status: number; body: any } {
-  const status = err?.statusCode || err?.status || 500
+  const status = err?.statusCode ?? err?.status ?? 500
   const onError = options.onError ?? DEFAULT_ERROR_FORMAT
   return { status, body: onError(err) }
 }

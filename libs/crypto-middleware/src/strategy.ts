@@ -18,11 +18,14 @@ export class DecentralandStrategy extends Strategy {
       Object.assign(req, data)
       this.pass()
     } catch (err: any) {
-      const requestError = err as RequestError
-      if (!merged.optional) {
-        this.fail(requestError.message, requestError.statusCode)
-      } else {
+      if (merged.optional) {
         this.pass()
+        return
+      }
+      if (err instanceof RequestError) {
+        this.fail(err.message, err.statusCode)
+      } else {
+        this.error(err)
       }
     }
   }

@@ -9,7 +9,7 @@ import {
   verifySign,
   verifyTimestamp
 } from '../../src/verify'
-import createAuthChainHeaders from '../../src/createAuthChainHeader'
+import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER, DEFAULT_EXPIRATION } from '../../src/types'
 import RequestError from '../../src/errors'
 
@@ -74,6 +74,16 @@ describe('extractAuthChain', () => {
       expect(() => extractAuthChain({})).toThrow('Invalid Auth Chain')
     })
   })
+
+  describe('when the number of chain headers exceeds the maximum', () => {
+    it('should throw an Auth chain exceeds maximum length error', () => {
+      const headers: Record<string, string> = {}
+      for (let i = 0; i <= 10; i++) {
+        headers[AUTH_CHAIN_HEADER_PREFIX + i] = '{"type":"SIGNER","payload":"0x1","signature":""}'
+      }
+      expect(() => extractAuthChain(headers)).toThrow('Auth chain exceeds maximum length')
+    })
+  })
 })
 
 describe('verifyTimestamp', () => {
@@ -124,6 +134,24 @@ describe('verifyMetadata', () => {
   describe('when the value is malformed JSON', () => {
     it('should throw an Invalid chain metadata error', () => {
       expect(() => verifyMetadata('{')).toThrow('Invalid chain metadata')
+    })
+  })
+
+  describe('when the value is a JSON primitive', () => {
+    it('should throw an Invalid chain metadata error', () => {
+      expect(() => verifyMetadata('42')).toThrow('Invalid chain metadata')
+    })
+  })
+
+  describe('when the value is a JSON array', () => {
+    it('should throw an Invalid chain metadata error', () => {
+      expect(() => verifyMetadata('[1,2]')).toThrow('Invalid chain metadata')
+    })
+  })
+
+  describe('when the value is null', () => {
+    it('should throw an Invalid chain metadata error', () => {
+      expect(() => verifyMetadata('null')).toThrow('Invalid chain metadata')
     })
   })
 })

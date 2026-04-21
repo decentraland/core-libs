@@ -120,14 +120,29 @@ describe('DecentralandStrategy.authenticate', () => {
   })
 
   describe('when verify rejects with a non-RequestError', () => {
-    it('should call fail() with the error message and undefined status', async () => {
+    it('should call error() with the original error instead of fail()', async () => {
       const strategy = buildStrategy()
-      mockVerify.mockRejectedValueOnce(new Error('opaque'))
+      const err = new Error('opaque')
+      mockVerify.mockRejectedValueOnce(err)
 
       await strategy.authenticate(buildRequest(), {})
 
-      expect(strategy.fail).toHaveBeenCalledWith('opaque', undefined)
+      expect(strategy.error).toHaveBeenCalledWith(err)
+      expect(strategy.fail).not.toHaveBeenCalled()
       expect(strategy.pass).not.toHaveBeenCalled()
+    })
+
+    describe('and the strategy is optional', () => {
+      it('should call pass() without surfacing the error', async () => {
+        const strategy = buildStrategy({ optional: true })
+        mockVerify.mockRejectedValueOnce(new Error('opaque'))
+
+        await strategy.authenticate(buildRequest(), {})
+
+        expect(strategy.pass).toHaveBeenCalled()
+        expect(strategy.error).not.toHaveBeenCalled()
+        expect(strategy.fail).not.toHaveBeenCalled()
+      })
     })
   })
 })

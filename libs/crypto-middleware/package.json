@@ -27,18 +27,21 @@
   ],
   "dependencies": {
     "@dcl/crypto": "^3.4.5",
-    "@well-known-components/interfaces": "^1.4.3",
-    "passport-strategy": "^1.0.0"
+    "@well-known-components/interfaces": "^1.4.3"
   },
   "peerDependencies": {
     "express": "^4.0.0 || ^5.0.0",
-    "koa": "^2.0.0"
+    "koa": "^2.0.0",
+    "passport-strategy": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "express": {
       "optional": true
     },
     "koa": {
+      "optional": true
+    },
+    "passport-strategy": {
       "optional": true
     }
   },
@@ -50,6 +53,7 @@
     "@well-known-components/fetch-component": "^2.0.2",
     "express": "^4.18.2",
     "koa": "^2.13.3",
+    "passport-strategy": "^1.0.0",
     "typescript": "^5.3.3"
   },
   "engines": {

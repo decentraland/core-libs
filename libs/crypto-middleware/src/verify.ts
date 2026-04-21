@@ -10,7 +10,9 @@ import {
   VerifyAuthChainHeadersOptions
 } from './types'
 
-export function isEIP1664AuthChain(authChain: AuthChain) {
+const MAX_CHAIN_LENGTH = 10
+
+export function isEIP1654AuthChain(authChain: AuthChain) {
   switch (authChain.length) {
     case 2:
     case 3:
@@ -21,20 +23,21 @@ export function isEIP1664AuthChain(authChain: AuthChain) {
 }
 
 export function extractAuthChain(headers: Record<string, string | string[] | undefined>) {
-  let index = 0
   const chain: AuthChain = []
-  while (headers[AUTH_CHAIN_HEADER_PREFIX + index]) {
-    try {
-      const item = Array.isArray(headers[AUTH_CHAIN_HEADER_PREFIX + index])
-        ? (headers[AUTH_CHAIN_HEADER_PREFIX + index] as string[])[0]
-        : (headers[AUTH_CHAIN_HEADER_PREFIX + index] as string)
+  for (let index = 0; index < MAX_CHAIN_LENGTH; index++) {
+    const raw = headers[AUTH_CHAIN_HEADER_PREFIX + index]
+    if (!raw) break
 
+    const item = Array.isArray(raw) ? raw[0] : raw
+    try {
       chain.push(JSON.parse(item))
     } catch (err: any) {
       throw new RequestError(`Invalid chain format: ${err.message}`, 400)
     }
+  }
 
-    index++
+  if (headers[AUTH_CHAIN_HEADER_PREFIX + MAX_CHAIN_LENGTH]) {
+    throw new RequestError(`Auth chain exceeds maximum length of ${MAX_CHAIN_LENGTH}`, 400)
   }
 
   if (chain.length <= 1) {
@@ -45,6 +48,9 @@ export function extractAuthChain(headers: Record<string, string | string[] | und
 }
 
 export async function verifyPersonalSign(authChain: AuthChain, payload: string) {
+  // The third argument is an HTTPProvider used for contract-wallet (EIP-1654) validation.
+  // Personal signatures don't need one; EIP-1654 chains are routed to verifyEIP1654Sign
+  // instead, which hits the catalyst. Cast silences the typed-provider requirement.
   const verification = await Authenticator.validateSignature(payload, authChain, null as any)
 
   if (!verification.ok) {
@@ -78,10 +84,9 @@ export async function verifyEIP1654Sign(
     throw new RequestError(`Error connecting to catalyst "${catalyst.origin}": ${err.message}`, 503)
   }
 
-  let body = ''
   let verification: { ownerAddress: string; valid: boolean }
   try {
-    body = await response.text()
+    const body = await response.text()
     const parsed = JSON.parse(body)
     if (
       !parsed ||
@@ -93,7 +98,7 @@ export async function verifyEIP1654Sign(
     }
     verification = parsed
   } catch (err: any) {
-    throw new RequestError(`Invalid response from catalyst "${catalyst.origin}": ${body} (${err.message})`, 503)
+    throw new RequestError(`Invalid response from catalyst "${catalyst.origin}": ${err.message}`, 503)
   }
 
   if (!verification.valid || verification.ownerAddress.toLowerCase() !== ownerAddress) {
@@ -108,7 +113,7 @@ export function verifySign(
   payload: string,
   options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher'> = {}
 ) {
-  if (isEIP1664AuthChain(authChain)) {
+  if (isEIP1654AuthChain(authChain)) {
     return verifyEIP1654Sign(authChain, payload, options)
   }
 
@@ -125,11 +130,18 @@ export function verifyTimestamp(value?: string | string[]) {
 }
 
 export function verifyMetadata(value?: string | string[]): Record<string, any> {
+  let parsed: unknown
   try {
-    return JSON.parse(value ? String(value) : '{}')
+    parsed = JSON.parse(value ? String(value) : '{}')
   } catch (err: any) {
     throw new RequestError(`Invalid chain metadata: "${value}"`, 400)
   }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new RequestError(`Invalid chain metadata: "${value}"`, 400)
+  }
+
+  return parsed as Record<string, any>
 }
 
 export function verifyExpiration(
