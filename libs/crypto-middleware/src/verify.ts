@@ -15,6 +15,24 @@ function firstOf(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
+// Truncates user-supplied fragments echoed into error messages. Prevents unbounded
+// growth of response bodies and limits the size of any attacker-controlled bytes
+// that may appear in log lines or HTML-rendered error views.
+function safe(value: unknown, max = 64): string {
+  const s = typeof value === 'string' ? value : String(value ?? '')
+  return s.length > max ? s.slice(0, max) + '…' : s
+}
+
+function isValidAuthLink(value: unknown): value is { type: string; payload: string; signature: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as any).type === 'string' &&
+    typeof (value as any).payload === 'string' &&
+    typeof (value as any).signature === 'string'
+  )
+}
+
 export function isEIP1654AuthChain(authChain: AuthChain) {
   switch (authChain.length) {
     case 2:
@@ -34,11 +52,18 @@ export function extractAuthChain(
     const raw = firstOf(headers[AUTH_CHAIN_HEADER_PREFIX + index])
     if (!raw) break
 
+    let parsed: unknown
     try {
-      chain.push(JSON.parse(raw))
+      parsed = JSON.parse(raw)
     } catch (err: any) {
-      throw new RequestError(`Invalid chain format: ${err.message}`, 400)
+      throw new RequestError(`Invalid chain format: ${safe(err.message)}`, 400)
     }
+
+    if (!isValidAuthLink(parsed)) {
+      throw new RequestError(`Invalid chain format: malformed auth link at position ${index}`, 400)
+    }
+
+    chain.push(parsed as AuthChain[number])
   }
 
   if (headers[AUTH_CHAIN_HEADER_PREFIX + maxChainLength]) {
@@ -83,11 +108,15 @@ export async function verifyEIP1654Sign(
     body: JSON.stringify({ authChain, timestamp: payload })
   }
 
-  let response: { text: () => Promise<string> }
+  let response: { ok: boolean; status: number; text: () => Promise<string> }
   try {
     response = options.fetcher ? await options.fetcher.fetch(url, init as any) : await fetch(url, init)
   } catch (err: any) {
     throw new RequestError(`Error connecting to catalyst "${catalyst.origin}": ${err.message}`, 503)
+  }
+
+  if (!response.ok) {
+    throw new RequestError(`Catalyst "${catalyst.origin}" returned HTTP ${response.status}`, 503)
   }
 
   let verification: { ownerAddress: string; valid: boolean }
@@ -127,24 +156,26 @@ export function verifySign(
 }
 
 export function verifyTimestamp(value?: string | string[]) {
-  const timestamp = Number(value || '0')
-  if (value && !Number.isFinite(timestamp)) {
-    throw new RequestError(`Invalid chain timestamp: ${value}`, 400)
+  const raw = firstOf(value)
+  const timestamp = Number(raw || '0')
+  if (raw && !Number.isFinite(timestamp)) {
+    throw new RequestError(`Invalid chain timestamp: ${safe(raw)}`, 400)
   }
 
   return timestamp
 }
 
 export function verifyMetadata(value?: string | string[]): Record<string, any> {
+  const raw = firstOf(value)
   let parsed: unknown
   try {
-    parsed = JSON.parse(value ? String(value) : '{}')
+    parsed = JSON.parse(raw ?? '{}')
   } catch (err: any) {
-    throw new RequestError(`Invalid chain metadata: "${value}"`, 400)
+    throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new RequestError(`Invalid chain metadata: "${value}"`, 400)
+    throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 
   return parsed as Record<string, any>
@@ -161,6 +192,15 @@ export function verifyExpiration(
       `Expired signature: signature timestamp: ${timestamp}, timestamp expiration: ${
         timestamp + expiration
       }, local timestamp: ${now}`,
+      401
+    )
+  }
+  // Guard against timestamps that are so far in the future that the signature effectively
+  // never expires. A legitimate signer's clock should not be more than one expiration
+  // window ahead of the server.
+  if (timestamp > now + expiration) {
+    throw new RequestError(
+      `Signature timestamp is too far in the future: signature timestamp: ${timestamp}, local timestamp: ${now}`,
       401
     )
   }

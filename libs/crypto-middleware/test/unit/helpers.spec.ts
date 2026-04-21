@@ -62,6 +62,36 @@ describe('extractAuthChain', () => {
     })
   })
 
+  describe('when a chain header parses to null', () => {
+    it('should throw an Invalid chain format error', () => {
+      const headers = {
+        [AUTH_CHAIN_HEADER_PREFIX + '0']: 'null',
+        [AUTH_CHAIN_HEADER_PREFIX + '1']: '{"type":"ECDSA_SIGNED_ENTITY","payload":"p","signature":"s"}'
+      }
+      expect(() => extractAuthChain(headers)).toThrow(/malformed auth link/)
+    })
+  })
+
+  describe('when a chain header parses to a primitive', () => {
+    it('should throw an Invalid chain format error', () => {
+      const headers = {
+        [AUTH_CHAIN_HEADER_PREFIX + '0']: '42',
+        [AUTH_CHAIN_HEADER_PREFIX + '1']: '{"type":"ECDSA_SIGNED_ENTITY","payload":"p","signature":"s"}'
+      }
+      expect(() => extractAuthChain(headers)).toThrow(/malformed auth link/)
+    })
+  })
+
+  describe('when a chain header parses to an object missing expected fields', () => {
+    it('should throw an Invalid chain format error', () => {
+      const headers = {
+        [AUTH_CHAIN_HEADER_PREFIX + '0']: '{"type":"SIGNER","payload":"0x1"}',
+        [AUTH_CHAIN_HEADER_PREFIX + '1']: '{"type":"ECDSA_SIGNED_ENTITY","payload":"p","signature":"s"}'
+      }
+      expect(() => extractAuthChain(headers)).toThrow(/malformed auth link/)
+    })
+  })
+
   describe('when only a single chain entry is present', () => {
     it('should throw an Invalid Auth Chain error', () => {
       const headers = { [AUTH_CHAIN_HEADER_PREFIX + '0']: '{"type":"SIGNER","payload":"0x1","signature":""}' }
@@ -143,8 +173,8 @@ describe('verifyTimestamp', () => {
   })
 
   describe('when the value is a multi-element array', () => {
-    it('should throw an Invalid chain timestamp error', () => {
-      expect(() => verifyTimestamp(['1', '2'])).toThrow('Invalid chain timestamp')
+    it('should use the first element', () => {
+      expect(verifyTimestamp(['1', '2'])).toBe(1)
     })
   })
 })
@@ -185,6 +215,25 @@ describe('verifyMetadata', () => {
       expect(() => verifyMetadata('null')).toThrow('Invalid chain metadata')
     })
   })
+
+  describe('when the value is a multi-element array', () => {
+    it('should only consider the first element', () => {
+      expect(verifyMetadata(['{"a":1}', 'ignored'])).toEqual({ a: 1 })
+    })
+  })
+
+  describe('when the attacker-supplied value is longer than the truncation cap', () => {
+    it('should truncate the echoed bytes in the error message', () => {
+      const long = 'x'.repeat(200)
+      try {
+        verifyMetadata(long)
+        fail('should have thrown')
+      } catch (err: any) {
+        expect(err.message.length).toBeLessThan(long.length)
+        expect(err.message).toContain('…')
+      }
+    })
+  })
 })
 
 describe('verifyExpiration', () => {
@@ -203,6 +252,24 @@ describe('verifyExpiration', () => {
   describe('when a custom expiration value is provided', () => {
     it('should apply the custom window', () => {
       expect(() => verifyExpiration(Date.now() - 100, { expiration: 50 })).toThrow('Expired signature')
+    })
+  })
+
+  describe('when the timestamp is more than one expiration window in the future', () => {
+    it('should throw a too far in the future error', () => {
+      expect(() => verifyExpiration(Date.now() + 2 * DEFAULT_EXPIRATION)).toThrow('too far in the future')
+    })
+  })
+
+  describe('when the timestamp is close to Number.MAX_VALUE', () => {
+    it('should reject instead of accepting a signature that never expires', () => {
+      expect(() => verifyExpiration(Number.MAX_VALUE)).toThrow('too far in the future')
+    })
+  })
+
+  describe('when the timestamp is slightly in the future within the expiration window', () => {
+    it('should accept the signature', () => {
+      expect(() => verifyExpiration(Date.now() + 1000, { expiration: 60000 })).not.toThrow()
     })
   })
 })
@@ -274,6 +341,8 @@ describe('verifySign', () => {
     it('should delegate to verifyEIP1654Sign and hit the catalyst', async () => {
       const fetcher = { fetch: jest.fn() } as unknown as IFetchComponent
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: true, ownerAddress: '0x1' })
       })
 

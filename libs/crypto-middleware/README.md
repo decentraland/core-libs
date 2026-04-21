@@ -103,6 +103,16 @@ app.get(
 wellKnownComponents({ onError: (err) => ({ ok: false, message: err.message, cause: String(err) }) })
 ```
 
+4xx messages are returned as-is because they include information that helps the client correct its request. User-supplied fragments echoed into those messages (e.g. the raw timestamp or metadata string that failed to parse) are truncated at 64 characters to bound response size and limit the impact of header-based injection payloads. Consumers should still **never** render error-response bodies as HTML — they are JSON by default and any renderer that interprets them as markup is responsible for its own escaping.
+
+## Threat model and operational notes
+
+- **`options.catalyst` must be trusted configuration.** It is passed through to `new URL(...)` and used as the outbound destination for signature verification. Accepting this value from end-user input (query strings, request bodies, etc.) opens an SSRF vector — a client could direct the server at arbitrary internal hosts. Pin it in startup config and treat it like a database connection string.
+
+- **Incoming request size is bounded by the HTTP server, not by this library.** Keep `maxHeaderSize` / `maxHeadersCount` on your HTTP server set to sensible values. `extractAuthChain` caps at `DEFAULT_MAX_CHAIN_LENGTH = 10` entries per request; the `maxChainLength` option lets you tighten this further. `verifyMetadata` parses the metadata header value via `JSON.parse`; depth/shape validation beyond "must be an object" is the consumer's responsibility via `metadataValidator`.
+
+- **Case-insensitive payload normalization is a known protocol property.** The canonical Decentraland signed-fetch payload is `(method + ':' + path + ':' + timestamp + ':' + metadata).toLowerCase()`. Two requests whose metadata or path differ only in case produce the same signed payload and therefore share the same valid signature — but the consumer receives the header bytes as delivered, not the lowercased version. A TLS-terminating intermediary could flip case in the metadata header without invalidating the signature. Consumer code that relies on `metadata` fields being case-sensitive (user-supplied IDs, arbitrary strings) should normalize case inside `metadataValidator` or downstream, or reject any metadata whose canonical representation differs from what was signed.
+
 ## Migration
 
 ### From `decentraland-crypto-middleware`

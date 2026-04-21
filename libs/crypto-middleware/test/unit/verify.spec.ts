@@ -83,6 +83,8 @@ describe('verifyEIP1654Sign', () => {
       const chain = Authenticator.signPayload(identity, payload)
       const ownerAddress = identity.authChain[0].payload.toLowerCase()
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: true, ownerAddress })
       })
 
@@ -96,6 +98,8 @@ describe('verifyEIP1654Sign', () => {
       const chain = Authenticator.signPayload(identity, payload)
       const ownerAddress = identity.authChain[0].payload.toLowerCase()
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: true, ownerAddress })
       })
 
@@ -122,6 +126,8 @@ describe('verifyEIP1654Sign', () => {
       const chain = Authenticator.signPayload(identity, payload)
       const ownerAddress = identity.authChain[0].payload.toLowerCase()
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: true, ownerAddress })
       })
 
@@ -149,6 +155,8 @@ describe('verifyEIP1654Sign', () => {
       const chain = Authenticator.signPayload(identity, payload)
       const ownerAddress = identity.authChain[0].payload.toLowerCase()
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: true, ownerAddress })
       })
 
@@ -160,6 +168,8 @@ describe('verifyEIP1654Sign', () => {
   describe('when the catalyst reports the signature as invalid', () => {
     it('should reject with an Invalid signature error', async () => {
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: false, ownerAddress: '0x0' })
       })
 
@@ -179,9 +189,27 @@ describe('verifyEIP1654Sign', () => {
     })
   })
 
+  describe('when the catalyst returns a non-2xx HTTP status', () => {
+    it('should reject with a 503 without parsing the body', async () => {
+      const textSpy = jest.fn().mockResolvedValue(JSON.stringify({ valid: true, ownerAddress: '0x0' }))
+      ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: textSpy
+      })
+
+      const payload = '0123456789'
+      const chain = Authenticator.signPayload(identity, payload)
+      await expect(verifyEIP1654Sign(chain, payload, { fetcher })).rejects.toThrow(/returned HTTP 502/)
+      expect(textSpy).not.toHaveBeenCalled()
+    })
+  })
+
   describe('when the catalyst responds with invalid JSON', () => {
     it('should reject with an Invalid response from catalyst error', async () => {
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => 'not-json'
       })
 
@@ -194,6 +222,8 @@ describe('verifyEIP1654Sign', () => {
   describe('when the catalyst responds with null', () => {
     it('should reject with an Invalid response from catalyst error', async () => {
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => 'null'
       })
 
@@ -206,6 +236,8 @@ describe('verifyEIP1654Sign', () => {
   describe('when the catalyst responds with a non-object JSON value', () => {
     it('should reject with an Invalid response from catalyst error', async () => {
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => '42'
       })
 
@@ -218,6 +250,8 @@ describe('verifyEIP1654Sign', () => {
   describe('when the catalyst response is missing expected fields', () => {
     it('should reject with an Invalid response from catalyst error', async () => {
       ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         text: async () => JSON.stringify({ valid: true })
       })
 
