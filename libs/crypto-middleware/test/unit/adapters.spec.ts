@@ -93,6 +93,45 @@ describe('express adapter', () => {
 
         expect(res.status).toHaveBeenCalledWith(500)
       })
+
+      it('should sanitize the response body to hide internal detail', async () => {
+        mockVerify.mockRejectedValueOnce(new Error('opaque internal detail'))
+
+        await express()(req, res, next)
+
+        expect(res.send).toHaveBeenCalledWith({ ok: false, message: 'Internal error' })
+      })
+    })
+
+    describe('and the error statusCode is 0', () => {
+      it('should fall back to status 500 rather than propagate an invalid code', async () => {
+        mockVerify.mockRejectedValueOnce(new RequestError('weird', 0))
+
+        await express()(req, res, next)
+
+        expect(res.status).toHaveBeenCalledWith(500)
+      })
+    })
+
+    describe('and the error statusCode is out of HTTP range', () => {
+      it('should fall back to status 500', async () => {
+        mockVerify.mockRejectedValueOnce(new RequestError('weird', 999))
+
+        await express()(req, res, next)
+
+        expect(res.status).toHaveBeenCalledWith(500)
+      })
+    })
+
+    describe('and the error is a 5xx RequestError', () => {
+      it('should sanitize the default response body', async () => {
+        mockVerify.mockRejectedValueOnce(new RequestError('catalyst at secret.internal:5000 is down', 503))
+
+        await express()(req, res, next)
+
+        expect(res.status).toHaveBeenCalledWith(503)
+        expect(res.send).toHaveBeenCalledWith({ ok: false, message: 'Internal error' })
+      })
     })
   })
 })

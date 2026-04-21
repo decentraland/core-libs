@@ -77,14 +77,31 @@ app.get(
 
 ## Options
 
-| Name                | Type                                         | Description                                                                                               |
-| ------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `optional`          | `boolean`                                    | If `true`, requests without a valid signature fall through silently. Default: `false`.                    |
-| `expiration`        | `number`                                     | Time in milliseconds a signature stays valid. Default: `60_000`.                                          |
+| Name                | Type                                         | Description                                                                                                    |
+| ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `optional`          | `boolean`                                    | If `true`, requests without a valid signature fall through silently. Default: `false`.                         |
+| `expiration`        | `number`                                     | Time in milliseconds a signature stays valid. Default: `60_000`.                                               |
 | `catalyst`          | `string`                                     | Catalyst URL used to validate contract wallet (EIP-1654) signatures. Default: `https://peer.decentraland.org`. |
-| `fetcher`           | `IFetchComponent`                            | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                       |
-| `metadataValidator` | `(metadata: P) => boolean`                   | Runs before signature verification. Return `false` to reject the request with a 400.                      |
-| `onError`           | `(err) => any`                               | Formats the response body on failure. Default: `{ ok: false, message: err.message }`.                     |
+| `fetcher`           | `IFetchComponent`                            | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                            |
+| `maxChainLength`    | `number`                                     | Maximum number of `x-identity-auth-chain-*` headers accepted. Default: `10`.                                   |
+| `metadataValidator` | `(metadata: P) => boolean`                   | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.         |
+| `onError`           | `(err: Error) => any`                        | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.  |
+
+## Metadata handling
+
+`metadataValidator` is the library's only structural guard on the `x-identity-metadata` header — `verify()` itself only checks that the value is JSON-parseable and shaped as an object (not a primitive, not an array, not `null`). Consumers are responsible for:
+
+- **Size.** HTTP servers cap total header size (commonly 8–32 KB), which bounds input, but nothing prevents a pathological JSON object within that budget.
+- **Shape.** If `P` has required fields, assert them inside `metadataValidator` — the type parameter is a contract, not a runtime check. The parsed value is cast, not validated.
+- **Sensitive keys.** `JSON.parse` produces `__proto__` / `constructor` as own properties (not as actual prototype mutations), so there is no direct prototype-pollution vector through this library. Consumer code that later spreads or `Object.assign`s the metadata into other objects should still be aware that these keys may be present.
+
+## Error format
+
+`DEFAULT_ERROR_FORMAT` emits `{ ok: false, message: 'Internal error' }` for status codes `>= 500` and `{ ok: false, message: err.message }` for client-side errors (`< 500`). The sanitization avoids echoing upstream catalyst hostnames, response bodies, or unexpected internal messages to the client. Consumers that prefer full-fidelity errors (for observability tooling, trusted internal APIs, etc.) should provide their own `onError`:
+
+```ts
+wellKnownComponents({ onError: (err) => ({ ok: false, message: err.message, cause: String(err) }) })
+```
 
 ## Migration
 

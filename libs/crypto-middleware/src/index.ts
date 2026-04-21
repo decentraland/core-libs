@@ -33,7 +33,8 @@ export {
 }
 
 function errorToResponse(err: any, options: Pick<Options, 'onError'>): { status: number; body: any } {
-  const status = err?.statusCode ?? err?.status ?? 500
+  const raw = err?.statusCode ?? err?.status
+  const status = typeof raw === 'number' && Number.isInteger(raw) && raw >= 100 && raw < 600 ? raw : 500
   const onError = options.onError ?? DEFAULT_ERROR_FORMAT
   return { status, body: onError(err) }
 }

@@ -7,10 +7,13 @@ import {
   DecentralandSignatureData,
   DEFAULT_CATALYST,
   DEFAULT_EXPIRATION,
+  DEFAULT_MAX_CHAIN_LENGTH,
   VerifyAuthChainHeadersOptions
 } from './types'
 
-const MAX_CHAIN_LENGTH = 10
+function firstOf(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
 
 export function isEIP1654AuthChain(authChain: AuthChain) {
   switch (authChain.length) {
@@ -22,22 +25,24 @@ export function isEIP1654AuthChain(authChain: AuthChain) {
   }
 }
 
-export function extractAuthChain(headers: Record<string, string | string[] | undefined>) {
+export function extractAuthChain(
+  headers: Record<string, string | string[] | undefined>,
+  maxChainLength: number = DEFAULT_MAX_CHAIN_LENGTH
+) {
   const chain: AuthChain = []
-  for (let index = 0; index < MAX_CHAIN_LENGTH; index++) {
-    const raw = headers[AUTH_CHAIN_HEADER_PREFIX + index]
+  for (let index = 0; index < maxChainLength; index++) {
+    const raw = firstOf(headers[AUTH_CHAIN_HEADER_PREFIX + index])
     if (!raw) break
 
-    const item = Array.isArray(raw) ? raw[0] : raw
     try {
-      chain.push(JSON.parse(item))
+      chain.push(JSON.parse(raw))
     } catch (err: any) {
       throw new RequestError(`Invalid chain format: ${err.message}`, 400)
     }
   }
 
-  if (headers[AUTH_CHAIN_HEADER_PREFIX + MAX_CHAIN_LENGTH]) {
-    throw new RequestError(`Auth chain exceeds maximum length of ${MAX_CHAIN_LENGTH}`, 400)
+  if (headers[AUTH_CHAIN_HEADER_PREFIX + maxChainLength]) {
+    throw new RequestError(`Auth chain exceeds maximum length of ${maxChainLength}`, 400)
   }
 
   if (chain.length <= 1) {
@@ -48,9 +53,10 @@ export function extractAuthChain(headers: Record<string, string | string[] | und
 }
 
 export async function verifyPersonalSign(authChain: AuthChain, payload: string) {
-  // The third argument is an HTTPProvider used for contract-wallet (EIP-1654) validation.
-  // Personal signatures don't need one; EIP-1654 chains are routed to verifyEIP1654Sign
-  // instead, which hits the catalyst. Cast silences the typed-provider requirement.
+  // SAFETY: `@dcl/crypto` types the third argument as HTTPProvider but accepts null at
+  // runtime for personal-signature verification (no contract call needed). EIP-1654
+  // chains — which do require a provider for contract-wallet validation — are routed
+  // to `verifyEIP1654Sign` (catalyst-based) and never reach this path.
   const verification = await Authenticator.validateSignature(payload, authChain, null as any)
 
   if (!verification.ok) {
@@ -166,7 +172,7 @@ export function createPayload(
   rawTimestamp: string | string[] | undefined,
   rawMetadata: string | string[] | undefined
 ) {
-  return [method, path, rawTimestamp, rawMetadata].join(':').toLowerCase()
+  return [method, path, firstOf(rawTimestamp), firstOf(rawMetadata)].join(':').toLowerCase()
 }
 
 export default async function verify<P extends Record<string, any> = Record<string, any>>(
@@ -175,15 +181,18 @@ export default async function verify<P extends Record<string, any> = Record<stri
   headers: Record<string, string | string[] | undefined>,
   options: VerifyAuthChainHeadersOptions<P> = {}
 ): Promise<DecentralandSignatureData<P>> {
-  const authChain = extractAuthChain(headers)
+  const authChain = extractAuthChain(headers, options.maxChainLength)
   const timestamp = verifyTimestamp(headers[AUTH_TIMESTAMP_HEADER])
+
+  // Fail fast on expired signatures — avoids invoking a user-supplied metadataValidator
+  // and the catalyst round-trip for replayed / stale requests.
+  verifyExpiration(timestamp, options)
+
   const metadata = verifyMetadata(headers[AUTH_METADATA_HEADER]) as P
 
   if (options.metadataValidator && !options.metadataValidator(metadata)) {
     throw new RequestError(`Invalid metadata content: ${JSON.stringify(metadata)}`, 400)
   }
-
-  verifyExpiration(timestamp, options)
 
   const payload = createPayload(method, path, headers[AUTH_TIMESTAMP_HEADER], headers[AUTH_METADATA_HEADER])
   const ownerAddress = await verifySign(authChain, payload, options)

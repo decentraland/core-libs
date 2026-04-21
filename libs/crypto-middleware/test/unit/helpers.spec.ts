@@ -75,13 +75,44 @@ describe('extractAuthChain', () => {
     })
   })
 
-  describe('when the number of chain headers exceeds the maximum', () => {
+  describe('when the number of chain headers exceeds the default maximum', () => {
     it('should throw an Auth chain exceeds maximum length error', () => {
       const headers: Record<string, string> = {}
       for (let i = 0; i <= 10; i++) {
         headers[AUTH_CHAIN_HEADER_PREFIX + i] = '{"type":"SIGNER","payload":"0x1","signature":""}'
       }
-      expect(() => extractAuthChain(headers)).toThrow('Auth chain exceeds maximum length')
+      expect(() => extractAuthChain(headers)).toThrow('Auth chain exceeds maximum length of 10')
+    })
+  })
+
+  describe('when the number of chain headers equals the default maximum', () => {
+    it('should accept the chain without throwing', () => {
+      const headers: Record<string, string> = {}
+      for (let i = 0; i < 10; i++) {
+        headers[AUTH_CHAIN_HEADER_PREFIX + i] = '{"type":"SIGNER","payload":"0x1","signature":""}'
+      }
+      expect(extractAuthChain(headers)).toHaveLength(10)
+    })
+  })
+
+  describe('when a custom maxChainLength is provided', () => {
+    it('should honor the lower cap', () => {
+      const headers: Record<string, string> = {}
+      for (let i = 0; i < 5; i++) {
+        headers[AUTH_CHAIN_HEADER_PREFIX + i] = '{"type":"SIGNER","payload":"0x1","signature":""}'
+      }
+      expect(() => extractAuthChain(headers, 3)).toThrow('Auth chain exceeds maximum length of 3')
+    })
+  })
+
+  describe('when a chain header arrives as a multi-valued array', () => {
+    it('should use the first value', () => {
+      const headers = {
+        [AUTH_CHAIN_HEADER_PREFIX + '0']: ['{"type":"SIGNER","payload":"0x1","signature":""}', 'ignored'],
+        [AUTH_CHAIN_HEADER_PREFIX + '1']: '{"type":"ECDSA_SIGNED_ENTITY","payload":"p","signature":"s"}'
+      }
+      const chain = extractAuthChain(headers)
+      expect(chain[0].payload).toBe('0x1')
     })
   })
 })
@@ -186,6 +217,12 @@ describe('createPayload', () => {
   describe('when some values are undefined', () => {
     it('should treat undefined values as empty strings', () => {
       expect(createPayload('get', '/p', undefined, '{}')).toBe('get:/p::{}')
+    })
+  })
+
+  describe('when a header value arrives as a multi-valued array', () => {
+    it('should use only the first value for the payload', () => {
+      expect(createPayload('get', '/p', ['123', 'extra'], '{}')).toBe('get:/p:123:{}')
     })
   })
 })

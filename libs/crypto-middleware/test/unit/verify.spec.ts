@@ -413,6 +413,36 @@ describe('verifyAuthChainHeaders', () => {
           })
         ).rejects.toThrow('a custom error')
       })
+
+      it('should not invoke the metadataValidator when the signature is already expired', async () => {
+        const timestamp = 0
+        const metadata = { signer: 'a signer' }
+        const method = 'get'
+        const path = '/path/to/resource'
+        const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+        const chain = Authenticator.signPayload(identity, payload)
+        const headers = createAuthChainHeaders(chain, timestamp, metadata)
+        const metadataValidator = jest.fn().mockReturnValue(true)
+
+        await expect(
+          verifyAuthChainHeaders(method, path, headers, { fetcher, metadataValidator })
+        ).rejects.toThrow('Expired signature')
+
+        expect(metadataValidator).not.toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe('when a custom maxChainLength option is provided', () => {
+    it('should throw when the chain exceeds the custom cap', async () => {
+      const fetcher = { fetch: jest.fn() } as unknown as IFetchComponent
+      const headers: Record<string, string> = {}
+      for (let i = 0; i < 5; i++) {
+        headers[AUTH_CHAIN_HEADER_PREFIX + i] = '{"type":"SIGNER","payload":"0x1","signature":""}'
+      }
+      await expect(
+        verifyAuthChainHeaders('get', '/p', headers, { fetcher, maxChainLength: 3 })
+      ).rejects.toThrow('Auth chain exceeds maximum length of 3')
     })
   })
 })
