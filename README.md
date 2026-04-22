@@ -10,6 +10,7 @@ This repository is organized as a monorepo using pnpm workspaces with the follow
 core-libs/
 ├── libs/
 │   ├── http-commons/        # Common middlewares and utils for HTTP Servers
+│   ├── crypto/              # Crypto auth primitives for Decentraland
 │   ├── crypto-middleware/   # Multi-framework authentication middleware for Decentraland signed requests
 ```
 
@@ -18,6 +19,10 @@ core-libs/
 ### HTTP Server Commons
 
 - **HTTP Commons** (`@dcl/http-server-commons`) - Middlewares and utilities for HTTP Servers
+
+### Crypto
+
+- **Crypto** (`@dcl/crypto`) - Crypto auth primitives for Decentraland: `Authenticator`, signature validation, and auth-chain helpers
 
 ### Crypto Middleware
 
@@ -98,6 +103,7 @@ Testing is configured with Jest and `ts-jest` for TypeScript support. The config
 This project uses [Changesets](https://github.com/changesets/changesets) for automated version management and publishing to npm. All packages are published under the `@dcl` scope:
 
 - `@dcl/http-server-commons`
+- `@dcl/crypto`
 - `@dcl/crypto-middleware`
 
 ### Publishing Workflow
