@@ -1,5 +1,5 @@
 ---
-"@dcl/crypto": minor
+"@dcl/crypto": patch
 "@dcl/crypto-middleware": patch
 ---
 
