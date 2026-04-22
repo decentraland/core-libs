@@ -1,0 +1,35 @@
+{
+  "name": "decentraland-crypto-fetch",
+  "version": "1.0.0",
+  "description": "Make requests signed using a Decentraland Identity",
+  "author": "Decentraland",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "echo \"No linting configured\""
+  },
+  "keywords": [
+    "fetch",
+    "http",
+    "signed",
+    "decentraland"
+  ],
+  "dependencies": {
+    "@dcl/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@dcl/eslint-config": "^2.4.3",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
