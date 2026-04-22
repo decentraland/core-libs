@@ -8,20 +8,36 @@ import {
   ECDSA_PERSONAL_EPHEMERAL_VALIDATOR,
   getEphemeralSignatureType
 } from '../../src/Authenticator'
+import { SignatureValidator } from '../../src/contracts/SignatureValidator'
 import { AuthChain, AuthLink, AuthLinkType, IdentityType } from '../../src/types'
 import { moveMinutes } from '../../src/helper/utils'
 
+jest.mock('../../src/contracts/SignatureValidator', () => ({
+  SignatureValidator: jest.fn()
+}))
+
 jest.setTimeout(999999)
+
+// ERC1654 isValidSignature magic value: bytes4(keccak256("isValidSignature(bytes32,bytes)")).
+// Returned by a contract wallet to indicate that a signature is valid.
+const ERC1654_MAGIC_VALUE_BYTES = new Uint8Array([0x16, 0x26, 0xba, 0x7e])
 
 describe('Authenticator', () => {
   let mainnetProvider: HTTPProvider
+  let isValidSignatureMock: jest.Mock
 
   beforeEach(() => {
     mainnetProvider = new HTTPProvider(process.env.ETHEREUM_MAINNET_RPC || '', { fetch: fetch as any })
-    mainnetProvider.debug = true
+    // Default: contract rejects the signature. EIP-1654 tests override this
+    // with the magic value to simulate a contract wallet that accepts it.
+    isValidSignatureMock = jest.fn().mockResolvedValue(new Uint8Array())
+    ;(SignatureValidator as jest.Mock).mockResolvedValue({
+      isValidSignature: isValidSignatureMock
+    })
   })
 
   afterEach(() => {
+    jest.resetAllMocks()
     jest.useRealTimers()
   })
 
@@ -78,6 +94,7 @@ describe('Authenticator', () => {
 
       beforeEach(() => {
         jest.useFakeTimers({ doNotFake: ['performance'] }).setSystemTime(0)
+        isValidSignatureMock.mockResolvedValue(ERC1654_MAGIC_VALUE_BYTES)
         entityId = 'QmUsqJaHc5HQaBrojhBdjF4fr5MQc6CqhwZjqwhVRftNAo'
         chain = [
           {
@@ -114,6 +131,7 @@ describe('Authenticator', () => {
       let validationTimestamp: number
 
       beforeEach(() => {
+        isValidSignatureMock.mockResolvedValue(ERC1654_MAGIC_VALUE_BYTES)
         entityId = 'QmXXYddXKWVGFMEgtGoPMCu6dbJ35TyYR4AkDHw9mUc1s1'
         validationTimestamp = 1581680328512
         chain = [
@@ -152,6 +170,7 @@ describe('Authenticator', () => {
 
       beforeEach(() => {
         jest.useFakeTimers({ doNotFake: ['performance'] }).setSystemTime(0)
+        isValidSignatureMock.mockResolvedValue(ERC1654_MAGIC_VALUE_BYTES)
         ephemeral = '0x1F19d3EC0BE294f913967364c1D5B416e6A74555'
         authority = '0x3B21028719a4ACa7EBee35B0157a6F1B0cF0d0c5'
         authLink = {
@@ -198,6 +217,7 @@ describe('Authenticator', () => {
       let validationTimestamp: number
 
       beforeEach(() => {
+        isValidSignatureMock.mockResolvedValue(ERC1654_MAGIC_VALUE_BYTES)
         entityId = 'QmNUd7Cyoo9CREGsACkvBrQSb3KjhWX379FVsdjTCGsTAz'
         validationTimestamp = 1584541612291
         chain = Authenticator.createSimpleAuthChain(
@@ -222,6 +242,7 @@ describe('Authenticator', () => {
 
       beforeEach(() => {
         jest.useFakeTimers({ doNotFake: ['performance'] }).setSystemTime(0)
+        isValidSignatureMock.mockResolvedValue(ERC1654_MAGIC_VALUE_BYTES)
         ephemeral = '0xD8364d36F41f3B609a32e204f12D168Eb1d1a00b'
         authority = '0xe30bb5d5ed06f3871e084ebd5e6e5f17edd91dfc'
         dateToValidateExpirationInMillis = 1663082280997
@@ -250,6 +271,7 @@ describe('Authenticator', () => {
 
       beforeEach(() => {
         jest.useFakeTimers({ doNotFake: ['performance'] }).setSystemTime(0)
+        isValidSignatureMock.mockResolvedValue(ERC1654_MAGIC_VALUE_BYTES)
         ephemeral = '0x1F19d3EC0BE294f913967364c1D5B416e6A74555'
         authority = '0x3B21028719a4ACa7EBee35B0157a6F1B0cF0d0c5'
         authLink = {
