@@ -14,7 +14,8 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "test": "jest",
-    "lint": "echo \"No linting configured\""
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
   },
   "keywords": [
     "decentraland",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@dcl/eslint-config": "^2.4.3",
+    "eslint": "^8.57.1",
     "eth-crypto": "^2.3.0",
     "node-fetch": "^2.7.0",
     "@types/node-fetch": "^2.6.12",

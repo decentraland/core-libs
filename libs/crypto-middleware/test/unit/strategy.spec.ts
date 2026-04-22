@@ -1,14 +1,13 @@
-import type { Request } from 'express'
 import RequestError from '../../src/errors'
+import { passport } from '../../src/index'
+import { DecentralandStrategy } from '../../src/strategy'
+import verify from '../../src/verify'
+import type { Request } from 'express'
 
 jest.mock('../../src/verify', () => ({
   __esModule: true,
   default: jest.fn()
 }))
-
-import verify from '../../src/verify'
-import { DecentralandStrategy } from '../../src/strategy'
-import { passport } from '../../src/index'
 
 const mockVerify = verify as unknown as jest.Mock
 
@@ -50,8 +49,8 @@ describe('DecentralandStrategy.authenticate', () => {
       await strategy.authenticate(req, {})
 
       expect(mockVerify).toHaveBeenCalledWith('GET', '/api/user', {}, {})
-      expect((req as any).auth).toBe('0xabc')
-      expect((req as any).authMetadata).toEqual({ a: 1 })
+      expect((req as unknown as Record<string, unknown>).auth).toBe('0xabc')
+      expect((req as unknown as Record<string, unknown>).authMetadata).toEqual({ a: 1 })
       expect(strategy.pass).toHaveBeenCalled()
       expect(strategy.fail).not.toHaveBeenCalled()
     })

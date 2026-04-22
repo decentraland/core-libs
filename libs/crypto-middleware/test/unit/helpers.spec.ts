@@ -1,6 +1,14 @@
+import type { IFetchComponent } from '@well-known-components/interfaces'
 import { AuthLinkType } from '@dcl/crypto'
 import type { AuthChain } from '@dcl/crypto'
-import type { IFetchComponent } from '@well-known-components/interfaces'
+import createAuthChainHeaders from '../../src/createAuthChainHeaders'
+import RequestError from '../../src/errors'
+import {
+  AUTH_CHAIN_HEADER_PREFIX,
+  AUTH_METADATA_HEADER,
+  AUTH_TIMESTAMP_HEADER,
+  DEFAULT_EXPIRATION
+} from '../../src/types'
 import {
   createPayload,
   extractAuthChain,
@@ -9,9 +17,6 @@ import {
   verifySign,
   verifyTimestamp
 } from '../../src/verify'
-import createAuthChainHeaders from '../../src/createAuthChainHeaders'
-import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER, DEFAULT_EXPIRATION } from '../../src/types'
-import RequestError from '../../src/errors'
 
 describe('RequestError', () => {
   describe('when constructed with a message and a status code', () => {
@@ -228,9 +233,11 @@ describe('verifyMetadata', () => {
       try {
         verifyMetadata(long)
         fail('should have thrown')
-      } catch (err: any) {
-        expect(err.message.length).toBeLessThan(long.length)
-        expect(err.message).toContain('…')
+      } catch (err) {
+        expect(err).toBeInstanceOf(Error)
+        const message = (err as Error).message
+        expect(message.length).toBeLessThan(long.length)
+        expect(message).toContain('…')
       }
     })
   })

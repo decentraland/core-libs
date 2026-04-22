@@ -1,4 +1,5 @@
-import { AuthIdentity, AuthLinkType, Authenticator } from '@dcl/crypto'
+import type { AuthIdentity } from '@dcl/crypto'
+import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import signedFetchFactory from '../../src/signedFetchFactory'
 
 const identity: AuthIdentity = {
@@ -25,16 +26,16 @@ const identity: AuthIdentity = {
 }
 
 describe('signedFetchFactory', () => {
-  let fetchMock: jest.Mock
+  let fetchMock: jest.MockedFunction<typeof fetch>
 
   beforeEach(() => {
-    fetchMock = jest.fn().mockResolvedValue(new Response('ok'))
+    fetchMock = jest.fn().mockResolvedValue(new Response('ok')) as jest.MockedFunction<typeof fetch>
   })
 
   describe('when no identity is provided', () => {
     describe('and the input is a string url', () => {
       it('should delegate to fetch with the raw input and init', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch('https://service.example/api/resource', { method: 'GET' })
 
         expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -44,7 +45,7 @@ describe('signedFetchFactory', () => {
 
     describe('and no init is provided', () => {
       it('should delegate to fetch with only the input', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch('https://service.example/api/resource')
 
         expect(fetchMock).toHaveBeenCalledWith('https://service.example/api/resource', undefined)
@@ -55,7 +56,7 @@ describe('signedFetchFactory', () => {
   describe('when an identity is provided', () => {
     describe('and the input is a string url', () => {
       it('should build a Request with signed headers and call fetch with it', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch('https://service.example/api/resource', { method: 'POST', identity })
 
         expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -72,7 +73,7 @@ describe('signedFetchFactory', () => {
 
     describe('and the input is a URL instance', () => {
       it('should build a signed Request using the URL pathname', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch(new URL('https://service.example/api/resource'), { identity })
 
         const request = fetchMock.mock.calls[0][0] as Request
@@ -83,7 +84,7 @@ describe('signedFetchFactory', () => {
 
     describe('and metadata is provided', () => {
       it('should serialize the metadata into the x-identity-metadata header', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         const metadata = { random: 42 }
         await signedFetch('https://service.example/api/resource', { identity, metadata })
 
@@ -94,7 +95,7 @@ describe('signedFetchFactory', () => {
 
     describe('and the input is an existing Request instance', () => {
       it('should copy the auth chain headers onto the existing request', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         const original = new Request('https://service.example/api/resource', { method: 'POST' })
         await signedFetch(original, { identity })
 
@@ -107,7 +108,7 @@ describe('signedFetchFactory', () => {
 
     describe('and the init contains pre-existing headers', () => {
       it('should merge those headers with the auth chain headers', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch('https://service.example/api/resource', {
           identity,
           headers: { 'content-type': 'application/json' }
@@ -121,7 +122,7 @@ describe('signedFetchFactory', () => {
 
     describe('and no method is provided', () => {
       it('should default to GET for the signed payload', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch('https://service.example/api/resource', { identity })
 
         const request = fetchMock.mock.calls[0][0] as Request
@@ -143,7 +144,7 @@ describe('signedFetchFactory', () => {
 
     describe('when the url contains a query string', () => {
       it('should sign the pathname only, excluding the query string and host', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch('https://service.example/api/resource?token=secret', { identity })
 
         const [, payload] = signPayloadSpy.mock.calls[0]
@@ -155,7 +156,7 @@ describe('signedFetchFactory', () => {
 
     describe('when the input is a URL instance with a query string', () => {
       it('should sign the pathname only', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         await signedFetch(new URL('https://service.example/api/resource?token=secret'), { identity })
 
         const [, payload] = signPayloadSpy.mock.calls[0]
@@ -166,7 +167,7 @@ describe('signedFetchFactory', () => {
 
     describe('when the input is an existing Request with a query string', () => {
       it('should sign the pathname only', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock })
         const request = new Request('https://service.example/api/resource?token=secret', { method: 'POST' })
         await signedFetch(request, { identity })
 
@@ -182,7 +183,7 @@ describe('signedFetchFactory', () => {
 
     describe('and the input is a native globalThis.URL instance', () => {
       it('should still take the URL branch via the globalThis.URL fallback', async () => {
-        const signedFetch = signedFetchFactory({ fetch: fetchMock as any, URL: WrappedURL })
+        const signedFetch = signedFetchFactory({ fetch: fetchMock, URL: WrappedURL })
         await signedFetch(new URL('https://service.example/api/resource'), { identity })
 
         expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -195,12 +196,12 @@ describe('signedFetchFactory', () => {
 
   describe('when the required global implementation is missing from options and globals', () => {
     it('should throw a ReferenceError on construction', () => {
-      const originalFetch = (globalThis as any).fetch
-      ;(globalThis as any).fetch = undefined
+      const originalFetch = globalThis.fetch
+      globalThis.fetch = undefined as unknown as typeof fetch
       try {
         expect(() => signedFetchFactory()).toThrow(ReferenceError)
       } finally {
-        ;(globalThis as any).fetch = originalFetch
+        globalThis.fetch = originalFetch
       }
     })
   })

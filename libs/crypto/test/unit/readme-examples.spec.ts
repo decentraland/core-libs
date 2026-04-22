@@ -1,11 +1,10 @@
-import { createIdentity } from 'eth-crypto'
 import { hexToBytes } from 'eth-connect'
-import { bytesToHex, utf8ToBytes } from 'ethereum-cryptography/utils'
+import { createIdentity } from 'eth-crypto'
 import { keccak256 } from 'ethereum-cryptography/keccak'
-
+import { bytesToHex, utf8ToBytes } from 'ethereum-cryptography/utils'
 import { Authenticator } from '../../src/Authenticator'
-import { AuthChain, AuthIdentity, IdentityType } from '../../src/types'
 import { ethSign, recoverAddressFromEthSignature, recoverPublicKey, sign } from '../../src/crypto'
+import type { AuthChain, AuthIdentity, IdentityType } from '../../src/types'
 
 describe('README examples', () => {
   describe('when signing a hash with eth-crypto and recovering the public key', () => {
@@ -80,11 +79,8 @@ describe('README examples', () => {
     beforeEach(async () => {
       ephemeralIdentity = createIdentity()
       realAccount = createIdentity()
-      identity = await Authenticator.initializeAuthChain(
-        realAccount.address,
-        ephemeralIdentity,
-        10,
-        async (message) => Authenticator.createSignature(realAccount, message)
+      identity = await Authenticator.initializeAuthChain(realAccount.address, ephemeralIdentity, 10, async (message) =>
+        Authenticator.createSignature(realAccount, message)
       )
     })
 

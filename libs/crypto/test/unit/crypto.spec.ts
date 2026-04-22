@@ -1,12 +1,12 @@
 import { hexToBytes } from 'eth-connect'
 import { keccak256 } from 'ethereum-cryptography/keccak'
 import { bytesToHex, utf8ToBytes } from 'ethereum-cryptography/utils'
-
-import { AuthChain, Authenticator, AuthLinkType } from '../../src'
+import { AuthLinkType, Authenticator } from '../../src'
 import { createUnsafeIdentity, ethSign, recoverAddressFromEthSignature, recoverPublicKey, sign } from '../../src/crypto'
-import { AuthIdentity, IdentityType } from '../../src/types'
+import type { AuthChain } from '../../src'
+import type { AuthIdentity, IdentityType } from '../../src/types'
 
-type TestVector = {
+interface TestVector {
   address: string
   privateKey: Uint8Array
   data: string | Uint8Array
@@ -147,11 +147,8 @@ describe('Crypto utils', () => {
     beforeEach(async () => {
       ephemeralIdentity = createUnsafeIdentity()
       realAccount = createUnsafeIdentity()
-      identity = await Authenticator.initializeAuthChain(
-        realAccount.address,
-        ephemeralIdentity,
-        10,
-        async (message) => Authenticator.createSignature(realAccount, message)
+      identity = await Authenticator.initializeAuthChain(realAccount.address, ephemeralIdentity, 10, async (message) =>
+        Authenticator.createSignature(realAccount, message)
       )
     })
 

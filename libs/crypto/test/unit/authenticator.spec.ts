@@ -1,7 +1,6 @@
-import * as EthCrypto from 'eth-crypto'
 import { HTTPProvider } from 'eth-connect'
+import * as EthCrypto from 'eth-crypto'
 import fetch from 'node-fetch'
-
 import {
   Authenticator,
   ECDSA_EIP_1654_EPHEMERAL_VALIDATOR,
@@ -9,8 +8,9 @@ import {
   getEphemeralSignatureType
 } from '../../src/Authenticator'
 import { SignatureValidator } from '../../src/contracts/SignatureValidator'
-import { AuthChain, AuthLink, AuthLinkType, IdentityType } from '../../src/types'
 import { moveMinutes } from '../../src/helper/utils'
+import { AuthLinkType } from '../../src/types'
+import type { AuthChain, AuthLink, IdentityType } from '../../src/types'
 
 jest.mock('../../src/contracts/SignatureValidator', () => ({
   SignatureValidator: jest.fn()
@@ -27,7 +27,9 @@ describe('Authenticator', () => {
   let isValidSignatureMock: jest.Mock
 
   beforeEach(() => {
-    mainnetProvider = new HTTPProvider(process.env.ETHEREUM_MAINNET_RPC || '', { fetch: fetch as any })
+    mainnetProvider = new HTTPProvider(process.env.ETHEREUM_MAINNET_RPC || '', {
+      fetch
+    } as unknown as ConstructorParameters<typeof HTTPProvider>[1])
     // Default: contract rejects the signature. EIP-1654 tests override this
     // with the magic value to simulate a contract wallet that accepts it.
     isValidSignatureMock = jest.fn().mockResolvedValue(new Uint8Array())

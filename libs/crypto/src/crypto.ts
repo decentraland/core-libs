@@ -40,7 +40,7 @@ function sanitizeSignature(signature: Uint8Array): Uint8Array {
   return signature
 }
 
-export function recoverAddressFromEthSignature(signature: Uint8Array | string, msg: string | Uint8Array) {
+export function recoverAddressFromEthSignature(signature: Uint8Array | string, msg: string | Uint8Array): string {
   if (typeof signature === 'string') {
     if (isHex(signature)) return recoverAddressFromEthSignature(hexToBytes(signature), msg)
     throw new Error('String signatures must be encoded in hex')
@@ -55,7 +55,7 @@ export function sign(privateKey: Uint8Array, hash: Uint8Array): string {
   return '0x' + sigObj.toCompactHex() + recoveryId
 }
 
-export function createEthereumMessageHash(msg: string | Uint8Array) {
+export function createEthereumMessageHash(msg: string | Uint8Array): Uint8Array {
   const message = typeof msg === 'string' ? stringToUtf8Bytes(msg) : msg
   const bytes = concatBytes(
     stringToUtf8Bytes(`\x19Ethereum Signed Message:\n`),
@@ -88,7 +88,7 @@ export function computeAddress(key: Uint8Array): string {
 /**
  * This method should not be used. It may use non-secure random number generators.
  */
-export function createUnsafeIdentity() {
+export function createUnsafeIdentity(): { privateKey: string; publicKey: string; address: string } {
   const privateKey = secp256k1.utils.randomPrivateKey()
   // remove leading 0x04
   const publicKey = secp256k1.getPublicKey(privateKey, false).slice(1)

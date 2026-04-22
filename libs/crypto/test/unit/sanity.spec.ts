@@ -1,15 +1,17 @@
-import { getAddress, HTTPProvider } from 'eth-connect'
+import { HTTPProvider, getAddress } from 'eth-connect'
 import fetch from 'node-fetch'
-
 import { Authenticator } from '../../src/Authenticator'
-import { AuthChain, AuthLinkType, IdentityType } from '../../src/types'
 import { recoverAddressFromEthSignature } from '../../src/crypto'
+import { AuthLinkType } from '../../src/types'
+import type { AuthChain, IdentityType } from '../../src/types'
 
 describe('Authenticator sanity', () => {
   let mainnetProvider: HTTPProvider
 
   beforeEach(() => {
-    mainnetProvider = new HTTPProvider(process.env.ETHEREUM_MAINNET_RPC || '', { fetch: fetch as any })
+    mainnetProvider = new HTTPProvider(process.env.ETHEREUM_MAINNET_RPC || '', {
+      fetch
+    } as unknown as ConstructorParameters<typeof HTTPProvider>[1])
   })
 
   afterEach(() => {

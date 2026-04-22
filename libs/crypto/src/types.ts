@@ -1,22 +1,22 @@
 export type Signature = string
 export type EthAddress = string
 
-import { AuthChain, AuthLinkType, AuthLink } from '@dcl/schemas'
+import { AuthChain, AuthLink, AuthLinkType } from '@dcl/schemas'
 export { AuthChain, AuthLinkType, AuthLink }
 
-export type IdentityType = {
+export interface IdentityType {
   privateKey: string
   publicKey: string
   address: string
 }
 
-export type AuthIdentity = {
+export interface AuthIdentity {
   ephemeralIdentity: IdentityType
   expiration: Date
   authChain: AuthChain
 }
 
-export type ValidationResult = {
+export interface ValidationResult {
   ok: boolean
   message?: string
 }
