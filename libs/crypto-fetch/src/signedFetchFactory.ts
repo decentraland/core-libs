@@ -39,7 +39,7 @@ export default function signedFetchFactory(options: SignedFetchFactoryOptions = 
       }
 
       const url = new URLImpl(input.url)
-      const request = new RequestImpl(input as any)
+      const request = new RequestImpl(input)
       const headers = signedHeader(identity, input.method || 'GET', url.pathname, metadata || {})
 
       headers.forEach((value, key) => {
@@ -49,6 +49,6 @@ export default function signedFetchFactory(options: SignedFetchFactoryOptions = 
       return fetchImpl(request)
     }
 
-    return fetchImpl(input as RequestInfo, init)
+    return fetchImpl(input, init)
   }
 }
