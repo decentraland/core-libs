@@ -1,0 +1,40 @@
+{
+  "name": "@dcl/crypto",
+  "version": "3.6.0",
+  "description": "Crypto auth for Decentraland",
+  "author": "Decentraland",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "echo \"No linting configured\""
+  },
+  "keywords": [
+    "decentraland",
+    "crypto",
+    "authentication",
+    "ethereum"
+  ],
+  "dependencies": {
+    "@dcl/schemas": "^25.2.0",
+    "eth-connect": "^6.0.3",
+    "ethereum-cryptography": "^2.0.0"
+  },
+  "devDependencies": {
+    "@dcl/eslint-config": "^2.4.3",
+    "eth-crypto": "^2.3.0",
+    "node-fetch": "^2.7.0",
+    "@types/node-fetch": "^2.6.12",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
