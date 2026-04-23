@@ -1,5 +1,7 @@
 import { hashV0, hashV1 } from './node'
 
+const textEncoder = new TextEncoder()
+
 /**
  * EntityContent as specified in ADR32
  * @public
@@ -25,7 +27,7 @@ export function compareStrings(a: string, b: string): number {
 }
 
 export function prepareADR32Data(contents: EntityContentItemReference[], metadata?: unknown): Uint8Array {
-  return new TextEncoder().encode(
+  return textEncoder.encode(
     JSON.stringify({
       content: contents.toSorted(sortKeys).map((entry) => ({ key: entry.file, hash: entry.hash })),
       metadata
