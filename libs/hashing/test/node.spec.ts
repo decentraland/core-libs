@@ -86,7 +86,7 @@ describe('hashing', () => {
     })
 
     it('should reject with an invalid value error', async () => {
-      await expect(hashV1(content as Uint8Array)).rejects.toThrow('Invalid value provided to hashStreamV1')
+      await expect(hashV1(content as Uint8Array)).rejects.toThrow('Invalid value provided to hashV1')
     })
   })
 
@@ -98,7 +98,7 @@ describe('hashing', () => {
     })
 
     it('should reject with an invalid value error', async () => {
-      await expect(hashV0(content as Uint8Array)).rejects.toThrow('Invalid value provided to hashStreamV0')
+      await expect(hashV0(content as Uint8Array)).rejects.toThrow('Invalid value provided to hashV0')
     })
   })
 })

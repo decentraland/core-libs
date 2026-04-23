@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha256'
-import { MemoryBlockstore } from 'blockstore-core'
+import { BlackHoleBlockstore } from 'blockstore-core'
 import { importer } from 'ipfs-unixfs-importer'
 import { CID } from 'multiformats/cid'
 import { create } from 'multiformats/hashes/digest'
@@ -31,7 +31,7 @@ export async function hashV0(stream: HashableContent): Promise<string> {
     }
   } else {
     throw new Error(
-      'Invalid value provided to hashStreamV0. Expected AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array'
+      'Invalid value provided to hashV0. Expected AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array'
     )
   }
 
@@ -43,9 +43,9 @@ export async function hashV0(stream: HashableContent): Promise<string> {
  * @public
  */
 export async function hashV1(content: HashableContent): Promise<string> {
-  const blockstore = new MemoryBlockstore()
+  const blockstore = new BlackHoleBlockstore()
 
-  let lastCid
+  let lastCid: CID | undefined
 
   async function* wrap() {
     yield content as Uint8Array
@@ -67,9 +67,13 @@ export async function hashV1(content: HashableContent): Promise<string> {
     }
   } else {
     throw new Error(
-      'Invalid value provided to hashStreamV1. Expected AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array'
+      'Invalid value provided to hashV1. Expected AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array'
     )
   }
 
-  return `${lastCid}`
+  if (!lastCid) {
+    throw new Error('hashV1: importer produced no CID for the given content')
+  }
+
+  return lastCid.toString()
 }

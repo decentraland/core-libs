@@ -15,26 +15,19 @@ export interface CalculateMultipleHashesResult {
 }
 
 export function sortKeys(a: EntityContentItemReference, b: EntityContentItemReference): number {
-  return compareStrings(a.hash, b.hash) || compareStrings(a.file, b.file) || 0
+  return compareStrings(a.hash, b.hash) || compareStrings(a.file, b.file)
 }
 
 export function compareStrings(a: string, b: string): number {
-  if (a === b) return 0
-
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    if (a.charAt(i) > b.charAt(i)) return 1
-    if (a.charAt(i) < b.charAt(i)) return -1
-  }
-
-  if (a.length > b.length) return 1
-
-  return -1
+  if (a < b) return -1
+  if (a > b) return 1
+  return 0
 }
 
 export function prepareADR32Data(contents: EntityContentItemReference[], metadata?: unknown): Uint8Array {
   return new TextEncoder().encode(
     JSON.stringify({
-      content: contents.sort(sortKeys).map((entry) => ({ key: entry.file, hash: entry.hash })),
+      content: contents.toSorted(sortKeys).map((entry) => ({ key: entry.file, hash: entry.hash })),
       metadata
     })
   )

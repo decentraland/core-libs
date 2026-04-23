@@ -13,4 +13,4 @@ export function keccak256Hash(metadata: Record<string, unknown>, keys: string[])
 }
 
 const pick = (obj: Record<string, unknown>, keys: string[]) =>
-  Object.fromEntries(keys.filter((key) => key in obj).map((key) => [key, obj[key]]))
+  Object.fromEntries(keys.filter((key) => Object.hasOwn(obj, key)).map((key) => [key, obj[key]]))
