@@ -377,7 +377,7 @@ export async function isValidEIP1271Signature(
   signature: string,
   block?: number
 ): Promise<boolean> {
-  const hashedMessage = Authenticator.createEIP1271MessageHash(message)
+  const hashedMessage = createEIP1271MessageHash(message)
   const _signature = hexToBytes(signature)
   let result
 

@@ -1,6 +1,6 @@
 ---
 "@dcl/http-commons": patch
-"@dcl/crypto-middleware": patch
+"@dcl/crypto-middleware": minor
 "decentraland-crypto-fetch": patch
 "@dcl/crypto": patch
 ---

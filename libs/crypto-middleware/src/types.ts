@@ -1,10 +1,17 @@
 import type { IFetchComponent } from '@well-known-components/interfaces'
-import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER } from '@dcl/crypto'
+import {
+  AUTH_CHAIN_HEADER_PREFIX as _AUTH_CHAIN_HEADER_PREFIX,
+  AUTH_METADATA_HEADER as _AUTH_METADATA_HEADER,
+  AUTH_TIMESTAMP_HEADER as _AUTH_TIMESTAMP_HEADER
+} from '@dcl/crypto'
 import RequestError from './errors'
 
-// Re-exported for backwards compatibility with consumers that imported these from
-// @dcl/crypto-middleware before the wire-protocol constants moved to @dcl/crypto.
-export { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER }
+/** @deprecated Import from `@dcl/crypto` directly. Kept here for backwards compatibility. */
+export const AUTH_CHAIN_HEADER_PREFIX = _AUTH_CHAIN_HEADER_PREFIX
+/** @deprecated Import from `@dcl/crypto` directly. Kept here for backwards compatibility. */
+export const AUTH_METADATA_HEADER = _AUTH_METADATA_HEADER
+/** @deprecated Import from `@dcl/crypto` directly. Kept here for backwards compatibility. */
+export const AUTH_TIMESTAMP_HEADER = _AUTH_TIMESTAMP_HEADER
 
 export const DEFAULT_CATALYST = 'https://peer.decentraland.org'
 export const DEFAULT_EXPIRATION = 1000 * 60

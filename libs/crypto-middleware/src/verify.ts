@@ -82,11 +82,7 @@ export async function verifyPersonalSign(authChain: AuthChain, payload: string):
   // runtime for personal-signature verification (no contract call needed). EIP-1654
   // chains — which do require a provider for contract-wallet validation — are routed
   // to `verifyEIP1654Sign` (catalyst-based) and never reach this path.
-  const verification = await Authenticator.validateSignature(
-    payload,
-    authChain,
-    null as unknown as Parameters<typeof Authenticator.validateSignature>[2]
-  )
+  const verification = await Authenticator.validateSignature(payload, authChain, null as never)
 
   if (!verification.ok) {
     throw new RequestError(`Invalid signature: ${verification.message}`, 401)
@@ -128,16 +124,16 @@ export async function verifyEIP1654Sign(
   let verification: { ownerAddress: string; valid: boolean }
   try {
     const body = await response.text()
-    const parsed = JSON.parse(body) as unknown
+    const parsed = JSON.parse(body) as Record<string, unknown>
     if (
       !parsed ||
       typeof parsed !== 'object' ||
-      typeof (parsed as { valid?: unknown }).valid !== 'boolean' ||
-      typeof (parsed as { ownerAddress?: unknown }).ownerAddress !== 'string'
+      typeof parsed.valid !== 'boolean' ||
+      typeof parsed.ownerAddress !== 'string'
     ) {
       throw new Error('unexpected response shape')
     }
-    verification = parsed as { ownerAddress: string; valid: boolean }
+    verification = { ownerAddress: parsed.ownerAddress, valid: parsed.valid }
   } catch (err) {
     throw new RequestError(`Invalid response from catalyst "${catalyst.origin}": ${errorMessage(err)}`, 503)
   }
