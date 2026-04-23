@@ -1,11 +1,14 @@
-import RequestManager, { BlockIdentifier, toBigNumber } from 'eth-connect'
+import { toBigNumber } from 'eth-connect'
+import type { BlockIdentifier } from 'eth-connect'
+// eslint-disable-next-line import/no-named-as-default
+import type RequestManager from 'eth-connect'
 
-export type SavedBlock = {
+export interface SavedBlock {
   number: number
   timestamp: number
 }
 
-export type BlockResponse = {
+export interface BlockResponse {
   block: number
   timestamp: number
 }
@@ -18,30 +21,36 @@ export default class Blocks {
   blockTime?: number
   firstTimestamp?: number
 
-  constructor(private requestManager: RequestManager, save: boolean = true) {
+  constructor(
+    private requestManager: RequestManager,
+    save = true
+  ) {
     this.checkedBlocks = {}
     this.saveBlocks = save
     this.savedBlocks = {}
     this.requests = 0
   }
 
-  async fillBlockTime() {
+  async fillBlockTime(): Promise<{ blockTime: number; firstTimestamp: number }> {
     const latest = await this.getBlockWrapper('latest')
     const first = await this.getBlockWrapper(1)
 
     this.blockTime = (latest.timestamp - first.timestamp) / (Number(latest.number) - 1)
     this.firstTimestamp = first.timestamp
+    return { blockTime: this.blockTime, firstTimestamp: this.firstTimestamp }
   }
 
-  async getDate(date: number, after: boolean = true): Promise<BlockResponse> {
+  async getDate(date: number, after = true): Promise<BlockResponse> {
     const dateInSeconds = date / 1000
     const now = Date.now() / 1000
 
-    if (typeof this.firstTimestamp === 'undefined' || typeof this.blockTime === 'undefined') {
-      await this.fillBlockTime()
+    let firstTimestamp = this.firstTimestamp
+    let blockTime = this.blockTime
+    if (firstTimestamp === undefined || blockTime === undefined) {
+      ;({ firstTimestamp, blockTime } = await this.fillBlockTime())
     }
 
-    if (dateInSeconds < this.firstTimestamp!) {
+    if (dateInSeconds < firstTimestamp) {
       return {
         block: 1,
         timestamp: dateInSeconds
@@ -58,23 +67,22 @@ export default class Blocks {
 
     this.checkedBlocks[dateInSeconds] = []
 
-    const predictedBlock = await this.getBlockWrapper(
-      Math.ceil((dateInSeconds - this.firstTimestamp!) / this.blockTime!)
-    )
+    const predictedBlock = await this.getBlockWrapper(Math.ceil((dateInSeconds - firstTimestamp) / blockTime))
 
     return {
-      block: await this.findBetter(dateInSeconds, predictedBlock, after),
+      block: await this.findBetter(dateInSeconds, predictedBlock, after, blockTime),
       timestamp: dateInSeconds
     }
   }
 
-  async findBetter(date: number, predictedBlock: SavedBlock, after: boolean, blockTime: number = this.blockTime!) {
+  async findBetter(date: number, predictedBlock: SavedBlock, after: boolean, blockTime?: number): Promise<number> {
+    let effectiveBlockTime = blockTime ?? this.blockTime ?? (await this.fillBlockTime()).blockTime
     if (await this.isBetterBlock(date, predictedBlock, after)) {
       return predictedBlock.number
     }
 
     const difference = date - predictedBlock.timestamp
-    let skip = Math.ceil(difference / blockTime)
+    let skip = Math.ceil(difference / effectiveBlockTime)
 
     if (skip === 0) {
       skip = difference < 0 ? -1 : 1
@@ -82,14 +90,14 @@ export default class Blocks {
 
     const nextPredictedBlock = await this.getBlockWrapper(this.getNextBlock(date, predictedBlock.number, skip))
 
-    blockTime = Math.abs(
+    effectiveBlockTime = Math.abs(
       (predictedBlock.timestamp - nextPredictedBlock.timestamp) / (predictedBlock.number - nextPredictedBlock.number)
     )
 
-    return this.findBetter(date, nextPredictedBlock, after, blockTime)
+    return this.findBetter(date, nextPredictedBlock, after, effectiveBlockTime)
   }
 
-  async isBetterBlock(date: number, predictedBlock: SavedBlock, after: boolean) {
+  async isBetterBlock(date: number, predictedBlock: SavedBlock, after: boolean): Promise<boolean> {
     const blockTime = predictedBlock.timestamp
 
     if (after) {

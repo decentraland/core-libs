@@ -1,15 +1,15 @@
-import { Authenticator, AuthChain, AuthLinkType } from '@dcl/crypto'
+import type { AuthChain } from '@dcl/crypto'
+import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import RequestError from './errors'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
   AUTH_TIMESTAMP_HEADER,
-  DecentralandSignatureData,
   DEFAULT_CATALYST,
   DEFAULT_EXPIRATION,
-  DEFAULT_MAX_CHAIN_LENGTH,
-  VerifyAuthChainHeadersOptions
+  DEFAULT_MAX_CHAIN_LENGTH
 } from './types'
+import type { DecentralandSignatureData, VerifyAuthChainHeadersOptions } from './types'
 
 function firstOf(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
@@ -23,17 +23,17 @@ function safe(value: unknown, max = 64): string {
   return s.length > max ? s.slice(0, max) + '…' : s
 }
 
-function isValidAuthLink(value: unknown): value is { type: string; payload: string; signature: string } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    typeof (value as any).type === 'string' &&
-    typeof (value as any).payload === 'string' &&
-    typeof (value as any).signature === 'string'
-  )
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
-export function isEIP1654AuthChain(authChain: AuthChain) {
+function isValidAuthLink(value: unknown): value is { type: string; payload: string; signature: string } {
+  if (!value || typeof value !== 'object') return false
+  const link = value as Record<string, unknown>
+  return typeof link.type === 'string' && typeof link.payload === 'string' && typeof link.signature === 'string'
+}
+
+export function isEIP1654AuthChain(authChain: AuthChain): boolean {
   switch (authChain.length) {
     case 2:
     case 3:
@@ -46,7 +46,7 @@ export function isEIP1654AuthChain(authChain: AuthChain) {
 export function extractAuthChain(
   headers: Record<string, string | string[] | undefined>,
   maxChainLength: number = DEFAULT_MAX_CHAIN_LENGTH
-) {
+): AuthChain {
   const chain: AuthChain = []
   for (let index = 0; index < maxChainLength; index++) {
     const raw = firstOf(headers[AUTH_CHAIN_HEADER_PREFIX + index])
@@ -55,8 +55,8 @@ export function extractAuthChain(
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
-    } catch (err: any) {
-      throw new RequestError(`Invalid chain format: ${safe(err.message)}`, 400)
+    } catch (err) {
+      throw new RequestError(`Invalid chain format: ${safe(errorMessage(err))}`, 400)
     }
 
     if (!isValidAuthLink(parsed)) {
@@ -77,12 +77,12 @@ export function extractAuthChain(
   return chain
 }
 
-export async function verifyPersonalSign(authChain: AuthChain, payload: string) {
+export async function verifyPersonalSign(authChain: AuthChain, payload: string): Promise<string> {
   // SAFETY: `@dcl/crypto` types the third argument as HTTPProvider but accepts null at
   // runtime for personal-signature verification (no contract call needed). EIP-1654
   // chains — which do require a provider for contract-wallet validation — are routed
   // to `verifyEIP1654Sign` (catalyst-based) and never reach this path.
-  const verification = await Authenticator.validateSignature(payload, authChain, null as any)
+  const verification = await Authenticator.validateSignature(payload, authChain, null as never)
 
   if (!verification.ok) {
     throw new RequestError(`Invalid signature: ${verification.message}`, 401)
@@ -95,7 +95,7 @@ export async function verifyEIP1654Sign(
   authChain: AuthChain,
   payload: string,
   options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher'> = {}
-) {
+): Promise<string> {
   const catalyst = new URL(options.catalyst ?? DEFAULT_CATALYST)
   const ownerAddress = Authenticator.ownerAddress(authChain).toLowerCase()
   const url = `${catalyst.origin}/lambdas/crypto/validate-signature`
@@ -110,9 +110,11 @@ export async function verifyEIP1654Sign(
 
   let response: { ok: boolean; status: number; text: () => Promise<string> }
   try {
-    response = options.fetcher ? await options.fetcher.fetch(url, init as any) : await fetch(url, init)
-  } catch (err: any) {
-    throw new RequestError(`Error connecting to catalyst "${catalyst.origin}": ${err.message}`, 503)
+    response = options.fetcher
+      ? await options.fetcher.fetch(url, init as unknown as Parameters<typeof options.fetcher.fetch>[1])
+      : await fetch(url, init)
+  } catch (err) {
+    throw new RequestError(`Error connecting to catalyst "${catalyst.origin}": ${errorMessage(err)}`, 503)
   }
 
   if (!response.ok) {
@@ -122,7 +124,7 @@ export async function verifyEIP1654Sign(
   let verification: { ownerAddress: string; valid: boolean }
   try {
     const body = await response.text()
-    const parsed = JSON.parse(body)
+    const parsed = JSON.parse(body) as Record<string, unknown>
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -131,9 +133,9 @@ export async function verifyEIP1654Sign(
     ) {
       throw new Error('unexpected response shape')
     }
-    verification = parsed
-  } catch (err: any) {
-    throw new RequestError(`Invalid response from catalyst "${catalyst.origin}": ${err.message}`, 503)
+    verification = { ownerAddress: parsed.ownerAddress, valid: parsed.valid }
+  } catch (err) {
+    throw new RequestError(`Invalid response from catalyst "${catalyst.origin}": ${errorMessage(err)}`, 503)
   }
 
   if (!verification.valid || verification.ownerAddress.toLowerCase() !== ownerAddress) {
@@ -147,7 +149,7 @@ export function verifySign(
   authChain: AuthChain,
   payload: string,
   options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher'> = {}
-) {
+): Promise<string> {
   if (isEIP1654AuthChain(authChain)) {
     return verifyEIP1654Sign(authChain, payload, options)
   }
@@ -155,7 +157,7 @@ export function verifySign(
   return verifyPersonalSign(authChain, payload)
 }
 
-export function verifyTimestamp(value?: string | string[]) {
+export function verifyTimestamp(value?: string | string[]): number {
   const raw = firstOf(value)
   const timestamp = Number(raw || '0')
   if (raw && !Number.isFinite(timestamp)) {
@@ -165,12 +167,12 @@ export function verifyTimestamp(value?: string | string[]) {
   return timestamp
 }
 
-export function verifyMetadata(value?: string | string[]): Record<string, any> {
+export function verifyMetadata(value?: string | string[]): Record<string, unknown> {
   const raw = firstOf(value)
   let parsed: unknown
   try {
     parsed = JSON.parse(raw ?? '{}')
-  } catch (err: any) {
+  } catch {
     throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 
@@ -178,7 +180,7 @@ export function verifyMetadata(value?: string | string[]): Record<string, any> {
     throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 
-  return parsed as Record<string, any>
+  return parsed as Record<string, unknown>
 }
 
 export function verifyExpiration(
@@ -211,11 +213,11 @@ export function createPayload(
   path: string,
   rawTimestamp: string | string[] | undefined,
   rawMetadata: string | string[] | undefined
-) {
+): string {
   return [method, path, firstOf(rawTimestamp), firstOf(rawMetadata)].join(':').toLowerCase()
 }
 
-export default async function verify<P extends Record<string, any> = Record<string, any>>(
+export default async function verify<P extends Record<string, unknown> = Record<string, unknown>>(
   method: string,
   path: string,
   headers: Record<string, string | string[] | undefined>,

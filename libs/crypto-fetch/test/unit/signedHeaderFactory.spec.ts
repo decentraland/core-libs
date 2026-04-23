@@ -1,4 +1,5 @@
-import { AuthIdentity, AuthLinkType, Authenticator } from '@dcl/crypto'
+import type { AuthIdentity } from '@dcl/crypto'
+import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import signedHeaderFactory from '../../src/signedHeaderFactory'
 
 const identity: AuthIdentity = {
@@ -58,8 +59,8 @@ describe('signedHeaderFactory', () => {
 
   describe('when a custom Headers implementation is provided', () => {
     it('should instantiate headers using the provided implementation', () => {
-      const HeadersSpy = jest.fn().mockImplementation((init?: HeadersInit) => new Headers(init))
-      const signedHeader = signedHeaderFactory({ Headers: HeadersSpy as any })
+      const HeadersSpy = jest.fn((init?: HeadersInit) => new Headers(init))
+      const signedHeader = signedHeaderFactory({ Headers: HeadersSpy as unknown as typeof Headers })
       signedHeader(identity, 'GET', '/anything', {})
 
       expect(HeadersSpy).toHaveBeenCalledTimes(1)

@@ -1,12 +1,12 @@
 describe('package entry point', () => {
   describe('the default export', () => {
-    let fetchMock: jest.Mock
+    let fetchMock: jest.MockedFunction<typeof fetch>
     let originalFetch: typeof globalThis.fetch
 
     beforeEach(() => {
-      fetchMock = jest.fn().mockResolvedValue(new Response('ok'))
+      fetchMock = jest.fn().mockResolvedValue(new Response('ok')) as jest.MockedFunction<typeof fetch>
       originalFetch = globalThis.fetch
-      globalThis.fetch = fetchMock as any
+      globalThis.fetch = fetchMock
     })
 
     afterEach(() => {

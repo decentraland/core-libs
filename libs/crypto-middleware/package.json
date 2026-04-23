@@ -1,6 +1,6 @@
 {
   "name": "@dcl/crypto-middleware",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Multi-framework authentication middleware for Decentraland signed requests",
   "author": "Decentraland",
   "license": "Apache-2.0",
@@ -14,7 +14,8 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "test": "jest",
-    "lint": "echo \"No linting configured\""
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
   },
   "keywords": [
     "decentraland",
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@dcl/eslint-config": "^2.4.3",
+    "eslint": "^8.57.1",
     "@types/express": "^4.17.13",
     "@types/koa": "^2.13.4",
     "@types/passport-strategy": "^0.2.35",

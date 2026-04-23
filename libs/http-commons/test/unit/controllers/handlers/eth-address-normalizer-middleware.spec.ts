@@ -1,10 +1,10 @@
+import type { IHttpServerComponent } from '@well-known-components/interfaces'
 import { ethAddressNormalizerMiddleware } from '../../../../src/controllers/handlers/eth-address-normalizer-middleware'
-import { IHttpServerComponent } from '@well-known-components/interfaces'
 
 describe('ethAddressNormalizerMiddleware', () => {
   let middleware: ReturnType<typeof ethAddressNormalizerMiddleware>
   let mockNext: jest.Mock
-  let mockContext: IHttpServerComponent.DefaultContext<any>
+  let mockContext: IHttpServerComponent.DefaultContext<Record<string, unknown>> & { params: Record<string, unknown> }
 
   beforeEach(() => {
     middleware = ethAddressNormalizerMiddleware()
@@ -156,7 +156,7 @@ describe('ethAddressNormalizerMiddleware', () => {
     describe('when params is undefined', () => {
       beforeEach(() => {
         mockContext = createMockContext()
-        mockContext.params = undefined
+        Object.assign(mockContext, { params: undefined })
       })
 
       it('should handle undefined parameters gracefully', async () => {
@@ -169,7 +169,7 @@ describe('ethAddressNormalizerMiddleware', () => {
     describe('when params is null', () => {
       beforeEach(() => {
         mockContext = createMockContext()
-        mockContext.params = null
+        Object.assign(mockContext, { params: null })
       })
 
       it('should handle null parameters gracefully', async () => {
@@ -182,7 +182,7 @@ describe('ethAddressNormalizerMiddleware', () => {
     describe('when params is not an object', () => {
       beforeEach(() => {
         mockContext = createMockContext()
-        mockContext.params = 'not-an-object'
+        Object.assign(mockContext, { params: 'not-an-object' })
       })
 
       it('should handle non-object parameters gracefully', async () => {
@@ -239,8 +239,11 @@ describe('ethAddressNormalizerMiddleware', () => {
   })
 
   // Helpers
-  const createMockContext = (params: Record<string, any> = {}) => {
+  const createMockContext = (
+    params: Record<string, unknown> = {}
+  ): IHttpServerComponent.DefaultContext<Record<string, unknown>> & { params: Record<string, unknown> } => {
     return {
+      request: new Request('http://localhost:3000/test'),
       url: new URL('http://localhost:3000/test'),
       params,
       components: {
@@ -252,6 +255,6 @@ describe('ethAddressNormalizerMiddleware', () => {
           })
         }
       }
-    } as IHttpServerComponent.DefaultContext<any>
+    } as unknown as IHttpServerComponent.DefaultContext<Record<string, unknown>> & { params: Record<string, unknown> }
   }
 })

@@ -1,8 +1,14 @@
-import { AuthChain, AuthIdentity, AuthLinkType, Authenticator } from '@dcl/crypto'
-import { IFetchComponent } from '@well-known-components/interfaces'
+import type { IFetchComponent } from '@well-known-components/interfaces'
+import type { AuthChain, AuthIdentity } from '@dcl/crypto'
+import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import RequestError from '../../src/errors'
-import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER, DEFAULT_EXPIRATION } from '../../src/types'
+import {
+  AUTH_CHAIN_HEADER_PREFIX,
+  AUTH_METADATA_HEADER,
+  AUTH_TIMESTAMP_HEADER,
+  DEFAULT_EXPIRATION
+} from '../../src/types'
 import verifyAuthChainHeaders, { isEIP1654AuthChain, verifyEIP1654Sign, verifyPersonalSign } from '../../src/verify'
 
 const identity: AuthIdentity = {
@@ -303,9 +309,7 @@ describe('verifyAuthChainHeaders', () => {
       const headers = createAuthChainHeaders(chain, timestamp, metadata)
       headers[AUTH_CHAIN_HEADER_PREFIX + '1'] = '{'
 
-      await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).rejects.toThrow(
-        'Invalid chain format:'
-      )
+      await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).rejects.toThrow('Invalid chain format:')
     })
   })
 
@@ -346,7 +350,7 @@ describe('verifyAuthChainHeaders', () => {
     })
   })
 
-  describe("when the timestamp header differs from the one that was signed", () => {
+  describe('when the timestamp header differs from the one that was signed', () => {
     it('should reject with an Invalid signature error', async () => {
       const timestamp = Date.now()
       const metadata = {}
@@ -377,7 +381,7 @@ describe('verifyAuthChainHeaders', () => {
     })
   })
 
-  describe("when the metadata header differs from the one that was signed", () => {
+  describe('when the metadata header differs from the one that was signed', () => {
     it('should reject with an Invalid signature error', async () => {
       const timestamp = Date.now()
       const metadata = {}
@@ -458,9 +462,9 @@ describe('verifyAuthChainHeaders', () => {
         const headers = createAuthChainHeaders(chain, timestamp, metadata)
         const metadataValidator = jest.fn().mockReturnValue(true)
 
-        await expect(
-          verifyAuthChainHeaders(method, path, headers, { fetcher, metadataValidator })
-        ).rejects.toThrow('Expired signature')
+        await expect(verifyAuthChainHeaders(method, path, headers, { fetcher, metadataValidator })).rejects.toThrow(
+          'Expired signature'
+        )
 
         expect(metadataValidator).not.toHaveBeenCalled()
       })
@@ -474,9 +478,9 @@ describe('verifyAuthChainHeaders', () => {
       for (let i = 0; i < 5; i++) {
         headers[AUTH_CHAIN_HEADER_PREFIX + i] = '{"type":"SIGNER","payload":"0x1","signature":""}'
       }
-      await expect(
-        verifyAuthChainHeaders('get', '/p', headers, { fetcher, maxChainLength: 3 })
-      ).rejects.toThrow('Auth chain exceeds maximum length of 3')
+      await expect(verifyAuthChainHeaders('get', '/p', headers, { fetcher, maxChainLength: 3 })).rejects.toThrow(
+        'Auth chain exceeds maximum length of 3'
+      )
     })
   })
 })

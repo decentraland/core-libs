@@ -1,6 +1,6 @@
-import { ILoggerComponent } from '@well-known-components/interfaces'
+import type { ILoggerComponent } from '@well-known-components/interfaces'
 
-export type ComponentsWithLogger = {
+export interface ComponentsWithLogger {
   components: {
     logs: ILoggerComponent
   }

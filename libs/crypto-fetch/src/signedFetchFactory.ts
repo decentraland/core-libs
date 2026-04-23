@@ -1,6 +1,7 @@
-import signedHeaderFactory, { SignedHeaderFactoryOptions } from './signedHeaderFactory'
-import { SignedRequestInfo, SignedRequestInit } from './types'
+import signedHeaderFactory from './signedHeaderFactory'
 import { getImplementation } from './utils'
+import type { SignedHeaderFactoryOptions } from './signedHeaderFactory'
+import type { SignedRequestInfo, SignedRequestInit } from './types'
 
 export type SignedFetchFactoryOptions = SignedHeaderFactoryOptions & {
   URL?: typeof URL
@@ -8,13 +9,15 @@ export type SignedFetchFactoryOptions = SignedHeaderFactoryOptions & {
   fetch?: typeof fetch
 }
 
-export default function signedFetchFactory(options: SignedFetchFactoryOptions = {}) {
+export type SignedFetch = (input: SignedRequestInfo, init?: SignedRequestInit) => Promise<Response>
+
+export default function signedFetchFactory(options: SignedFetchFactoryOptions = {}): SignedFetch {
   const signedHeader = signedHeaderFactory(options)
   const URLImpl = getImplementation(options, 'URL')
   const RequestImpl = getImplementation(options, 'Request')
   const fetchImpl = getImplementation(options, 'fetch')
 
-  return function signedFetch(input: SignedRequestInfo, init?: SignedRequestInit | undefined) {
+  return function signedFetch(input: SignedRequestInfo, init?: SignedRequestInit): Promise<Response> {
     if (init && init.identity) {
       const { identity, metadata, ...originalInit } = init
 
@@ -26,13 +29,7 @@ export default function signedFetchFactory(options: SignedFetchFactoryOptions = 
         const url = typeof input === 'string' ? new URLImpl(input) : input
         const request = new RequestImpl(url.toString(), {
           ...originalInit,
-          headers: signedHeader(
-            identity,
-            init.method || 'GET',
-            url.pathname,
-            metadata || {},
-            originalInit?.headers
-          )
+          headers: signedHeader(identity, init.method || 'GET', url.pathname, metadata || {}, originalInit?.headers)
         })
 
         return fetchImpl(request)

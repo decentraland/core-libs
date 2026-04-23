@@ -1,4 +1,4 @@
-import * as nodeFetch from 'node-fetch'
+import type * as nodeFetch from 'node-fetch'
 
 export class InvalidRequestError extends Error {
   constructor(message: string) {

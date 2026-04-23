@@ -1,6 +1,6 @@
-import { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@well-known-components/interfaces'
 import { InvalidRequestError, NotAuthorizedError, NotFoundError } from '../../errors'
-import { ComponentsWithLogger } from '../../types'
+import type { ComponentsWithLogger } from '../../types'
 
 export async function errorHandler(
   ctx: IHttpServerComponent.DefaultContext<ComponentsWithLogger>,
@@ -8,7 +8,8 @@ export async function errorHandler(
 ): Promise<IHttpServerComponent.IResponse> {
   try {
     return await next()
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     if (error instanceof InvalidRequestError) {
       return {
         status: 400,
@@ -41,7 +42,7 @@ export async function errorHandler(
 
     const { logs } = ctx.components
     const logger = logs.getLogger('error-handler')
-    logger.warn(`Error handling ${ctx.url.toString()}: ${error.message}`)
+    logger.warn(`Error handling ${ctx.url.toString()}: ${message}`)
 
     return {
       status: 500,

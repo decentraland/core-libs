@@ -1,6 +1,6 @@
 import { Request } from 'node-fetch'
+import type { IHttpServerComponent } from '@well-known-components/interfaces'
 import { bearerTokenMiddleware } from '../../../../src'
-import { IHttpServerComponent } from '@well-known-components/interfaces'
 
 describe('Bearer Token Middleware', () => {
   let next: () => Promise<IHttpServerComponent.IResponse>
@@ -15,7 +15,7 @@ describe('Bearer Token Middleware', () => {
   })
 
   it('should handle unauthenticated requests', async () => {
-    const ctx: IHttpServerComponent.DefaultContext<any> = {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
       request: new Request(''),
       url: new URL('http://localhost'),
       components: {}
@@ -26,7 +26,7 @@ describe('Bearer Token Middleware', () => {
   })
 
   it('should handle request with wrong authentication', async () => {
-    const ctx: IHttpServerComponent.DefaultContext<any> = {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
       request: new Request('', {
         headers: {
           Authorization: 'Bearer saraza'
@@ -41,7 +41,7 @@ describe('Bearer Token Middleware', () => {
   })
 
   it('should handle request with correct authentication', async () => {
-    const ctx: IHttpServerComponent.DefaultContext<any> = {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
       request: new Request('', {
         headers: {
           Authorization: 'Bearer some-token'
@@ -56,7 +56,7 @@ describe('Bearer Token Middleware', () => {
   })
 
   it('should handle request with invalid authentication header', async () => {
-    const ctx: IHttpServerComponent.DefaultContext<any> = {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
       request: new Request('', {
         headers: {
           Authorization: 'Basic whatever'

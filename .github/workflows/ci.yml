@@ -35,11 +35,11 @@ jobs:
       - name: Check for changeset
         run: pnpm changeset status --since=origin/main
 
-      - name: Run linting
-        run: pnpm lint
-
       - name: Build packages
         run: pnpm build
+
+      - name: Run linting
+        run: pnpm lint
 
       - name: Run tests
         run: pnpm test

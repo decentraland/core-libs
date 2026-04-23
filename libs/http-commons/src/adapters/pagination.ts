@@ -1,4 +1,4 @@
-import { PaginatedParameters } from '@dcl/schemas'
+import type { PaginatedParameters } from '@dcl/schemas'
 
 const MAX_LIMIT = 100
 
