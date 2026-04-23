@@ -151,6 +151,18 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  libs/urn-resolver:
+    devDependencies:
+      '@dcl/eslint-config':
+        specifier: ^2.4.3
+        version: 2.4.3(@babel/core@7.28.5)(babel-plugin-module-resolver@5.0.2)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      urn-lib:
+        specifier: ^2.0.0
+        version: 2.0.0
+
 packages:
 
   '@babel/code-frame@7.27.1':
@@ -3347,6 +3359,9 @@ packages:
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
+
+  urn-lib@2.0.0:
+    resolution: {integrity: sha512-A9w5yIZke2J13v7i01rumaW2w5qWEakQM7sWkDNcdDty/3LhZVMg/AZyM+JNVVmi+tKU4flbJJsUJ+/qGyWdFw==}
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -7879,6 +7894,8 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
+
+  urn-lib@2.0.0: {}
 
   util-deprecate@1.0.2: {}
 
