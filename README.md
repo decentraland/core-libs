@@ -13,6 +13,7 @@ core-libs/
 │   ├── crypto/              # Crypto auth primitives for Decentraland
 │   ├── crypto-middleware/   # Multi-framework authentication middleware for Decentraland signed requests
 │   ├── crypto-fetch/        # fetch wrapper that signs requests with a Decentraland Identity
+│   ├── hashing/             # Hashing functions for Decentraland Content Identifiers
 ```
 
 ## 🚀 Libraries
@@ -32,6 +33,10 @@ core-libs/
 ### Crypto Fetch
 
 - **Crypto Fetch** (`decentraland-crypto-fetch`) - `fetch` wrapper that signs requests with a Decentraland Identity
+
+### Hashing
+
+- **Hashing** (`@dcl/hashing`) - Hashing functions to calculate Decentraland Content Identifiers
 
 ## 🛠️ Development
 
@@ -111,6 +116,7 @@ This project uses [Changesets](https://github.com/changesets/changesets) for aut
 - `@dcl/crypto`
 - `@dcl/crypto-middleware`
 - `decentraland-crypto-fetch`
+- `@dcl/hashing`
 
 ### Publishing Workflow
 
