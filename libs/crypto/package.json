@@ -1,6 +1,6 @@
 {
   "name": "@dcl/crypto",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "Crypto auth for Decentraland",
   "author": "Decentraland",
   "license": "Apache-2.0",
