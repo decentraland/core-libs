@@ -1,9 +1,9 @@
 import { Request } from 'node-fetch'
-import { InvalidRequestError, NotAuthorizedError, NotFoundError } from '../../../../src'
-import { IHttpServerComponent, ILoggerComponent } from '@well-known-components/interfaces'
-import { errorHandler } from '../../../../src/controllers'
+import type { IHttpServerComponent, ILoggerComponent } from '@well-known-components/interfaces'
 import { createLogComponent } from '@well-known-components/logger'
-import { ComponentsWithLogger } from '../../../../src/types'
+import { InvalidRequestError, NotAuthorizedError, NotFoundError } from '../../../../src'
+import { errorHandler } from '../../../../src/controllers'
+import type { ComponentsWithLogger } from '../../../../src/types'
 
 describe('Error Handler', () => {
   let ctx: IHttpServerComponent.DefaultContext<ComponentsWithLogger>

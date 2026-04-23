@@ -1,21 +1,21 @@
-import type * as e from 'express'
-import type * as k from 'koa'
-import { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import createAuthChainHeaders from './createAuthChainHeaders'
+import RequestError from './errors'
+import { DecentralandStrategy } from './strategy'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
   AUTH_TIMESTAMP_HEADER,
+  DEFAULT_ERROR_FORMAT,
   DecentralandSignatureContext,
   DecentralandSignatureData,
   DecentralandSignatureRequiredContext,
-  DEFAULT_ERROR_FORMAT,
   Options,
   VerifyAuthChainHeadersOptions
 } from './types'
-import { DecentralandStrategy } from './strategy'
-import RequestError from './errors'
-import createAuthChainHeaders from './createAuthChainHeaders'
 import verify from './verify'
+import type * as e from 'express'
+import type * as k from 'koa'
 
 export {
   Options,
@@ -32,21 +32,25 @@ export {
   verify
 }
 
-function errorToResponse(err: any, options: Pick<Options, 'onError'>): { status: number; body: any } {
-  const raw = err?.statusCode ?? err?.status
+function errorToResponse(err: unknown, options: Pick<Options, 'onError'>): { status: number; body: unknown } {
+  const errorWithStatus = err as { statusCode?: unknown; status?: unknown }
+  const raw = errorWithStatus?.statusCode ?? errorWithStatus?.status
   const status = typeof raw === 'number' && Number.isInteger(raw) && raw >= 100 && raw < 600 ? raw : 500
   const onError = options.onError ?? DEFAULT_ERROR_FORMAT
-  return { status, body: onError(err) }
+  const asError = err instanceof Error ? err : new Error(String(err))
+  return { status, body: onError(asError) }
 }
 
 /** Express middleware */
-export function express(options: Options = {}) {
+export function express(
+  options: Options = {}
+): (req: e.Request, res: e.Response, next: e.NextFunction) => Promise<void> {
   return async (req: e.Request, res: e.Response, next: e.NextFunction) => {
     try {
       const data = await verify(req.method, req.baseUrl + req.path, req.headers, options)
       Object.assign(req, data)
       next()
-    } catch (err: any) {
+    } catch (err) {
       if (!options.optional) {
         const { status, body } = errorToResponse(err, options)
         res.status(status).send(body)
@@ -63,7 +67,7 @@ export function koa(options: Options = {}): k.Middleware {
     try {
       const data = await verify(ctx.method, ctx.path, ctx.headers, options)
       Object.assign(ctx, data)
-    } catch (err: any) {
+    } catch (err) {
       if (!options.optional) {
         const { status, body } = errorToResponse(err, options)
         ctx.status = status
@@ -77,12 +81,12 @@ export function koa(options: Options = {}): k.Middleware {
 }
 
 /** Passport strategy */
-export function passport(defaultOptions: Options = {}) {
+export function passport(defaultOptions: Options = {}): DecentralandStrategy {
   return new DecentralandStrategy(defaultOptions)
 }
 
 /** Well-Known Components */
-export function wellKnownComponents<P extends Record<string, any> = Record<string, any>>(
+export function wellKnownComponents<P extends Record<string, unknown> = Record<string, unknown>>(
   options: Options<P> = {}
 ): IHttpServerComponent.IRequestHandler<
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
@@ -90,9 +94,10 @@ export function wellKnownComponents<P extends Record<string, any> = Record<strin
   return async (ctx, next) => {
     try {
       ctx.verification = await verify<P>(ctx.request.method, ctx.url.pathname, ctx.request.headers.raw(), options)
-    } catch (err: any) {
+    } catch (err) {
       if (!options.optional) {
-        return errorToResponse(err, options)
+        const { status, body } = errorToResponse(err, options)
+        return { status, body: body as IHttpServerComponent.ResponseBody }
       }
     }
 

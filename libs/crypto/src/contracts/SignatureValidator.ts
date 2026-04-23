@@ -1,4 +1,7 @@
-import RequestManager, { AbiItem, Contract, ContractFactory } from 'eth-connect'
+import { ContractFactory } from 'eth-connect'
+import type { AbiItem, Contract } from 'eth-connect'
+// eslint-disable-next-line import/no-named-as-default
+import type RequestManager from 'eth-connect'
 
 export type SignatureValidator = Contract & {
   isValidSignature(hash: Uint8Array, signature: Uint8Array, block?: string | number): Promise<Uint8Array>
@@ -31,5 +34,5 @@ export async function SignatureValidator(requestManager: RequestManager, address
     }
   ]
 
-  return (await new ContractFactory(requestManager, abi).at(address)) as any
+  return (await new ContractFactory(requestManager, abi).at(address)) as SignatureValidator
 }

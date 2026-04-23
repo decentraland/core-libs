@@ -1,16 +1,20 @@
-import { Authenticator } from '@dcl/crypto'
-import { AuthIdentity, Metadata } from './types'
+import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER, Authenticator } from '@dcl/crypto'
 import { getImplementation } from './utils'
+import type { AuthIdentity, Metadata } from './types'
 
-const AUTH_CHAIN_HEADER_PREFIX = 'x-identity-auth-chain-'
-const AUTH_TIMESTAMP_HEADER = 'x-identity-timestamp'
-const AUTH_METADATA_HEADER = 'x-identity-metadata'
-
-export type SignedHeaderFactoryOptions = {
+export interface SignedHeaderFactoryOptions {
   Headers?: typeof Headers
 }
 
-export default function signedHeaderFactory(options: SignedHeaderFactoryOptions = {}) {
+export type SignedHeaderBuilder = (
+  identity: AuthIdentity,
+  method: string,
+  path: string,
+  metadata: Metadata,
+  init?: HeadersInit
+) => Headers
+
+export default function signedHeaderFactory(options: SignedHeaderFactoryOptions = {}): SignedHeaderBuilder {
   const HeadersImpl = getImplementation(options, 'Headers')
 
   return function signedHeader(
@@ -19,7 +23,7 @@ export default function signedHeaderFactory(options: SignedHeaderFactoryOptions 
     path: string,
     metadata: Metadata,
     init?: HeadersInit
-  ) {
+  ): Headers {
     const headers = new HeadersImpl(init)
     const timestamp = String(Date.now())
     const data = JSON.stringify(metadata)

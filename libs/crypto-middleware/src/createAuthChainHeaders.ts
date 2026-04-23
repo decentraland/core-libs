@@ -1,11 +1,11 @@
-import { AuthChain } from '@dcl/crypto'
+import type { AuthChain } from '@dcl/crypto'
 import { AUTH_CHAIN_HEADER_PREFIX, AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER } from './types'
 
 export default function createAuthChainHeaders(
   authChain: AuthChain,
   timestamp: number,
-  metadata: Record<string, any> = {}
-) {
+  metadata: Record<string, unknown> = {}
+): Record<string, string> {
   const headers = {} as Record<string, string>
 
   authChain.forEach((item, index) => {

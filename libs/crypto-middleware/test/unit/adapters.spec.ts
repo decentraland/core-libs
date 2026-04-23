@@ -1,16 +1,15 @@
-import type { NextFunction, Request, Response } from 'express'
-import type { Context } from 'koa'
 import type { IHttpServerComponent } from '@well-known-components/interfaces'
 import RequestError from '../../src/errors'
+import { express, koa, wellKnownComponents } from '../../src/index'
+import verify from '../../src/verify'
+import type { DecentralandSignatureContext } from '../../src/types'
+import type { NextFunction, Request, Response } from 'express'
+import type { Context } from 'koa'
 
 jest.mock('../../src/verify', () => ({
   __esModule: true,
   default: jest.fn()
 }))
-
-import verify from '../../src/verify'
-import { express, koa, wellKnownComponents } from '../../src/index'
-import { DecentralandSignatureContext } from '../../src/types'
 
 const mockVerify = verify as unknown as jest.Mock
 
@@ -41,8 +40,8 @@ describe('express adapter', () => {
       await express()(req, res, next)
 
       expect(mockVerify).toHaveBeenCalledWith('GET', '/api/user', {}, {})
-      expect((req as any).auth).toBe('0xabc')
-      expect((req as any).authMetadata).toEqual({ hello: 'world' })
+      expect((req as unknown as Record<string, unknown>).auth).toBe('0xabc')
+      expect((req as unknown as Record<string, unknown>).authMetadata).toEqual({ hello: 'world' })
       expect(next).toHaveBeenCalledWith()
       expect(res.status).not.toHaveBeenCalled()
     })
@@ -152,7 +151,7 @@ describe('koa adapter', () => {
       await koa()(ctx, next)
 
       expect(mockVerify).toHaveBeenCalledWith('POST', '/foo', {}, {})
-      expect((ctx as any).auth).toBe('0xabc')
+      expect((ctx as unknown as Record<string, unknown>).auth).toBe('0xabc')
       expect(next).toHaveBeenCalled()
     })
   })
@@ -228,7 +227,7 @@ describe('wellKnownComponents adapter', () => {
 
       const result = await wellKnownComponents()(ctx, next)
 
-      expect((ctx as any).verification).toEqual(signatureData)
+      expect((ctx as unknown as Record<string, unknown>).verification).toEqual(signatureData)
       expect(next).toHaveBeenCalled()
       expect(result).toEqual({ status: 200, body: 'ok' })
     })
@@ -252,7 +251,7 @@ describe('wellKnownComponents adapter', () => {
 
         const result = await wellKnownComponents({ optional: true })(ctx, next)
 
-        expect((ctx as any).verification).toBeUndefined()
+        expect((ctx as unknown as Record<string, unknown>).verification).toBeUndefined()
         expect(next).toHaveBeenCalled()
         expect(result).toEqual({ status: 200, body: 'ok' })
       })
