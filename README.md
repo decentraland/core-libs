@@ -12,6 +12,7 @@ core-libs/
 │   ├── http-commons/        # Common middlewares and utils for HTTP Servers
 │   ├── crypto/              # Crypto auth primitives for Decentraland
 │   ├── crypto-middleware/   # Multi-framework authentication middleware for Decentraland signed requests
+│   ├── crypto-fetch/        # fetch wrapper that signs requests with a Decentraland Identity
 ```
 
 ## 🚀 Libraries
@@ -27,6 +28,10 @@ core-libs/
 ### Crypto Middleware
 
 - **Crypto Middleware** (`@dcl/crypto-middleware`) - Authentication middleware for Decentraland signed requests with Express, Koa, Passport and Well-Known Components adapters
+
+### Crypto Fetch
+
+- **Crypto Fetch** (`decentraland-crypto-fetch`) - `fetch` wrapper that signs requests with a Decentraland Identity
 
 ## 🛠️ Development
 
@@ -100,11 +105,12 @@ Testing is configured with Jest and `ts-jest` for TypeScript support. The config
 
 ## 📦 Publishing
 
-This project uses [Changesets](https://github.com/changesets/changesets) for automated version management and publishing to npm. All packages are published under the `@dcl` scope:
+This project uses [Changesets](https://github.com/changesets/changesets) for automated version management and publishing to npm:
 
 - `@dcl/http-server-commons`
 - `@dcl/crypto`
 - `@dcl/crypto-middleware`
+- `decentraland-crypto-fetch`
 
 ### Publishing Workflow
 
