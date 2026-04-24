@@ -1,0 +1,41 @@
+{
+  "name": "@dcl/urn-resolver",
+  "version": "1.0.0",
+  "description": "URN resolver for Decentraland assets",
+  "author": "Decentraland",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "./update-contracts.sh",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/decentraland/core-libs.git",
+    "directory": "libs/urn-resolver"
+  },
+  "keywords": [
+    "decentraland",
+    "urn",
+    "resolver"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@dcl/eslint-config": "^2.4.3",
+    "eslint": "^8.57.1",
+    "typescript": "^5.3.3",
+    "urn-lib": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
