@@ -1,6 +1,7 @@
-import { createParser, getCollection, getContract, isValidNetwork, RouteMap } from './helpers'
+import { createParser, getCollection, getContract, isValidNetwork } from './helpers'
 import { LandUtils } from './land-utils'
-import {
+import type { RouteMap } from './helpers'
+import type {
   BlockchainAsset,
   BlockchainCollectionThirdParty,
   BlockchainCollectionThirdPartyCollection,
@@ -122,7 +123,7 @@ export async function resolveErc721Asset(
     tokenId: groups.tokenId
   })
 
-  return !!ethereumAsset ? ethereumAsset : undefined
+  return ethereumAsset ? ethereumAsset : undefined
 }
 
 function parseHostAndPath(uri: URL): { host: string; path: string[] } {
@@ -206,11 +207,7 @@ export async function resolveOffchainAsset(
 }
 
 export async function resolveEntityV3(uri: URL, groups: Record<'cid', string>): Promise<EntityV3Asset | undefined> {
-  let baseUrl: string | undefined
-
-  if (uri.searchParams.has('baseUrl')) {
-    baseUrl = uri.searchParams.get('baseUrl')!
-  }
+  const baseUrl = uri.searchParams.get('baseUrl') ?? undefined
 
   return {
     namespace: 'decentraland',
@@ -236,9 +233,9 @@ export async function resolveCollectionV1AssetByCollectionName(
     blockchain: 'ethereum',
     type: 'blockchain-collection-v1-asset',
     network: 'mainnet',
-    contractAddress: (collection && collection.contractAddress) || null,
+    contractAddress: collection?.contractAddress || null,
     id: groups.name,
-    collectionName: (collection && collection.collectionId) || groups.collectionName
+    collectionName: collection?.collectionId || groups.collectionName
   }
 }
 
@@ -257,9 +254,9 @@ export async function resolveCollectionV1ItemByCollectionName(
     blockchain: 'ethereum',
     type: 'blockchain-collection-v1-item',
     network: 'mainnet',
-    contractAddress: (collection && collection.contractAddress) || null,
+    contractAddress: collection?.contractAddress || null,
     id: groups.name,
-    collectionName: (collection && collection.collectionId) || groups.collectionName,
+    collectionName: collection?.collectionId || groups.collectionName,
     tokenId: groups.tokenId
   } as BlockchainCollectionV1Item
 }

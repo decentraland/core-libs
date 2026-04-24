@@ -1,6 +1,6 @@
 import { LandUtils } from '../src'
 
-const cases: [tokenId: string, x: number, y: number][] = [
+const cases: Array<[tokenId: string, x: number, y: number]> = [
   ['0x0', 0, 0],
   ['115792089237316195423570985008687907853269984665640564039457584007913129639935', -1, -1],
   ['340282366920938463463374607431768211457', 1, 1],
@@ -17,20 +17,14 @@ const cases: [tokenId: string, x: number, y: number][] = [
 
 describe('when encoding and decoding LAND token ids', () => {
   describe('when decoding a token id', () => {
-    it.each(cases)(
-      'should return the expected x and y coordinates for token id %s at (%i, %i)',
-      (tokenId, x, y) => {
-        expect(LandUtils.decodeTokenId(tokenId)).toEqual({ x: BigInt(x), y: BigInt(y) })
-      }
-    )
+    it.each(cases)('should return the expected x and y coordinates for token id %s at (%i, %i)', (tokenId, x, y) => {
+      expect(LandUtils.decodeTokenId(tokenId)).toEqual({ x: BigInt(x), y: BigInt(y) })
+    })
   })
 
   describe('when encoding coordinates', () => {
-    it.each(cases)(
-      'should return token id %s when encoding position (%i, %i)',
-      (tokenId, x, y) => {
-        expect(LandUtils.encodeTokenId(x, y)).toEqual(BigInt(tokenId))
-      }
-    )
+    it.each(cases)('should return token id %s when encoding position (%i, %i)', (tokenId, x, y) => {
+      expect(LandUtils.encodeTokenId(x, y)).toEqual(BigInt(tokenId))
+    })
   })
 })

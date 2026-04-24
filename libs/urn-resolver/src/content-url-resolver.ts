@@ -1,6 +1,6 @@
 import { getContract } from './helpers'
 import { LandUtils } from './land-utils'
-import { DecentralandAssetIdentifier } from './types'
+import type { DecentralandAssetIdentifier } from './types'
 
 /**
  * @public

@@ -1,8 +1,8 @@
+import { ResolversOptions, resolveContentUrl } from './content-url-resolver'
 import { internalResolver, resolveLegacyDclUrl } from './resolvers'
-import { DecentralandAssetIdentifier } from './types'
+import type { DecentralandAssetIdentifier } from './types'
 export * from './types'
 export { LandUtils } from './land-utils'
-import { resolveContentUrl, ResolversOptions } from './content-url-resolver'
 export { resolveContentUrl, ResolversOptions }
 export { isExtendedUrn, getTokenIdAndAssetUrn } from './collection-items-utils'
 

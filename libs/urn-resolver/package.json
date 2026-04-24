@@ -15,7 +15,8 @@
     "dev": "tsc -p tsconfig.json --watch",
     "clean": "rm -rf dist",
     "test": "jest",
-    "lint": "echo \"No linting configured\""
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
   },
   "repository": {
     "type": "git",
@@ -30,6 +31,7 @@
   "dependencies": {},
   "devDependencies": {
     "@dcl/eslint-config": "^2.4.3",
+    "eslint": "^8.57.1",
     "typescript": "^5.3.3",
     "urn-lib": "^2.0.0"
   },

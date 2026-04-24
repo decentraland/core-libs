@@ -1,4 +1,4 @@
-import { DecentralandAssetIdentifier } from './types'
+import type { DecentralandAssetIdentifier } from './types'
 
 const BLOCKCHAIN_ITEM_TYPES = ['blockchain-collection-v1-item', 'blockchain-collection-v2-item']
 

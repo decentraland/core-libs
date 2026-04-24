@@ -1,7 +1,5 @@
 # `@dcl/urn-resolver`
 
-[![Coverage Status](https://coveralls.io/repos/github/decentraland/urn-resolver/badge.svg?branch=main)](https://coveralls.io/github/decentraland/urn-resolver?branch=main)
-
 A TypeScript library that resolves and parses Decentraland asset URNs (Uniform Resource Names) within the `urn:decentraland` namespace, following the definitions outlined in the [common-metaverse/urn-namespaces](https://github.com/common-metaverse/urn-namespaces) repository. It supports both on-chain and off-chain assets, such as LAND, wearables, and collections.
 
 ## Table of Contents
@@ -37,19 +35,13 @@ This library has no external service dependencies. It is a pure parsing library 
 
 ### Prerequisites
 
-- **Node.js**: Version 18.x or higher
-- **yarn**: For package management
+- **Node.js**: Version 22.x or higher
+- **pnpm**: For package management
 
 ### Installation
 
 ```bash
-npm install @dcl/urn-resolver
-```
-
-or with yarn:
-
-```bash
-yarn add @dcl/urn-resolver
+pnpm add @dcl/urn-resolver
 ```
 
 ## Usage
@@ -149,7 +141,7 @@ The `parseUrn` function returns a `DecentralandAssetIdentifier` union type. All 
 Run all tests:
 
 ```bash
-yarn test
+pnpm --filter @dcl/urn-resolver test
 ```
 
 ### Test Structure
@@ -178,11 +170,11 @@ brew install jq
 
 ### Build
 
-The library is being built with Node.js 18.x.
+The library is built with Node.js 22.x from the monorepo root.
 
 ```bash
-yarn
-yarn build
+pnpm install
+pnpm --filter @dcl/urn-resolver build
 ```
 
 ## AI Agent Context

@@ -1,11 +1,11 @@
 import { RFC2141 } from 'urn-lib'
-import {
+import { parseUrn } from '../src'
+import type {
   BlockchainCollectionThirdParty,
   BlockchainCollectionThirdPartyCollection,
   BlockchainCollectionThirdPartyItem,
   BlockchainCollectionThirdPartyName,
-  DecentralandAssetIdentifier,
-  parseUrn
+  DecentralandAssetIdentifier
 } from '../src'
 
 describe('when parsing a URN', () => {
@@ -13,24 +13,16 @@ describe('when parsing a URN', () => {
   let result: DecentralandAssetIdentifier | null
 
   describe('and the URN has an unknown scheme under urn:', () => {
-    beforeEach(async () => {
-      urn = 'urn:test'
-      result = await parseUrn(urn)
-    })
-
-    it('should return null', () => {
+    it('should return null', async () => {
+      const result = await parseUrn('urn:test')
       expect(result).toBeNull()
     })
   })
 
   describe('and the URN is a LAND URN', () => {
     describe('and the network is sepolia with an atBlock query parameter', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:sepolia:LAND:-10,-13?atBlock=151231111'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the sepolia LAND asset with decoded x/y coordinates', () => {
+      it('should return the sepolia LAND asset with decoded x/y coordinates', async () => {
+        const result = await parseUrn('urn:decentraland:sepolia:LAND:-10,-13?atBlock=151231111')
         expect(result).toMatchObject({
           blockchain: 'ethereum',
           contractAddress: '0x42f4ba48791e2de32f5fbf553441c2672864bb33',
@@ -45,23 +37,16 @@ describe('when parsing a URN', () => {
     })
 
     describe('and the URN carries a query string and a fragment', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:sepolia:LAND:0x1?atBlock=151231111#4'
-        result = await parseUrn(urn)
-      })
-
-      it('should preserve the original URN as the uri property', () => {
+      it('should preserve the original URN as the uri property', async () => {
+        const urn = 'urn:decentraland:sepolia:LAND:0x1?atBlock=151231111#4'
+        const result = await parseUrn(urn)
         expect(result.uri.toString()).toEqual(urn)
       })
     })
 
     describe('and the network is sepolia with a hex token id', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:sepolia:LAND:0x1'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the sepolia LAND asset with the hex id preserved', () => {
+      it('should return the sepolia LAND asset with the hex id preserved', async () => {
+        const result = await parseUrn('urn:decentraland:sepolia:LAND:0x1')
         expect(result).toMatchObject({
           contractAddress: '0x42f4ba48791e2de32f5fbf553441c2672864bb33',
           blockchain: 'ethereum',
@@ -72,12 +57,8 @@ describe('when parsing a URN', () => {
     })
 
     describe('and the network is ETHEREUM in upper case', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ETHEREUM:LAND:0x1'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the mainnet LAND asset', () => {
+      it('should return the mainnet LAND asset', async () => {
+        const result = await parseUrn('urn:decentraland:ETHEREUM:LAND:0x1')
         expect(result).toMatchObject({
           contractAddress: '0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d',
           blockchain: 'ethereum',
@@ -188,12 +169,8 @@ describe('when parsing a URN', () => {
 
   describe('and the URN is an off-chain URN', () => {
     describe('and the registry is static-portable-experiences', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:off-chain:static-portable-experiences:quest-1'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the off-chain asset for the quest', () => {
+      it('should return the off-chain asset for the quest', async () => {
+        const result = await parseUrn('urn:decentraland:off-chain:static-portable-experiences:quest-1')
         expect(result).toMatchObject({
           id: 'quest-1',
           registry: 'static-portable-experiences',
@@ -224,12 +201,10 @@ describe('when parsing a URN', () => {
 
   describe('and the URN is a collections-v1 collection', () => {
     describe('and it is referenced by contract address', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the blockchain-collection-v1 asset on mainnet', () => {
+      it('should return the blockchain-collection-v1 asset on mainnet', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v1:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d'
+        )
         expect(result).toMatchObject({
           type: 'blockchain-collection-v1',
           blockchain: 'ethereum',
@@ -240,12 +215,8 @@ describe('when parsing a URN', () => {
     })
 
     describe('and it is referenced by a known collection name', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:community_contest'
-        result = await parseUrn(urn)
-      })
-
-      it('should resolve the collection to its contract address and keep the collection name', () => {
+      it('should resolve the collection to its contract address and keep the collection name', async () => {
+        const result = await parseUrn('urn:decentraland:ethereum:collections-v1:community_contest')
         expect(result).toMatchObject({
           type: 'blockchain-collection-v1',
           blockchain: 'ethereum',
@@ -259,12 +230,10 @@ describe('when parsing a URN', () => {
 
   describe('and the URN is a collections-v1 asset', () => {
     describe('and it is referenced by contract address', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the blockchain-collection-v1-asset on mainnet with the provided id', () => {
+      it('should return the blockchain-collection-v1-asset on mainnet with the provided id', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v1:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name'
+        )
         expect(result).toMatchObject({
           type: 'blockchain-collection-v1-asset',
           blockchain: 'ethereum',
@@ -299,7 +268,8 @@ describe('when parsing a URN', () => {
 
     describe('and it is referenced by contract address matching a known collection', () => {
       beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:0x32b7495895264ac9d0b12d32afd435453458b1c6:cw_bell_attendant_hat'
+        urn =
+          'urn:decentraland:ethereum:collections-v1:0x32b7495895264ac9d0b12d32afd435453458b1c6:cw_bell_attendant_hat'
         result = await parseUrn(urn)
       })
 
@@ -338,12 +308,10 @@ describe('when parsing a URN', () => {
 
   describe('and the URN is a collections-v1 item with a token id', () => {
     describe('and it is referenced by contract address', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name:456'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the blockchain-collection-v1-item with the provided token id', () => {
+      it('should return the blockchain-collection-v1-item with the provided token id', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v1:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name:456'
+        )
         expect(result).toMatchObject({
           type: 'blockchain-collection-v1-item',
           blockchain: 'ethereum',
@@ -356,12 +324,10 @@ describe('when parsing a URN', () => {
     })
 
     describe('and it is referenced by a known collection name', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:community_contest:cw_bell_attendant_hat:789'
-        result = await parseUrn(urn)
-      })
-
-      it('should resolve the contract address while preserving the collection name, id and token id', () => {
+      it('should resolve the contract address while preserving the collection name, id and token id', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v1:community_contest:cw_bell_attendant_hat:789'
+        )
         expect(result).toMatchObject({
           type: 'blockchain-collection-v1-item',
           blockchain: 'ethereum',
@@ -376,12 +342,10 @@ describe('when parsing a URN', () => {
   })
 
   describe('and the URN is a collections-v2 collection', () => {
-    beforeEach(async () => {
-      urn = 'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d'
-      result = await parseUrn(urn)
-    })
-
-    it('should return the blockchain-collection-v2 asset on mainnet', () => {
+    it('should return the blockchain-collection-v2 asset on mainnet', async () => {
+      const result = await parseUrn(
+        'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d'
+      )
       expect(result).toMatchObject({
         blockchain: 'ethereum',
         type: 'blockchain-collection-v2',
@@ -393,12 +357,10 @@ describe('when parsing a URN', () => {
 
   describe('and the URN is a collections-v2 asset', () => {
     describe('and the id is a non-numeric string', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name'
-        result = await parseUrn(urn)
-      })
-
-      it('should return null', () => {
+      it('should return null', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name'
+        )
         expect(result).toBeNull()
       })
     })
@@ -488,12 +450,10 @@ describe('when parsing a URN', () => {
 
   describe('and the URN is a collections-v2 item with a token id', () => {
     describe('and the token id is a positive integer', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:0:123'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the blockchain-collection-v2-item with the provided token id', () => {
+      it('should return the blockchain-collection-v2-item with the provided token id', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:0:123'
+        )
         expect(result).toMatchObject({
           blockchain: 'ethereum',
           type: 'blockchain-collection-v2-item',
@@ -506,12 +466,10 @@ describe('when parsing a URN', () => {
     })
 
     describe('and the id and token id are both non-numeric', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name:abc'
-        result = await parseUrn(urn)
-      })
-
-      it('should return null', () => {
+      it('should return null', async () => {
+        const result = await parseUrn(
+          'urn:decentraland:ethereum:collections-v2:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:test_name:abc'
+        )
         expect(result).toBeNull()
       })
     })
@@ -561,34 +519,22 @@ describe('when parsing a URN', () => {
     })
 
     describe('and the path is empty (trailing slash only)', () => {
-      beforeEach(async () => {
-        urn = 'dcl://base-avatars/'
-        result = await parseUrn(urn)
-      })
-
-      it('should return null', () => {
+      it('should return null', async () => {
+        const result = await parseUrn('dcl://base-avatars/')
         expect(result).toBeNull()
       })
     })
 
     describe('and the path has no segment after the host', () => {
-      beforeEach(async () => {
-        urn = 'dcl://base-avatars'
-        result = await parseUrn(urn)
-      })
-
-      it('should return null', () => {
+      it('should return null', async () => {
+        const result = await parseUrn('dcl://base-avatars')
         expect(result).toBeNull()
       })
     })
 
     describe('and the path has too many segments', () => {
-      beforeEach(async () => {
-        urn = 'dcl://base-avatars/a/b/c'
-        result = await parseUrn(urn)
-      })
-
-      it('should return null', () => {
+      it('should return null', async () => {
+        const result = await parseUrn('dcl://base-avatars/a/b/c')
         expect(result).toBeNull()
       })
     })
@@ -610,12 +556,9 @@ describe('when parsing a URN', () => {
 
   describe('and the URN uses the erc721 pattern', () => {
     describe('and the network is ethereum', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:erc721:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:111111111111111111'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the mainnet blockchain-asset with uri preserved', () => {
+      it('should return the mainnet blockchain-asset with uri preserved', async () => {
+        const urn = 'urn:decentraland:ethereum:erc721:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:111111111111111111'
+        const result = await parseUrn(urn)
         expect(result).toEqual({
           blockchain: 'ethereum',
           contractAddress: '0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d',
@@ -629,12 +572,9 @@ describe('when parsing a URN', () => {
     })
 
     describe('and the network is sepolia', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:sepolia:erc721:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:111111111111111111'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the sepolia blockchain-asset with uri preserved', () => {
+      it('should return the sepolia blockchain-asset with uri preserved', async () => {
+        const urn = 'urn:decentraland:sepolia:erc721:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:111111111111111111'
+        const result = await parseUrn(urn)
         expect(result).toEqual({
           blockchain: 'ethereum',
           contractAddress: '0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d',
@@ -648,12 +588,9 @@ describe('when parsing a URN', () => {
     })
 
     describe('and the network is matic', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:matic:erc721:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:111111111111111111'
-        result = await parseUrn(urn)
-      })
-
-      it('should return the matic blockchain-asset with uri preserved', () => {
+      it('should return the matic blockchain-asset with uri preserved', async () => {
+        const urn = 'urn:decentraland:matic:erc721:0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d:111111111111111111'
+        const result = await parseUrn(urn)
         expect(result).toEqual({
           blockchain: 'ethereum',
           contractAddress: '0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d',
@@ -668,12 +605,10 @@ describe('when parsing a URN', () => {
   })
 
   describe('and the URN is a collections-v2 item on mainnet (sanity check)', () => {
-    beforeEach(async () => {
-      urn = 'urn:decentraland:ethereum:collections-v2:0x1b8ba74cc34c2927aac0a8af9c3b1ba2e61352f2:0'
-      result = await parseUrn(urn)
-    })
-
-    it('should return a non-null asset', () => {
+    it('should return a non-null asset', async () => {
+      const result = await parseUrn(
+        'urn:decentraland:ethereum:collections-v2:0x1b8ba74cc34c2927aac0a8af9c3b1ba2e61352f2:0'
+      )
       expect(result).toBeTruthy()
     })
   })

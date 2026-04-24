@@ -1,17 +1,14 @@
 import { RFC2141 } from 'urn-lib'
-import { ResolversOptions, resolveUrlFromUrn } from '../src'
+import { resolveUrlFromUrn } from '../src'
+import type { ResolversOptions } from '../src'
 
 describe('when calling resolveUrlFromUrn', () => {
   let urn: string
   let result: string | null
 
   describe('and the URN is not a valid urn: scheme (missing urn prefix)', () => {
-    beforeEach(async () => {
-      urn = 'decentraland:off-chain:something:something-else'
-      result = await resolveUrlFromUrn(urn)
-    })
-
-    it('should return null', () => {
+    it('should return null', async () => {
+      const result = await resolveUrlFromUrn('decentraland:off-chain:something:something-else')
       expect(result).toBeNull()
     })
   })
@@ -110,60 +107,46 @@ describe('when calling resolveUrlFromUrn', () => {
 
   describe('and the URN is an entity URN', () => {
     describe('and it includes a baseUrl query parameter', () => {
-      beforeEach(async () => {
-        urn =
+      it('should resolve to baseUrl joined with the CID', async () => {
+        const result = await resolveUrlFromUrn(
           'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?baseUrl=https://ipfs.com/ipfs'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should resolve to baseUrl joined with the CID', () => {
+        )
         expect(result).toEqual('https://ipfs.com/ipfs/bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki')
       })
     })
 
     describe('and it includes an empty-named pair before baseUrl (ADR-207: dcl variant)', () => {
-      beforeEach(async () => {
-        urn =
+      it('should still resolve to baseUrl joined with the CID', async () => {
+        const result = await resolveUrlFromUrn(
           'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?=dcl&baseUrl=https://ipfs.com/ipfs'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should still resolve to baseUrl joined with the CID', () => {
+        )
         expect(result).toEqual('https://ipfs.com/ipfs/bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki')
       })
     })
 
     describe('and it includes an empty-named pair before baseUrl (ADR-207: empty variant)', () => {
-      beforeEach(async () => {
-        urn =
+      it('should still resolve to baseUrl joined with the CID', async () => {
+        const result = await resolveUrlFromUrn(
           'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?=&baseUrl=https://ipfs.com/ipfs'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should still resolve to baseUrl joined with the CID', () => {
+        )
         expect(result).toEqual('https://ipfs.com/ipfs/bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki')
       })
     })
 
     describe('and the baseUrl has a trailing slash', () => {
-      beforeEach(async () => {
-        urn =
+      it('should resolve without a double slash between baseUrl and CID', async () => {
+        const result = await resolveUrlFromUrn(
           'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?baseUrl=https://ipfs.com/ipfs/'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should resolve without a double slash between baseUrl and CID', () => {
+        )
         expect(result).toEqual('https://ipfs.com/ipfs/bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki')
       })
     })
 
     describe('and no baseUrl is supplied', () => {
-      beforeEach(async () => {
-        urn = 'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should default to the peer.decentraland.org content URL', () => {
+      it('should default to the peer.decentraland.org content URL', async () => {
+        const result = await resolveUrlFromUrn(
+          'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki'
+        )
         expect(result).toEqual(
           'https://peer.decentraland.org/content/contents/bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki'
         )
@@ -253,7 +236,8 @@ describe('when calling resolveUrlFromUrn', () => {
 
     describe('and referenced by contract address matching a known collection', () => {
       beforeEach(async () => {
-        urn = 'urn:decentraland:ethereum:collections-v1:0x32b7495895264ac9d0b12d32afd435453458b1c6:cw_bell_attendant_hat'
+        urn =
+          'urn:decentraland:ethereum:collections-v1:0x32b7495895264ac9d0b12d32afd435453458b1c6:cw_bell_attendant_hat'
         result = await resolveUrlFromUrn(urn)
       })
 
@@ -271,23 +255,15 @@ describe('when calling resolveUrlFromUrn', () => {
 
   describe('and the URN is a legacy dcl:// URL', () => {
     describe('and it points to a base-avatars wearable', () => {
-      beforeEach(async () => {
-        urn = 'dcl://base-avatars/eyes_03'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should resolve to the wearable-api URL on the base-avatars collection', () => {
+      it('should resolve to the wearable-api URL on the base-avatars collection', async () => {
+        const result = await resolveUrlFromUrn('dcl://base-avatars/eyes_03')
         expect(result).toEqual('https://wearable-api.decentraland.org/v2/collections/base-avatars/wearables/eyes_03')
       })
     })
 
     describe('and it points to a collections-v1 wearable', () => {
-      beforeEach(async () => {
-        urn = 'dcl://halloween_2019/bride_of_frankie_earring'
-        result = await resolveUrlFromUrn(urn)
-      })
-
-      it('should resolve to the wearable-api URL on the halloween_2019 collection', () => {
+      it('should resolve to the wearable-api URL on the halloween_2019 collection', async () => {
+        const result = await resolveUrlFromUrn('dcl://halloween_2019/bride_of_frankie_earring')
         expect(result).toEqual(
           'https://wearable-api.decentraland.org/v2/collections/halloween_2019/wearables/bride_of_frankie_earring'
         )

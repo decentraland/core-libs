@@ -1,7 +1,10 @@
-import contracts from './contracts'
 import rawCollectionsV1 from './collections-v1'
+import contracts from './contracts'
 
-export type Collection = { collectionId: string; contractAddress: string }
+export interface Collection {
+  collectionId: string
+  contractAddress: string
+}
 
 const collectionsByContractAddress = new Map<string, Collection>()
 const collectionsByName = new Map<string, Collection>()
@@ -31,9 +34,7 @@ rawCollectionsV1.forEach((collection) => {
 })
 
 export async function getCollection(addressOrName: string): Promise<Collection | null> {
-  return (
-    collectionsByContractAddress.get(addressOrName.toLowerCase()) ?? collectionsByName.get(addressOrName) ?? null
-  )
+  return collectionsByContractAddress.get(addressOrName.toLowerCase()) ?? collectionsByName.get(addressOrName) ?? null
 }
 
 function mapContract(network: string, contractNameOrAddress: string): string | null {
@@ -47,7 +48,7 @@ function mapContract(network: string, contractNameOrAddress: string): string | n
   return null
 }
 
-export async function getContract(network: string, contractNameOrAddress: string) {
+export async function getContract(network: string, contractNameOrAddress: string): Promise<string | null> {
   if (contractNameOrAddress.startsWith('0x')) return contractNameOrAddress
   return mapContract(network.toLowerCase(), contractNameOrAddress.toLowerCase())
 }
@@ -63,7 +64,7 @@ export type RouteMap<T> = {
   [P in string]: (original: URL, captures: Record<string, string>) => Promise<T | null | void>
 }
 
-type CompiledRoute<T> = {
+interface CompiledRoute<T> {
   regex: RegExp
   handler: (original: URL, captures: Record<string, string>) => Promise<T | null | void>
 }
@@ -81,7 +82,7 @@ function compileRouteExpression(expression: string): RegExp {
  * @public
  */
 export function createParser<T>(handlers: RouteMap<T>): (urn: string) => Promise<T | null> {
-  const routes: CompiledRoute<T>[] = []
+  const routes: Array<CompiledRoute<T>> = []
   for (const expression in handlers) {
     routes.push({ regex: compileRouteExpression(expression), handler: handlers[expression] })
   }
@@ -102,7 +103,7 @@ export function createParser<T>(handlers: RouteMap<T>): (urn: string) => Promise
         }
       }
       const match = await handler(url, groups)
-      if (match) return match as any
+      if (match) return match as T
     }
     return null
   }

@@ -1,7 +1,7 @@
 /**
  * @public
  */
-export type BaseBlockchainAsset = {
+export interface BaseBlockchainAsset {
   namespace: 'decentraland'
   uri: URL
   /**
@@ -40,7 +40,7 @@ export type BlockchainLandAsset = BlockchainAsset & {
 /**
  * @public
  */
-export type BlockchainCollectionV1Asset = {
+export interface BlockchainCollectionV1Asset {
   namespace: 'decentraland'
   uri: URL
   /**
@@ -78,7 +78,7 @@ export type BlockchainCollectionV1Item = Omit<BlockchainCollectionV1Asset, 'type
 /**
  * @public
  */
-export type BlockchainCollectionV1 = {
+export interface BlockchainCollectionV1 {
   namespace: 'decentraland'
   uri: URL
   /**
@@ -191,7 +191,7 @@ export type BlockchainCollectionThirdPartyName = BaseBlockchainAsset & {
 /**
  * @public
  */
-export type OffChainAsset = {
+export interface OffChainAsset {
   namespace: 'decentraland'
   uri: URL
   type: 'off-chain'
@@ -208,7 +208,7 @@ export type OffChainAsset = {
 /**
  * @public
  */
-export type EntityV3Asset = {
+export interface EntityV3Asset {
   namespace: 'decentraland'
   uri: URL
   type: 'entity'

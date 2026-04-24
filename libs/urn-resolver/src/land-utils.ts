@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-namespace */
+/* eslint-disable @typescript-eslint/no-namespace, no-inner-declarations */
 /**
  * @public
  */
@@ -34,7 +34,7 @@ export namespace LandUtils {
   /**
    * @public
    */
-  export function decodeTokenId(value: string | number | bigint) {
+  export function decodeTokenId(value: string | number | bigint): { x: BN; y: BN } {
     return _decodeTokenId(B(value))
   }
 
@@ -62,7 +62,7 @@ export namespace LandUtils {
    * Converts a string position "-1,5" to \{ x: -1, y: 5 \}
    * @public
    */
-  export function parseParcelPosition(position: string) {
+  export function parseParcelPosition(position: string): { x: number; y: number } {
     const [x, y] = position
       .trim()
       .split(/\s*,\s*/)
