@@ -11,12 +11,9 @@ module.exports = {
   coveragePathIgnorePatterns: ['node_modules'],
   collectCoverageFrom: ['dist/ADR32.js', 'dist/ADR62.js', 'dist/node.js'],
   coverageThreshold: {
-    'src/**/*.ts': {
-      branches: 90,
-      functions: 90,
-      lines: 90,
-      statements: 90
-    }
+    'src/ADR32.ts': { branches: 90, functions: 90, lines: 90, statements: 90 },
+    'src/ADR62.ts': { branches: 90, functions: 90, lines: 90, statements: 90 },
+    'src/node.ts': { branches: 90, functions: 90, lines: 90, statements: 90 }
   },
   moduleFileExtensions: ['ts', 'js', 'json']
 }
