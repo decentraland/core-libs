@@ -1,6 +1,6 @@
 {
   "name": "@dcl/hashing",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Hashing functions to calculate Decentraland Content Identifiers",
   "author": "Decentraland",
   "license": "Apache-2.0",
