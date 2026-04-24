@@ -1,0 +1,47 @@
+{
+  "name": "@dcl/hashing",
+  "version": "1.0.0",
+  "description": "Hashing functions to calculate Decentraland Content Identifiers",
+  "author": "Decentraland",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=node --format=cjs --outdir=dist --external:node:* --sourcemap",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "pnpm build && jest",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/decentraland/core-libs.git",
+    "directory": "libs/hashing"
+  },
+  "keywords": [
+    "decentraland",
+    "hashing",
+    "cid",
+    "ipfs"
+  ],
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "blockstore-core": "^6.1.2",
+    "ethereum-cryptography": "^3.2.0",
+    "ipfs-unixfs-importer": "^16.1.1",
+    "multiformats": "^13.4.2"
+  },
+  "devDependencies": {
+    "@dcl/eslint-config": "^2.4.3",
+    "esbuild": "^0.27.0",
+    "eslint": "^8.57.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
