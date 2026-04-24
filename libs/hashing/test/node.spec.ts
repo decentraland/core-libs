@@ -78,6 +78,62 @@ describe('hashing', () => {
     })
   })
 
+  describe('when hashing content at the single-chunk boundary', () => {
+    const SINGLE_CHUNK_MAX_BYTES = 262_144
+
+    async function* toAsyncIterable(bytes: Uint8Array): AsyncIterable<Uint8Array> {
+      yield bytes
+    }
+
+    function makeBuffer(size: number): Uint8Array {
+      const bytes = new Uint8Array(size)
+      for (let i = 0; i < size; i++) bytes[i] = i & 0xff
+      return bytes
+    }
+
+    describe('and the buffer is exactly the max single-chunk size', () => {
+      let content: Uint8Array
+
+      beforeEach(() => {
+        content = makeBuffer(SINGLE_CHUNK_MAX_BYTES)
+      })
+
+      it('should produce the same CID via the fast path and the importer path', async () => {
+        const fastPathHash = await hashV1(content)
+        const importerPathHash = await hashV1(toAsyncIterable(content))
+        expect(fastPathHash).toBe(importerPathHash)
+      })
+    })
+
+    describe('and the buffer is one byte above the max single-chunk size', () => {
+      let content: Uint8Array
+
+      beforeEach(() => {
+        content = makeBuffer(SINGLE_CHUNK_MAX_BYTES + 1)
+      })
+
+      it('should produce the same CID via the Uint8Array path and the stream path', async () => {
+        const bufferHash = await hashV1(content)
+        const streamHash = await hashV1(toAsyncIterable(content))
+        expect(bufferHash).toBe(streamHash)
+      })
+    })
+
+    describe('and the buffer is small', () => {
+      let content: Uint8Array
+
+      beforeEach(() => {
+        content = makeBuffer(1024)
+      })
+
+      it('should produce the same CID via the fast path and the importer path', async () => {
+        const fastPathHash = await hashV1(content)
+        const importerPathHash = await hashV1(toAsyncIterable(content))
+        expect(fastPathHash).toBe(importerPathHash)
+      })
+    })
+  })
+
   describe('when hashing an unsupported value with CIDv1', () => {
     let content: unknown
 

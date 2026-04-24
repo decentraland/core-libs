@@ -6,6 +6,12 @@ import { create } from 'multiformats/hashes/digest'
 
 export type HashableContent = AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array
 
+// Matches the default maxChunkSize of ipfs-unixfs-importer; content at or below
+// this size produces a single raw leaf CID, which we can compute directly.
+const SINGLE_CHUNK_MAX_BYTES = 262_144
+const SHA2_256_CODE = 0x12
+const RAW_CODEC = 0x55
+
 function isAsyncIterable(content: unknown): content is AsyncIterable<Uint8Array> {
   return (
     (typeof content === 'object' || typeof content === 'function') &&
@@ -43,6 +49,11 @@ export async function hashV0(stream: HashableContent): Promise<string> {
  * @public
  */
 export async function hashV1(content: HashableContent): Promise<string> {
+  if (content instanceof Uint8Array && content.length <= SINGLE_CHUNK_MAX_BYTES) {
+    const digest = create(SHA2_256_CODE, sha256(content))
+    return CID.createV1(RAW_CODEC, digest).toString()
+  }
+
   const blockstore = new BlackHoleBlockstore()
 
   let lastCid: CID | undefined
