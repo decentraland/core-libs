@@ -134,6 +134,32 @@ describe('hashing', () => {
     })
   })
 
+  describe('when hashing an empty stream with CIDv1', () => {
+    async function* emptyStream(): AsyncIterable<Uint8Array> {
+      // yields nothing
+    }
+
+    it('should reject with a no-content error', async () => {
+      await expect(hashV1(emptyStream())).rejects.toThrow('hashV1: no content was provided')
+    })
+  })
+
+  describe('when hashing content that exceeds the flat-parent limit', () => {
+    const CHUNK_SIZE_BYTES = 262_144
+    const MAX_FLAT_CHILDREN = 174
+
+    async function* tooManyChunks(): AsyncIterable<Uint8Array> {
+      const chunk = new Uint8Array(CHUNK_SIZE_BYTES)
+      for (let i = 0; i < MAX_FLAT_CHILDREN + 1; i++) {
+        yield chunk
+      }
+    }
+
+    it('should reject with a flat-parent-limit error', async () => {
+      await expect(hashV1(tooManyChunks())).rejects.toThrow(/exceeds flat-parent limit of 174 chunks/)
+    })
+  })
+
   describe('when hashing an unsupported value with CIDv1', () => {
     let content: unknown
 
