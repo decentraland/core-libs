@@ -902,6 +902,20 @@ describe('when reading image metadata', () => {
     })
   })
 
+  describe('and a PNG IEND chunk declares a non-zero length', () => {
+    it('should reject IEND with declared length 5 even when the chunk footprint is correct', () => {
+      // Construct a PNG with IEND header that declares 5 bytes of data, but
+      // whose total chunk footprint is still 12 bytes (length + type + crc).
+      // A laxer reader that only checks the footprint would silently accept
+      // this; strict readers fail when reading the missing 5+4 bytes.
+      const fakeIend = Buffer.alloc(12)
+      fakeIend.writeUInt32BE(5, 0)
+      fakeIend.write('IEND', 4, 'ascii')
+      const png = buildPng(64, 64, { extraChunks: fakeIend, omitIend: true })
+      expect(() => readImageMetadata(png)).toThrow('Malformed PNG: IEND chunk must have zero length')
+    })
+  })
+
   describe('and the BMP file-size header does not match the buffer length', () => {
     it('should throw with a file-size mismatch message', () => {
       const tampered = buildBmp(64, 48)

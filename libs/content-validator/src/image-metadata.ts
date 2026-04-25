@@ -177,8 +177,14 @@ function validatePngChunkChain(buffer: Buffer): void {
       throw new Error('Malformed PNG: duplicate IHDR chunk')
     }
     if (bufferEqualsAt(buffer, i + 4, PNG_IEND_BYTES)) {
-      // IEND has zero-length data; the chunk occupies exactly 12 bytes
-      // (length + type + crc) and must be the last bytes in the buffer.
+      // IEND has zero-length data per ISO/IEC 15948. Validate both the
+      // declared length AND the chunk footprint: a file that declares a
+      // non-zero IEND length but only contains the 12-byte footprint would
+      // otherwise pass us while strict readers reject (they expect more
+      // bytes for IEND data + CRC).
+      if (chunkDataLength !== 0) {
+        throw new Error('Malformed PNG: IEND chunk must have zero length')
+      }
       if (i + PNG_CHUNK_OVERHEAD !== buffer.length) {
         throw new Error('Malformed PNG: data after IEND chunk')
       }
