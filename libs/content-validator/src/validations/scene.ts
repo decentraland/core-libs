@@ -1,0 +1,50 @@
+import type { ContentMapping } from '@dcl/schemas'
+import { EntityType } from '@dcl/schemas'
+import { validateAfterADR173, validateAfterADR236, validateAll, validateIfTypeMatches } from './validations'
+import { OK, validationFailed } from '../types'
+import type { DeploymentToValidate, ValidationResponse } from '../types'
+
+/**
+ * Validate that given scene deployment does not contain worldConfiguration section
+ * @public
+ */
+export const noWorldsConfigurationValidateFn = validateAfterADR173(async function validateFn(
+  deployment: DeploymentToValidate
+): Promise<ValidationResponse> {
+  const sceneHasWorldConfiguration = deployment.entity.metadata?.worldConfiguration !== undefined
+  if (sceneHasWorldConfiguration) {
+    return validationFailed(
+      // Start of Selection
+      'The scene.json contains a worldConfiguration section, which is not allowed for Genesis City scenes (see ADR-173: http://adr.decentraland.org/adr/ADR-173). Please remove it and try again.'
+    )
+  }
+  return OK
+})
+
+/**
+ * Validate that given scene deployment thumbnail is a file embedded in the deployment
+ * @public
+ */
+export const embeddedThumbnail = validateAfterADR236(async function validateFn(
+  deployment: DeploymentToValidate
+): Promise<ValidationResponse> {
+  const sceneThumbnail = deployment.entity.metadata?.display?.navmapThumbnail
+  if (sceneThumbnail) {
+    const isFilePresent = (deployment.entity.content ?? []).some(
+      (content: ContentMapping) => content.file === sceneThumbnail
+    )
+    if (!isFilePresent) {
+      return validationFailed(`Scene thumbnail '${sceneThumbnail}' must be a file included in the deployment.`)
+    }
+  }
+  return OK
+})
+
+/**
+ * Validate that given scene deployment is valid
+ * @public
+ */
+export const sceneValidateFn = validateIfTypeMatches(
+  EntityType.SCENE,
+  validateAll(noWorldsConfigurationValidateFn, embeddedThumbnail)
+)
