@@ -307,6 +307,49 @@ describe('when reading image metadata', () => {
     })
   })
 
+  describe('and the WebP variant identifier contains control bytes', () => {
+    it('should sanitise the variant in the error message to avoid log injection', () => {
+      // \n in the variant string would otherwise inject a newline into log
+      // pipelines that interpolate Error messages directly.
+      expect(() => readImageMetadata(buildWebpUnknownVariant('A\nB\r'))).toThrow(
+        "Malformed WebP: unknown variant 'A?B?'"
+      )
+    })
+  })
+
+  describe('and the WebP VP8 sub-chunk size does not match the payload length', () => {
+    it('should throw with a sub-chunk size mismatch message', () => {
+      const tampered = buildWebpVp8(320, 240)
+      tampered.writeUInt32LE(0, 16) // declare a 0-byte VP8 chunk while file claims to hold one
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: VP8 chunk size does not match buffer length')
+    })
+  })
+
+  describe('and the WebP VP8L sub-chunk size does not match the payload length', () => {
+    it('should throw with a sub-chunk size mismatch message', () => {
+      const tampered = buildWebpVp8l(64, 48)
+      tampered.writeUInt32LE(99, 16)
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: VP8L chunk size does not match buffer length')
+    })
+  })
+
+  describe('and the WebP VP8X sub-chunk size is not 10', () => {
+    it('should throw because VP8X canvas info must be exactly 10 bytes', () => {
+      const tampered = buildWebpVp8x(1920, 1080)
+      tampered.writeUInt32LE(7, 16) // VP8X spec requires 10 here
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: VP8X chunk size must be 10')
+    })
+  })
+
+  describe('and the input is backed by a SharedArrayBuffer', () => {
+    it('should reject the input rather than expose a TOCTOU window', () => {
+      const sab = new SharedArrayBuffer(64)
+      const view = new Uint8Array(sab)
+      view.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      expect(() => readImageMetadata(view)).toThrow('Image input must not be backed by a SharedArrayBuffer')
+    })
+  })
+
   describe('and the WebP VP8L chunk is truncated below the minimum length', () => {
     it('should throw with a truncated-chunk message', () => {
       const truncated = Buffer.alloc(24)

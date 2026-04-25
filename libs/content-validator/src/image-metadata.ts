@@ -62,6 +62,13 @@ export interface ImageMetadata {
  * @public
  */
 export function readImageMetadata(input: Uint8Array): ImageMetadata {
+  // Reject SharedArrayBuffer-backed inputs: a concurrent writer could race the
+  // parser between length checks and reads (TOCTOU). The reader operates on
+  // bytes only; callers who need shared memory must copy into a regular
+  // ArrayBuffer first.
+  if (typeof SharedArrayBuffer !== 'undefined' && input.buffer instanceof SharedArrayBuffer) {
+    throw new Error('Image input must not be backed by a SharedArrayBuffer')
+  }
   // Wrap as Buffer to access readUInt*BE / equals / toString without copying.
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input.buffer, input.byteOffset, input.byteLength)
   let metadata: ImageMetadata
@@ -214,6 +221,7 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
     if (buffer.length < 30) {
       throw new Error('Malformed WebP: VP8 chunk truncated')
     }
+    assertWebpSimpleSubChunkSize(buffer, 'VP8')
     if (buffer[23] !== 0x9d || buffer[24] !== 0x01 || buffer[25] !== 0x2a) {
       throw new Error('Malformed WebP: invalid VP8 keyframe sync code')
     }
@@ -228,6 +236,7 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
     if (buffer.length < 25) {
       throw new Error('Malformed WebP: VP8L chunk truncated')
     }
+    assertWebpSimpleSubChunkSize(buffer, 'VP8L')
     const b0 = buffer[21]
     const b1 = buffer[22]
     const b2 = buffer[23]
@@ -243,13 +252,46 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
     if (buffer.length < 30) {
       throw new Error('Malformed WebP: VP8X chunk truncated')
     }
+    // VP8X canvas info is always exactly 10 bytes; trailing chunks (ICCP,
+    // ANIM, …) are accounted for by the outer RIFF size only.
+    if (buffer.readUInt32LE(16) !== 10) {
+      throw new Error('Malformed WebP: VP8X chunk size must be 10')
+    }
     return {
       format: 'webp',
       width: 1 + buffer.readUIntLE(24, 3),
       height: 1 + buffer.readUIntLE(27, 3)
     }
   }
-  throw new Error(`Malformed WebP: unknown variant '${variant}'`)
+  throw new Error(`Malformed WebP: unknown variant '${sanitiseForLog(variant)}'`)
+}
+
+/**
+ * For Simple File Format WebP (VP8 / VP8L), the inner chunk's declared payload
+ * size at offset 16 must — together with the 8-byte chunk header and an
+ * optional 1-byte RIFF pad for odd-length payloads — account for everything
+ * after the 12-byte RIFF/WEBP preamble. Catches parser-differential attacks
+ * where a tampered chunk size is silently accepted by readers that work off
+ * fixed offsets.
+ */
+function assertWebpSimpleSubChunkSize(buffer: Buffer, label: 'VP8' | 'VP8L'): void {
+  const declared = buffer.readUInt32LE(16)
+  const expectedPayload = buffer.length - 20
+  const expectedPayloadWithoutPad = buffer.length - 21
+  if (declared !== expectedPayload && declared !== expectedPayloadWithoutPad) {
+    throw new Error(`Malformed WebP: ${label} chunk size does not match buffer length`)
+  }
+}
+
+/**
+ * Replace control characters and non-printable bytes in a user-controlled
+ * string before interpolating it into an error message. PNG/JPEG/WebP type
+ * fields are 7-bit ASCII per spec, but a malicious buffer can put any
+ * 0x00-0x7F byte there — including newline / carriage return / NUL — which
+ * could otherwise smuggle log lines through downstream consumers.
+ */
+function sanitiseForLog(value: string): string {
+  return value.replace(/[^\x20-\x7e]/g, '?')
 }
 
 function isGif(buffer: Buffer): boolean {
