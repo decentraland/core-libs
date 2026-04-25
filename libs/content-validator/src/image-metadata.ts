@@ -20,6 +20,10 @@ const PNG_IEND_BYTES = Buffer.from('IEND', 'ascii')
 const PNG_IHDR_CHUNK_LENGTH = 13
 const PNG_FIRST_CHUNK_END = 33 // 8 (signature) + 4 (length) + 4 (type) + 13 (IHDR data) + 4 (CRC)
 const PNG_CHUNK_OVERHEAD = 12 // length(4) + type(4) + crc(4)
+// PNG spec (ISO/IEC 15948 §5.3): chunk lengths shall not exceed 2^31-1 bytes
+// even though the wire field is 4 bytes. Anything above that is a parser
+// differential — some readers reject, some accept the high bit silently.
+const PNG_MAX_CHUNK_LENGTH = 0x7fffffff
 // Spec-permitted bit-depth + color-type combinations (PNG, ISO/IEC 15948, §11.2.2).
 const PNG_VALID_BIT_DEPTHS_BY_COLOR_TYPE: Record<number, readonly number[]> = {
   0: [1, 2, 4, 8, 16], // Grayscale
@@ -130,6 +134,7 @@ function readPngMetadata(buffer: Buffer): ImageMetadata {
   const width = buffer.readUInt32BE(16)
   const height = buffer.readUInt32BE(20)
   validatePngBitDepthAndColorType(buffer.readUInt8(24), buffer.readUInt8(25))
+  validatePngIhdrMethods(buffer.readUInt8(26), buffer.readUInt8(27), buffer.readUInt8(28))
   validatePngChunkChain(buffer)
   return { format: 'png', width, height }
 }
@@ -144,6 +149,20 @@ function validatePngBitDepthAndColorType(bitDepth: number, colorType: number): v
   }
 }
 
+function validatePngIhdrMethods(compression: number, filter: number, interlace: number): void {
+  // Per PNG spec (ISO/IEC 15948 §11.2.2), only deflate (0) compression and
+  // filter method 0 are defined. Interlace must be 0 (none) or 1 (Adam7).
+  if (compression !== 0) {
+    throw new Error(`Malformed PNG: invalid compression method ${compression}`)
+  }
+  if (filter !== 0) {
+    throw new Error(`Malformed PNG: invalid filter method ${filter}`)
+  }
+  if (interlace !== 0 && interlace !== 1) {
+    throw new Error(`Malformed PNG: invalid interlace method ${interlace}`)
+  }
+}
+
 function validatePngChunkChain(buffer: Buffer): void {
   // First chunk after the signature is IHDR (already validated by the caller).
   // Walk subsequent chunks, requiring exactly one IEND that terminates the
@@ -151,6 +170,9 @@ function validatePngChunkChain(buffer: Buffer): void {
   let i = PNG_FIRST_CHUNK_END
   while (i + PNG_CHUNK_OVERHEAD <= buffer.length) {
     const chunkDataLength = buffer.readUInt32BE(i)
+    if (chunkDataLength > PNG_MAX_CHUNK_LENGTH) {
+      throw new Error('Malformed PNG: chunk length exceeds 2^31-1')
+    }
     if (bufferEqualsAt(buffer, i + 4, PNG_IHDR_BYTES)) {
       throw new Error('Malformed PNG: duplicate IHDR chunk')
     }
@@ -206,6 +228,14 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
       i += 2
       continue
     }
+    // SOS (Start Of Scan) marks the boundary between marker stream and
+    // entropy-coded image data. SOFn must appear before SOS in any valid
+    // JPEG; if we hit SOS without one, stop scanning rather than walk
+    // entropy data hunting for a 0xFF marker (which would be a false
+    // positive on improperly stuffed bytes).
+    if (marker === 0xda) {
+      break
+    }
     const isStartOfFrame = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
     if (isStartOfFrame) {
       // SOFn payload: [length:2][precision:1][height:2][width:2][...]
@@ -260,6 +290,11 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
       throw new Error('Malformed WebP: VP8L chunk truncated')
     }
     assertWebpSimpleSubChunkSize(buffer, 'VP8L')
+    // VP8L spec mandates a 1-byte signature (0x2F) immediately after the
+    // 8-byte chunk header, before the packed dimensions.
+    if (buffer[20] !== 0x2f) {
+      throw new Error('Malformed WebP: invalid VP8L signature byte')
+    }
     const b0 = buffer[21]
     const b1 = buffer[22]
     const b2 = buffer[23]
@@ -350,6 +385,12 @@ function isBmp(buffer: Buffer): boolean {
 }
 
 function readBmpMetadata(buffer: Buffer): ImageMetadata {
+  // BITMAPFILEHEADER bytes 2-5 store the total file size in bytes, including
+  // the headers. A mismatch indicates truncation or trailing data injection.
+  const declaredFileSize = buffer.readUInt32LE(2)
+  if (declaredFileSize !== buffer.length) {
+    throw new Error('Malformed BMP: file size header does not match buffer length')
+  }
   const dibHeaderSize = buffer.readUInt32LE(14)
   if (dibHeaderSize === BMP_BITMAPCOREHEADER_SIZE) {
     // BITMAPCOREHEADER (OS/2 v1): 16-bit width and height at offsets 18-19 and

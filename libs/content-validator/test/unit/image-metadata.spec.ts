@@ -7,6 +7,9 @@ interface BuildPngOptions {
   ihdrLength?: number
   bitDepth?: number
   colorType?: number
+  compressionMethod?: number
+  filterMethod?: number
+  interlaceMethod?: number
   omitIend?: boolean
   duplicateIhdr?: boolean
   trailingBytes?: Buffer
@@ -22,6 +25,9 @@ const buildPng = (width: number, height: number, options: BuildPngOptions = {}):
   data.writeUInt32BE(height, 4)
   data.writeUInt8(options.bitDepth ?? 8, 8)
   data.writeUInt8(options.colorType ?? 6, 9)
+  data.writeUInt8(options.compressionMethod ?? 0, 10)
+  data.writeUInt8(options.filterMethod ?? 0, 11)
+  data.writeUInt8(options.interlaceMethod ?? 0, 12)
   const ihdr = Buffer.concat([length, type, data, Buffer.alloc(4)])
   const duplicateIhdr = options.duplicateIhdr ? buildPngChunk('IHDR', data) : Buffer.alloc(0)
   const extra = options.extraChunks ?? Buffer.alloc(0)
@@ -119,6 +125,7 @@ const buildBmp = (width: number, height: number): Buffer => {
   // BITMAPFILEHEADER (14 bytes) + BITMAPINFOHEADER (40 bytes).
   const buffer = Buffer.alloc(54)
   buffer.write('BM', 0, 'ascii')
+  buffer.writeUInt32LE(buffer.length, 2) // file size header
   buffer.writeUInt32LE(40, 14) // DIB header size = BITMAPINFOHEADER
   buffer.writeInt32LE(width, 18)
   buffer.writeInt32LE(height, 22)
@@ -129,6 +136,7 @@ const buildBmpCoreHeader = (width: number, height: number): Buffer => {
   // BITMAPFILEHEADER (14 bytes) + BITMAPCOREHEADER (12 bytes).
   const buffer = Buffer.alloc(26)
   buffer.write('BM', 0, 'ascii')
+  buffer.writeUInt32LE(buffer.length, 2)
   buffer.writeUInt32LE(12, 14)
   buffer.writeUInt16LE(width, 18)
   buffer.writeUInt16LE(height, 20)
@@ -216,9 +224,11 @@ describe('when reading image metadata', () => {
 
   describe('and the PNG buffer contains a chunk whose declared length overflows the buffer', () => {
     it('should reach the end of the chunk chain without finding IEND and throw', () => {
-      // Insert a non-IEND chunk that claims a 4-billion-byte payload.
-      const oversize = Buffer.alloc(8)
-      oversize.writeUInt32BE(0xffffffff, 0)
+      // Insert a non-IEND chunk that claims a 2-billion-byte payload (just
+      // under the 2^31-1 spec cap, so the length check passes and the chunk
+      // walker advances past the buffer end).
+      const oversize = Buffer.alloc(12)
+      oversize.writeUInt32BE(0x7fffffff, 0)
       oversize.write('iTXt', 4, 'ascii')
       expect(() => readImageMetadata(buildPng(64, 64, { extraChunks: oversize }))).toThrow(
         'Malformed PNG: missing IEND chunk'
@@ -485,6 +495,7 @@ describe('when reading image metadata', () => {
       // Looks like a BIH (DIB size 40) but the buffer is only 25 bytes.
       const truncated = Buffer.alloc(25)
       truncated.write('BM', 0, 'ascii')
+      truncated.writeUInt32LE(truncated.length, 2)
       truncated.writeUInt32LE(40, 14)
       expect(() => readImageMetadata(truncated)).toThrow('Malformed BMP: BITMAPINFOHEADER truncated')
     })
@@ -564,6 +575,7 @@ describe('when reading image metadata', () => {
     it('should treat it as a BIH variant and read the int32 fields', () => {
       const buffer = Buffer.alloc(54)
       buffer.write('BM', 0, 'ascii')
+      buffer.writeUInt32LE(buffer.length, 2)
       buffer.writeUInt32LE(108, 14) // BITMAPV4HEADER size
       buffer.writeInt32LE(640, 18)
       buffer.writeInt32LE(480, 22)
@@ -813,6 +825,88 @@ describe('when reading image metadata', () => {
       buffer.writeUInt16LE(48, 8)
       buffer.writeUInt8(0x3b, 13)
       expect(() => readImageMetadata(buffer)).toThrow('Unsupported image format')
+    })
+  })
+
+  describe('and the PNG IHDR declares a non-zero compression method', () => {
+    it('should throw with an invalid-compression-method message', () => {
+      expect(() => readImageMetadata(buildPng(64, 64, { compressionMethod: 1 }))).toThrow(
+        'Malformed PNG: invalid compression method 1'
+      )
+    })
+  })
+
+  describe('and the PNG IHDR declares a non-zero filter method', () => {
+    it('should throw with an invalid-filter-method message', () => {
+      expect(() => readImageMetadata(buildPng(64, 64, { filterMethod: 2 }))).toThrow(
+        'Malformed PNG: invalid filter method 2'
+      )
+    })
+  })
+
+  describe('and the PNG IHDR declares an interlace method other than 0 or 1', () => {
+    it('should throw with an invalid-interlace-method message', () => {
+      expect(() => readImageMetadata(buildPng(64, 64, { interlaceMethod: 2 }))).toThrow(
+        'Malformed PNG: invalid interlace method 2'
+      )
+    })
+  })
+
+  describe('and the PNG IHDR declares Adam7 interlace (method 1)', () => {
+    it('should accept the buffer because Adam7 is spec-allowed', () => {
+      expect(readImageMetadata(buildPng(64, 64, { interlaceMethod: 1 }))).toEqual({
+        format: 'png',
+        width: 64,
+        height: 64
+      })
+    })
+  })
+
+  describe('and a PNG chunk declares a length with the high bit set', () => {
+    it('should throw because the spec caps chunk length at 2^31-1', () => {
+      const overlong = Buffer.alloc(12)
+      overlong.writeUInt32BE(0x80000000, 0)
+      overlong.write('iTXt', 4, 'ascii')
+      expect(() => readImageMetadata(buildPng(64, 64, { extraChunks: overlong }))).toThrow(
+        'Malformed PNG: chunk length exceeds 2^31-1'
+      )
+    })
+
+    it('should also reject the maximum 2^32-1 length', () => {
+      const overlong = Buffer.alloc(12)
+      overlong.writeUInt32BE(0xffffffff, 0)
+      overlong.write('iTXt', 4, 'ascii')
+      expect(() => readImageMetadata(buildPng(64, 64, { extraChunks: overlong }))).toThrow(
+        'Malformed PNG: chunk length exceeds 2^31-1'
+      )
+    })
+  })
+
+  describe('and the WebP VP8L signature byte is not 0x2F', () => {
+    it('should throw with an invalid-VP8L-signature message', () => {
+      const tampered = buildWebpVp8l(64, 48)
+      tampered.writeUInt8(0x00, 20)
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: invalid VP8L signature byte')
+    })
+  })
+
+  describe('and a JPEG hits SOS without a SOFn marker', () => {
+    it('should throw because SOFn must precede SOS in any valid JPEG', () => {
+      // SOI + APP0 + SOS + (entropy stub) + EOI. The parser must not walk
+      // entropy data hunting for SOFn — break out at SOS.
+      const buffer = Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xda, 0x00, 0x08, 0, 0, 0, 0, 0,
+        0, 0, 0, 0xff, 0xd9
+      ])
+      expect(() => readImageMetadata(buffer)).toThrow('Malformed JPEG: no SOFn marker found')
+    })
+  })
+
+  describe('and the BMP file-size header does not match the buffer length', () => {
+    it('should throw with a file-size mismatch message', () => {
+      const tampered = buildBmp(64, 48)
+      tampered.writeUInt32LE(99, 2)
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed BMP: file size header does not match buffer length')
     })
   })
 
