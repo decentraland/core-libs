@@ -87,9 +87,17 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
       continue
     }
     const marker = buffer[i + 1]
-    // Skip fill bytes / standalone markers.
+    // Skip fill bytes (0xFF padding before a real marker).
     if (marker === 0x00 || marker === 0xff) {
       i++
+      continue
+    }
+    // Standalone markers have no length field. Advance past the marker only
+    // so we don't read the next two bytes as a bogus segment length and
+    // desynchronise the parser. TEM=0x01, RST0..7=0xD0..0xD7, SOI=0xD8,
+    // EOI=0xD9.
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+      i += 2
       continue
     }
     const isStartOfFrame = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
@@ -119,9 +127,13 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
   // and dimensions are encoded slightly differently per variant.
   const variant = buffer.toString('ascii', 12, 16)
   if (variant === WEBP_VARIANT_VP8) {
-    // Lossy: width/height are at bytes 26-29 as 14-bit little-endian values.
+    // Lossy: width/height are at bytes 26-29 as 14-bit little-endian values,
+    // preceded by the mandatory 3-byte VP8 keyframe sync code at bytes 23-25.
     if (buffer.length < 30) {
       throw new Error('Malformed WebP: VP8 chunk truncated')
+    }
+    if (buffer[23] !== 0x9d || buffer[24] !== 0x01 || buffer[25] !== 0x2a) {
+      throw new Error('Malformed WebP: invalid VP8 keyframe sync code')
     }
     return {
       format: 'webp',
@@ -173,13 +185,33 @@ function readGifMetadata(buffer: Buffer): ImageMetadata {
   }
 }
 
+const BMP_BITMAPCOREHEADER_SIZE = 12
+
 function isBmp(buffer: Buffer): boolean {
-  return buffer.length >= 26 && buffer[0] === 0x42 && buffer[1] === 0x4d
+  // 14-byte BITMAPFILEHEADER + at least the 4-byte DIB header size field, plus
+  // enough room to read the smallest DIB header's width/height (BITMAPCOREHEADER
+  // ends at byte 21; everything else extends to 25).
+  return buffer.length >= 22 && buffer[0] === 0x42 && buffer[1] === 0x4d
 }
 
 function readBmpMetadata(buffer: Buffer): ImageMetadata {
-  // BITMAPINFOHEADER: width at bytes 18-21 (signed int32 LE), height at 22-25.
-  // Height can be negative for top-down DIBs; absolute value is the pixel height.
+  const dibHeaderSize = buffer.readUInt32LE(14)
+  if (dibHeaderSize === BMP_BITMAPCOREHEADER_SIZE) {
+    // BITMAPCOREHEADER (OS/2 v1): 16-bit width and height at offsets 18-19 and
+    // 20-21. Negative heights are not defined for this header.
+    return {
+      format: 'bmp',
+      width: buffer.readUInt16LE(18),
+      height: buffer.readUInt16LE(20)
+    }
+  }
+  // BITMAPINFOHEADER and its extended variants (40, 52, 56, 108, 124 bytes).
+  // Width is signed int32 LE at 18-21, height is signed int32 LE at 22-25.
+  // A negative height encodes a top-down DIB; absolute value is the pixel
+  // height.
+  if (buffer.length < 26) {
+    throw new Error('Malformed BMP: BITMAPINFOHEADER truncated')
+  }
   return {
     format: 'bmp',
     width: buffer.readInt32LE(18),

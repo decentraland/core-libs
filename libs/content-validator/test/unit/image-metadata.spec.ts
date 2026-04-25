@@ -38,7 +38,11 @@ const buildWebpVp8 = (width: number, height: number): Buffer => {
   buffer.write('WEBP', 8, 'ascii')
   buffer.write('VP8 ', 12, 'ascii')
   buffer.writeUInt32LE(10, 16)
-  // bytes 20..25: frame-tag (3) + sync code (3) — left as zeros for the test
+  // bytes 20-22: frame-tag (left as zeros)
+  // bytes 23-25: VP8 keyframe sync code (mandatory per spec)
+  buffer.writeUInt8(0x9d, 23)
+  buffer.writeUInt8(0x01, 24)
+  buffer.writeUInt8(0x2a, 25)
   buffer.writeUInt16LE(width, 26)
   buffer.writeUInt16LE(height, 28)
   return buffer
@@ -91,10 +95,22 @@ const buildGif = (width: number, height: number): Buffer => {
 }
 
 const buildBmp = (width: number, height: number): Buffer => {
+  // BITMAPFILEHEADER (14 bytes) + BITMAPINFOHEADER (40 bytes).
   const buffer = Buffer.alloc(54)
   buffer.write('BM', 0, 'ascii')
+  buffer.writeUInt32LE(40, 14) // DIB header size = BITMAPINFOHEADER
   buffer.writeInt32LE(width, 18)
   buffer.writeInt32LE(height, 22)
+  return buffer
+}
+
+const buildBmpCoreHeader = (width: number, height: number): Buffer => {
+  // BITMAPFILEHEADER (14 bytes) + BITMAPCOREHEADER (12 bytes).
+  const buffer = Buffer.alloc(26)
+  buffer.write('BM', 0, 'ascii')
+  buffer.writeUInt32LE(12, 14)
+  buffer.writeUInt16LE(width, 18)
+  buffer.writeUInt16LE(height, 20)
   return buffer
 }
 
@@ -229,6 +245,31 @@ describe('when reading image metadata', () => {
     })
   })
 
+  describe('and the WebP VP8 chunk has an invalid sync code', () => {
+    it('should throw with an invalid-sync-code message', () => {
+      const tampered = buildWebpVp8(320, 240)
+      tampered.writeUInt8(0x00, 23)
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: invalid VP8 keyframe sync code')
+    })
+  })
+
+  describe.each([
+    ['width and height that fit in 8 bits', 200, 150],
+    ['width and height that span byte boundaries (>= 4096)', 5000, 8000],
+    ['the maximum representable VP8L dimensions', 16384, 16384],
+    ['arbitrary mid-range values', 12345, 9876]
+  ])('and the buffer is a WebP (lossless VP8L) image with %s', (_label, width, height) => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      metadata = readImageMetadata(buildWebpVp8l(width, height))
+    })
+
+    it('should round-trip the encoded width and height', () => {
+      expect(metadata).toEqual({ format: 'webp', width, height })
+    })
+  })
+
   describe('and the buffer is a GIF89a image', () => {
     let metadata: ReturnType<typeof readImageMetadata>
 
@@ -262,6 +303,81 @@ describe('when reading image metadata', () => {
 
     it('should report the absolute pixel height', () => {
       expect(metadata).toEqual({ format: 'bmp', width: 128, height: 96 })
+    })
+  })
+
+  describe('and the buffer is a BMP image with the legacy BITMAPCOREHEADER (DIB size 12)', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      metadata = readImageMetadata(buildBmpCoreHeader(64, 48))
+    })
+
+    it('should read the 16-bit width and height fields', () => {
+      expect(metadata).toEqual({ format: 'bmp', width: 64, height: 48 })
+    })
+  })
+
+  describe('and the BMP buffer is a BITMAPINFOHEADER variant truncated below 26 bytes', () => {
+    it('should throw with a truncated-header message', () => {
+      // Looks like a BIH (DIB size 40) but the buffer is only 25 bytes.
+      const truncated = Buffer.alloc(25)
+      truncated.write('BM', 0, 'ascii')
+      truncated.writeUInt32LE(40, 14)
+      expect(() => readImageMetadata(truncated)).toThrow('Malformed BMP: BITMAPINFOHEADER truncated')
+    })
+  })
+
+  describe('and the JPEG has a standalone restart marker before the SOFn', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      // SOI + RST0 (standalone, no length field) + SOFn(640x480) + EOI.
+      // If the parser tried to interpret the two bytes after RST0 as a
+      // segment length, it would skip into the SOFn segment and fail.
+      const sof = Buffer.alloc(19)
+      sof.writeUInt8(0xff, 0)
+      sof.writeUInt8(0xc0, 1)
+      sof.writeUInt16BE(17, 2)
+      sof.writeUInt8(8, 4)
+      sof.writeUInt16BE(480, 5)
+      sof.writeUInt16BE(640, 7)
+      sof.writeUInt8(3, 9)
+      const buffer = Buffer.concat([
+        Buffer.from([0xff, 0xd8]),
+        Buffer.from([0xff, 0xd0]),
+        sof,
+        Buffer.from([0xff, 0xd9])
+      ])
+      metadata = readImageMetadata(buffer)
+    })
+
+    it('should still find the SOFn dimensions', () => {
+      expect(metadata).toEqual({ format: 'jpeg', width: 640, height: 480 })
+    })
+  })
+
+  describe('and the input is a Uint8Array view with a non-zero byteOffset', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      const png = buildPng(512, 512)
+      const padded = Buffer.alloc(8 + png.length)
+      png.copy(padded, 8)
+      const view = new Uint8Array(padded.buffer, padded.byteOffset + 8, png.length)
+      metadata = readImageMetadata(view)
+    })
+
+    it('should still report the IHDR width and height from the offset view', () => {
+      expect(metadata).toEqual({ format: 'png', width: 512, height: 512 })
+    })
+  })
+
+  describe('and the buffer has a PNG signature but is truncated below the IHDR data', () => {
+    it('should throw an unsupported-format error from the length guard', () => {
+      const truncated = Buffer.alloc(20)
+      buildPng(64, 64).copy(truncated, 0, 0, 20)
+      expect(() => readImageMetadata(truncated)).toThrow('Unsupported image format')
     })
   })
 
