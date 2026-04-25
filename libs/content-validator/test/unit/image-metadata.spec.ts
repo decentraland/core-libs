@@ -44,6 +44,44 @@ const buildWebpVp8 = (width: number, height: number): Buffer => {
   return buffer
 }
 
+const buildWebpVp8l = (width: number, height: number): Buffer => {
+  // RIFF[size]WEBPVP8L[chunk-size:4][signature:1][packed dimensions:4]
+  const buffer = Buffer.alloc(25)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(17, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write('VP8L', 12, 'ascii')
+  buffer.writeUInt32LE(5, 16)
+  buffer.writeUInt8(0x2f, 20)
+  // Pack (width-1) into bits 0-13 and (height-1) into bits 14-27.
+  const packed = ((width - 1) & 0x3fff) | (((height - 1) & 0x3fff) << 14)
+  buffer.writeUInt32LE(packed >>> 0, 21)
+  return buffer
+}
+
+const buildWebpVp8x = (width: number, height: number): Buffer => {
+  // RIFF[size]WEBPVP8X[chunk-size:4][flags:1][reserved:3][width-1:3 LE][height-1:3 LE]
+  const buffer = Buffer.alloc(30)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(22, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write('VP8X', 12, 'ascii')
+  buffer.writeUInt32LE(10, 16)
+  // bytes 20..23 are flags + reserved (zeros are fine for the reader)
+  buffer.writeUIntLE(width - 1, 24, 3)
+  buffer.writeUIntLE(height - 1, 27, 3)
+  return buffer
+}
+
+const buildWebpUnknownVariant = (variant: string): Buffer => {
+  const buffer = Buffer.alloc(30)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(22, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write(variant, 12, 'ascii')
+  return buffer
+}
+
 const buildGif = (width: number, height: number): Buffer => {
   const buffer = Buffer.alloc(13)
   buffer.write('GIF89a', 0, 'ascii')
@@ -142,6 +180,52 @@ describe('when reading image metadata', () => {
 
     it('should report format webp with the VP8 width and height', () => {
       expect(metadata).toEqual({ format: 'webp', width: 320, height: 240 })
+    })
+  })
+
+  describe('and the buffer is a WebP (lossless VP8L) image with values larger than 8 bits', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      metadata = readImageMetadata(buildWebpVp8l(300, 400))
+    })
+
+    it('should unpack the VP8L width-1 and height-1 fields correctly', () => {
+      expect(metadata).toEqual({ format: 'webp', width: 300, height: 400 })
+    })
+  })
+
+  describe('and the buffer is a WebP (extended VP8X) image', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      metadata = readImageMetadata(buildWebpVp8x(1920, 1080))
+    })
+
+    it('should unpack the VP8X canvas width-1 and height-1 fields', () => {
+      expect(metadata).toEqual({ format: 'webp', width: 1920, height: 1080 })
+    })
+  })
+
+  describe('and the WebP variant identifier is unknown', () => {
+    it('should throw with an unknown-variant message', () => {
+      expect(() => readImageMetadata(buildWebpUnknownVariant('VP9 '))).toThrow("Malformed WebP: unknown variant 'VP9 '")
+    })
+  })
+
+  describe('and the WebP VP8L chunk is truncated below the minimum length', () => {
+    it('should throw with a truncated-chunk message', () => {
+      const truncated = Buffer.alloc(24)
+      buildWebpVp8l(64, 48).copy(truncated, 0, 0, 24)
+      expect(() => readImageMetadata(truncated)).toThrow('Malformed WebP: VP8L chunk truncated')
+    })
+  })
+
+  describe('and the WebP VP8 chunk is truncated below the minimum length', () => {
+    it('should throw with a truncated-chunk message', () => {
+      const truncated = Buffer.alloc(29)
+      buildWebpVp8(320, 240).copy(truncated, 0, 0, 29)
+      expect(() => readImageMetadata(truncated)).toThrow('Malformed WebP: VP8 chunk truncated')
     })
   })
 

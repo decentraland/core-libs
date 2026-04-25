@@ -11,6 +11,10 @@
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const PNG_IHDR_CHUNK_LENGTH = 13
 
+const WEBP_VARIANT_VP8 = 'VP8 '
+const WEBP_VARIANT_VP8L = 'VP8L'
+const WEBP_VARIANT_VP8X = 'VP8X'
+
 /**
  * @public
  */
@@ -74,9 +78,10 @@ function isJpeg(buffer: Buffer): boolean {
 function readJpegMetadata(buffer: Buffer): ImageMetadata {
   // JPEG is a chain of 0xFF-prefixed segments. Dimensions live in any of the
   // SOFn (Start Of Frame) segments — markers 0xC0..0xCF except 0xC4 (DHT),
-  // 0xC8 (JPG, reserved), and 0xCC (DAC).
+  // 0xC8 (JPG, reserved), and 0xCC (DAC). The SOFn payload reads up to
+  // buffer[i + 8], so we need `i + 8 < buffer.length`.
   let i = 2
-  while (i < buffer.length - 9) {
+  while (i < buffer.length - 8) {
     if (buffer[i] !== 0xff) {
       i++
       continue
@@ -105,24 +110,30 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
 }
 
 function isWebp(buffer: Buffer): boolean {
-  // RIFF[4 bytes file size]WEBP
-  return buffer.length >= 30 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP'
+  // RIFF[4 bytes file size]WEBP[4 bytes variant identifier]
+  return buffer.length >= 16 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP'
 }
 
 function readWebpMetadata(buffer: Buffer): ImageMetadata {
   // After "WEBP" comes a sub-chunk identifier ("VP8 ", "VP8L", or "VP8X")
   // and dimensions are encoded slightly differently per variant.
   const variant = buffer.toString('ascii', 12, 16)
-  if (variant === 'VP8 ') {
+  if (variant === WEBP_VARIANT_VP8) {
     // Lossy: width/height are at bytes 26-29 as 14-bit little-endian values.
+    if (buffer.length < 30) {
+      throw new Error('Malformed WebP: VP8 chunk truncated')
+    }
     return {
       format: 'webp',
       width: buffer.readUInt16LE(26) & 0x3fff,
       height: buffer.readUInt16LE(28) & 0x3fff
     }
   }
-  if (variant === 'VP8L') {
+  if (variant === WEBP_VARIANT_VP8L) {
     // Lossless: width-1 and height-1 are packed into bytes 21-24.
+    if (buffer.length < 25) {
+      throw new Error('Malformed WebP: VP8L chunk truncated')
+    }
     const b0 = buffer[21]
     const b1 = buffer[22]
     const b2 = buffer[23]
@@ -133,8 +144,11 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
       height: 1 + (((b1 >> 6) | (b2 << 2) | (b3 << 10)) & 0x3fff)
     }
   }
-  if (variant === 'VP8X') {
+  if (variant === WEBP_VARIANT_VP8X) {
     // Extended: width-1 and height-1 as 24-bit little-endian at bytes 24-29.
+    if (buffer.length < 30) {
+      throw new Error('Malformed WebP: VP8X chunk truncated')
+    }
     return {
       format: 'webp',
       width: 1 + buffer.readUIntLE(24, 3),
