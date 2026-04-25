@@ -46,8 +46,9 @@ export function createFaceThumbnailValidateFn(components: ContentValidatorCompon
       if (!thumbnailBuffer) return validationFailed(`Couldn't find thumbnail file with hash: ${hash}`)
       try {
         const { width, height, format } = readImageMetadata(thumbnailBuffer)
-        if (format !== 'png') errors.push(`Invalid or unknown image format. Only 'PNG' format is accepted.`)
-        if (!width || !height) {
+        if (format !== 'png') {
+          errors.push(`Invalid or unknown image format. Only 'PNG' format is accepted.`)
+        } else if (!width || !height) {
           errors.push(`Couldn't validate thumbnail size for file 'face256'`)
         } else if (width !== defaultThumbnailSize || height !== defaultThumbnailSize) {
           errors.push(`Invalid face256 thumbnail image size (width = ${width} / height = ${height})`)

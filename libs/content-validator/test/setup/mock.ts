@@ -78,9 +78,29 @@ function buildPngWithDimensions(width: number, height: number): Buffer {
   ihdrData.writeUInt8(8, 8) // bit depth
   ihdrData.writeUInt8(6, 9) // color type: RGBA
   // bytes 10..12 are compression / filter / interlace methods (all 0)
-  // CRC is not validated by the reader, but include zeros so the chunk is the expected length.
   const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(crc32(Buffer.concat([ihdrType, ihdrData])), 0)
   return Buffer.concat([signature, ihdrLength, ihdrType, ihdrData, crc])
+}
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256)
+  for (let i = 0; i < 256; i++) {
+    let c = i
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    }
+    table[i] = c
+  }
+  return table
+})()
+
+function crc32(buffer: Buffer): number {
+  let crc = 0xffffffff
+  for (let i = 0; i < buffer.length; i++) {
+    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ buffer[i]) & 0xff]
+  }
+  return (crc ^ 0xffffffff) >>> 0
 }
 
 function buildJpegWithDimensions(width: number, height: number): Buffer {

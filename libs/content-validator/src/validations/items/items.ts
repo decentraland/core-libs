@@ -97,8 +97,7 @@ export function createThumbnailMaxSizeIsNotExceededValidateFn(
       const { width, height, format } = readImageMetadata(thumbnailBuffer)
       if (format !== 'png') {
         errors.push(`Invalid or unknown image format. Only 'PNG' format is accepted.`)
-      }
-      if (!width || !height) {
+      } else if (!width || !height) {
         errors.push(`Couldn't validate thumbnail size for file ${metadata.thumbnail}`)
       } else if (width > maxThumbnailDimensionInPx || height > maxThumbnailDimensionInPx) {
         errors.push(`Invalid thumbnail image size (width = ${width} / height = ${height})`)

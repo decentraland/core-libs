@@ -9,11 +9,12 @@
  */
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const PNG_IHDR_CHUNK_LENGTH = 13
 
 /**
  * @public
  */
-export type ImageFormat = 'png' | 'jpeg'
+export type ImageFormat = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp'
 
 /**
  * @public
@@ -25,34 +26,45 @@ export interface ImageMetadata {
 }
 
 /**
- * Reads the format and pixel dimensions of a PNG or JPEG buffer.
+ * Reads the format and pixel dimensions of a recognised image buffer.
  *
- * Throws if the buffer is not a recognised PNG or JPEG image. Callers are
+ * Recognises PNG, JPEG, WebP, GIF, and BMP by their magic bytes. The library
+ * only enforces a PNG-format check on top of this, but recognising the other
+ * common formats means a user uploading a JPEG/WebP/GIF/BMP thumbnail gets
+ * the precise "Invalid format" error instead of a generic parse failure.
+ *
+ * Throws if the buffer is not one of the recognised formats. Callers are
  * expected to wrap calls in try/catch to translate the throw into a
- * "couldn't parse" validation error, matching the previous sharp behaviour.
+ * "couldn't parse" validation error.
  * @public
  */
 export function readImageMetadata(input: Uint8Array): ImageMetadata {
   // Wrap as Buffer to access readUInt*BE / equals / toString without copying.
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input.buffer, input.byteOffset, input.byteLength)
-  if (isPng(buffer)) {
-    if (buffer.toString('ascii', 12, 16) !== 'IHDR') {
-      throw new Error('Malformed PNG: missing IHDR chunk')
-    }
-    return {
-      format: 'png',
-      width: buffer.readUInt32BE(16),
-      height: buffer.readUInt32BE(20)
-    }
-  }
-  if (isJpeg(buffer)) {
-    return readJpegMetadata(buffer)
-  }
+  if (isPng(buffer)) return readPngMetadata(buffer)
+  if (isJpeg(buffer)) return readJpegMetadata(buffer)
+  if (isWebp(buffer)) return readWebpMetadata(buffer)
+  if (isGif(buffer)) return readGifMetadata(buffer)
+  if (isBmp(buffer)) return readBmpMetadata(buffer)
   throw new Error('Unsupported image format')
 }
 
 function isPng(buffer: Buffer): boolean {
   return buffer.length >= 24 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)
+}
+
+function readPngMetadata(buffer: Buffer): ImageMetadata {
+  if (buffer.readUInt32BE(8) !== PNG_IHDR_CHUNK_LENGTH) {
+    throw new Error('Malformed PNG: IHDR chunk length is not 13')
+  }
+  if (buffer.toString('ascii', 12, 16) !== 'IHDR') {
+    throw new Error('Malformed PNG: missing IHDR chunk')
+  }
+  return {
+    format: 'png',
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20)
+  }
 }
 
 function isJpeg(buffer: Buffer): boolean {
@@ -90,4 +102,73 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
     i += 2 + segmentLength
   }
   throw new Error('Malformed JPEG: no SOFn marker found')
+}
+
+function isWebp(buffer: Buffer): boolean {
+  // RIFF[4 bytes file size]WEBP
+  return buffer.length >= 30 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP'
+}
+
+function readWebpMetadata(buffer: Buffer): ImageMetadata {
+  // After "WEBP" comes a sub-chunk identifier ("VP8 ", "VP8L", or "VP8X")
+  // and dimensions are encoded slightly differently per variant.
+  const variant = buffer.toString('ascii', 12, 16)
+  if (variant === 'VP8 ') {
+    // Lossy: width/height are at bytes 26-29 as 14-bit little-endian values.
+    return {
+      format: 'webp',
+      width: buffer.readUInt16LE(26) & 0x3fff,
+      height: buffer.readUInt16LE(28) & 0x3fff
+    }
+  }
+  if (variant === 'VP8L') {
+    // Lossless: width-1 and height-1 are packed into bytes 21-24.
+    const b0 = buffer[21]
+    const b1 = buffer[22]
+    const b2 = buffer[23]
+    const b3 = buffer[24]
+    return {
+      format: 'webp',
+      width: 1 + ((b0 | (b1 << 8)) & 0x3fff),
+      height: 1 + (((b1 >> 6) | (b2 << 2) | (b3 << 10)) & 0x3fff)
+    }
+  }
+  if (variant === 'VP8X') {
+    // Extended: width-1 and height-1 as 24-bit little-endian at bytes 24-29.
+    return {
+      format: 'webp',
+      width: 1 + buffer.readUIntLE(24, 3),
+      height: 1 + buffer.readUIntLE(27, 3)
+    }
+  }
+  throw new Error(`Malformed WebP: unknown variant '${variant}'`)
+}
+
+function isGif(buffer: Buffer): boolean {
+  if (buffer.length < 10) return false
+  const header = buffer.toString('ascii', 0, 6)
+  return header === 'GIF87a' || header === 'GIF89a'
+}
+
+function readGifMetadata(buffer: Buffer): ImageMetadata {
+  // Logical screen descriptor: width at bytes 6-7, height at 8-9, little-endian.
+  return {
+    format: 'gif',
+    width: buffer.readUInt16LE(6),
+    height: buffer.readUInt16LE(8)
+  }
+}
+
+function isBmp(buffer: Buffer): boolean {
+  return buffer.length >= 26 && buffer[0] === 0x42 && buffer[1] === 0x4d
+}
+
+function readBmpMetadata(buffer: Buffer): ImageMetadata {
+  // BITMAPINFOHEADER: width at bytes 18-21 (signed int32 LE), height at 22-25.
+  // Height can be negative for top-down DIBs; absolute value is the pixel height.
+  return {
+    format: 'bmp',
+    width: buffer.readInt32LE(18),
+    height: Math.abs(buffer.readInt32LE(22))
+  }
 }
