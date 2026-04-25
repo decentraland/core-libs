@@ -1,0 +1,25 @@
+import type { Entity } from '@dcl/schemas'
+import { ADR_45_TIMESTAMP } from './timestamps'
+import { OK, validationFailed } from '../types'
+import type { DeploymentToValidate, ValidationResponse } from '../types'
+
+const entityIsNotVersion3 = (entity: Entity) => entity.version !== 'v3'
+
+// Uses > (not >=) intentionally: the v3 requirement starts strictly after the ADR-45 timestamp,
+// while validateAfterADR45 uses >= to enable other ADR-45 validations at the exact timestamp.
+const entityWasDeployedAfterADR45 = (entity: Entity) => entity.timestamp > ADR_45_TIMESTAMP
+
+/**
+ * Validate that entity meets ADR-45 validations
+ * @public
+ */
+export async function adr45ValidateFn(deployment: DeploymentToValidate): Promise<ValidationResponse> {
+  const { entity } = deployment
+
+  if (entityIsNotVersion3(entity) && entityWasDeployedAfterADR45(entity))
+    return validationFailed(
+      'Only entities v3 are allowed after the ADR-45. Check http://adr.decentraland.org/adr/ADR-45 for more information'
+    )
+
+  return OK
+}

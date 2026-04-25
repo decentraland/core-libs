@@ -1,0 +1,37 @@
+import type { EntityType, ValidateFunction } from '@dcl/schemas'
+import { Emote, Outfits, Profile, Scene, Store, Wearable } from '@dcl/schemas'
+
+interface Params {
+  validate: ValidateFunction<Scene | Profile | Wearable | Store | Emote | Outfits>
+  maxSizeInMB: number // in MB
+}
+
+export const skinMaxSizeInMb = 9
+export const thumbnailMaxSizeInMb = 1
+
+export const entityParameters: Record<EntityType, Params> = {
+  scene: {
+    validate: Scene.validate,
+    maxSizeInMB: 15
+  },
+  profile: {
+    validate: Profile.validate,
+    maxSizeInMB: 2
+  },
+  wearable: {
+    validate: Wearable.validate,
+    maxSizeInMB: 3
+  },
+  store: {
+    validate: Store.validate,
+    maxSizeInMB: 1
+  },
+  emote: {
+    validate: Emote.validate,
+    maxSizeInMB: 3
+  },
+  outfits: {
+    validate: Outfits.validate,
+    maxSizeInMB: 1
+  }
+}
