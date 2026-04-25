@@ -15,6 +15,8 @@
  */
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const PNG_IHDR_BYTES = Buffer.from('IHDR', 'ascii')
+const PNG_IEND_BYTES = Buffer.from('IEND', 'ascii')
 const PNG_IHDR_CHUNK_LENGTH = 13
 const PNG_FIRST_CHUNK_END = 33 // 8 (signature) + 4 (length) + 4 (type) + 13 (IHDR data) + 4 (CRC)
 const PNG_CHUNK_OVERHEAD = 12 // length(4) + type(4) + crc(4)
@@ -27,12 +29,31 @@ const PNG_VALID_BIT_DEPTHS_BY_COLOR_TYPE: Record<number, readonly number[]> = {
   6: [8, 16] // Truecolor + Alpha (RGBA)
 }
 
-const WEBP_VARIANT_VP8 = 'VP8 '
-const WEBP_VARIANT_VP8L = 'VP8L'
-const WEBP_VARIANT_VP8X = 'VP8X'
+const WEBP_RIFF_BYTES = Buffer.from('RIFF', 'ascii')
+const WEBP_WEBP_BYTES = Buffer.from('WEBP', 'ascii')
+const WEBP_VP8_BYTES = Buffer.from('VP8 ', 'ascii')
+const WEBP_VP8L_BYTES = Buffer.from('VP8L', 'ascii')
+const WEBP_VP8X_BYTES = Buffer.from('VP8X', 'ascii')
+
+const GIF87A_BYTES = Buffer.from('GIF87a', 'ascii')
+const GIF89A_BYTES = Buffer.from('GIF89a', 'ascii')
 
 const JPEG_EOI_BYTE_1 = 0xff
 const JPEG_EOI_BYTE_2 = 0xd9
+
+/**
+ * Compare a slice of `buffer` to `expected` using byte-exact equality.
+ *
+ * Buffer.toString('ascii') masks the high bit of each byte before decoding,
+ * so a chunk type stored as e.g. [0x49, 0x48, 0xC4, 0x52] would otherwise
+ * decode as "IHDR" — a parser differential vs. real PNG/WebP/GIF readers.
+ * This helper is used everywhere a magic byte sequence or chunk identifier
+ * needs to be compared.
+ */
+function bufferEqualsAt(buffer: Buffer, offset: number, expected: Buffer): boolean {
+  if (offset < 0 || offset + expected.length > buffer.length) return false
+  return buffer.subarray(offset, offset + expected.length).equals(expected)
+}
 
 /**
  * @public
@@ -103,7 +124,7 @@ function readPngMetadata(buffer: Buffer): ImageMetadata {
   if (buffer.readUInt32BE(8) !== PNG_IHDR_CHUNK_LENGTH) {
     throw new Error('Malformed PNG: IHDR chunk length is not 13')
   }
-  if (buffer.toString('ascii', 12, 16) !== 'IHDR') {
+  if (!bufferEqualsAt(buffer, 12, PNG_IHDR_BYTES)) {
     throw new Error('Malformed PNG: missing IHDR chunk')
   }
   const width = buffer.readUInt32BE(16)
@@ -130,11 +151,10 @@ function validatePngChunkChain(buffer: Buffer): void {
   let i = PNG_FIRST_CHUNK_END
   while (i + PNG_CHUNK_OVERHEAD <= buffer.length) {
     const chunkDataLength = buffer.readUInt32BE(i)
-    const type = buffer.toString('ascii', i + 4, i + 8)
-    if (type === 'IHDR') {
+    if (bufferEqualsAt(buffer, i + 4, PNG_IHDR_BYTES)) {
       throw new Error('Malformed PNG: duplicate IHDR chunk')
     }
-    if (type === 'IEND') {
+    if (bufferEqualsAt(buffer, i + 4, PNG_IEND_BYTES)) {
       // IEND has zero-length data; the chunk occupies exactly 12 bytes
       // (length + type + crc) and must be the last bytes in the buffer.
       if (i + PNG_CHUNK_OVERHEAD !== buffer.length) {
@@ -205,7 +225,7 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
 
 function isWebp(buffer: Buffer): boolean {
   // RIFF[4 bytes file size]WEBP[4 bytes variant identifier]
-  return buffer.length >= 16 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP'
+  return buffer.length >= 16 && bufferEqualsAt(buffer, 0, WEBP_RIFF_BYTES) && bufferEqualsAt(buffer, 8, WEBP_WEBP_BYTES)
 }
 
 function readWebpMetadata(buffer: Buffer): ImageMetadata {
@@ -218,8 +238,7 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
   }
   // After "WEBP" comes a sub-chunk identifier ("VP8 ", "VP8L", or "VP8X")
   // and dimensions are encoded slightly differently per variant.
-  const variant = buffer.toString('ascii', 12, 16)
-  if (variant === WEBP_VARIANT_VP8) {
+  if (bufferEqualsAt(buffer, 12, WEBP_VP8_BYTES)) {
     // Lossy: width/height are at bytes 26-29 as 14-bit little-endian values,
     // preceded by the mandatory 3-byte VP8 keyframe sync code at bytes 23-25.
     if (buffer.length < 30) {
@@ -235,7 +254,7 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
       height: buffer.readUInt16LE(28) & 0x3fff
     }
   }
-  if (variant === WEBP_VARIANT_VP8L) {
+  if (bufferEqualsAt(buffer, 12, WEBP_VP8L_BYTES)) {
     // Lossless: width-1 and height-1 are packed into bytes 21-24.
     if (buffer.length < 25) {
       throw new Error('Malformed WebP: VP8L chunk truncated')
@@ -251,7 +270,7 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
       height: 1 + (((b1 >> 6) | (b2 << 2) | (b3 << 10)) & 0x3fff)
     }
   }
-  if (variant === WEBP_VARIANT_VP8X) {
+  if (bufferEqualsAt(buffer, 12, WEBP_VP8X_BYTES)) {
     // Extended: width-1 and height-1 as 24-bit little-endian at bytes 24-29.
     if (buffer.length < 30) {
       throw new Error('Malformed WebP: VP8X chunk truncated')
@@ -267,7 +286,10 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
       height: 1 + buffer.readUIntLE(27, 3)
     }
   }
-  throw new Error(`Malformed WebP: unknown variant '${sanitiseForLog(variant)}'`)
+  // Read the variant bytes for the error message via latin1 (preserves all
+  // byte values 0x00-0xFF) and then sanitise non-printable characters so we
+  // can't smuggle log lines through high-bit or control bytes.
+  throw new Error(`Malformed WebP: unknown variant '${sanitiseForLog(buffer.toString('latin1', 12, 16))}'`)
 }
 
 /**
@@ -299,9 +321,8 @@ function sanitiseForLog(value: string): string {
 }
 
 function isGif(buffer: Buffer): boolean {
-  if (buffer.length < 10) return false
-  const header = buffer.toString('ascii', 0, 6)
-  return header === 'GIF87a' || header === 'GIF89a'
+  // Minimum legal GIF89a is signature(6) + LSD(7) + trailer(1) = 14 bytes.
+  return buffer.length >= 14 && (bufferEqualsAt(buffer, 0, GIF87A_BYTES) || bufferEqualsAt(buffer, 0, GIF89A_BYTES))
 }
 
 function readGifMetadata(buffer: Buffer): ImageMetadata {

@@ -723,6 +723,99 @@ describe('when reading image metadata', () => {
     })
   })
 
+  describe('and a PNG has high-bit bytes that would mask to IHDR via toString(ascii)', () => {
+    it('should reject byte-for-byte: 0xC9 0xC8 0xC4 0xD2 is not the same as IHDR', () => {
+      // Buffer.toString('ascii') strips the high bit of each byte, so
+      // [0xC9, 0xC8, 0xC4, 0xD2] would decode as "IHDR" — a parser
+      // differential vs. real PNG readers that compare bytes literally.
+      const png = buildPng(64, 64)
+      png[12] = 0xc9
+      png[13] = 0xc8
+      png[14] = 0xc4
+      png[15] = 0xd2
+      expect(() => readImageMetadata(png)).toThrow('Malformed PNG: missing IHDR chunk')
+    })
+  })
+
+  describe('and a PNG chunk type uses high-bit bytes that would mask to IEND', () => {
+    // Build a 12-byte chunk (length + type + crc) whose type bytes
+    // [0xC9, 0xC5, 0xCE, 0xC4] mask to "IEND" via toString('ascii').
+    const buildMasqueradeIendChunk = (): Buffer => {
+      const chunk = Buffer.alloc(12)
+      chunk.writeUInt32BE(0, 0)
+      chunk.writeUInt8(0xc9, 4)
+      chunk.writeUInt8(0xc5, 5)
+      chunk.writeUInt8(0xce, 6)
+      chunk.writeUInt8(0xc4, 7)
+      return chunk
+    }
+
+    it('should not treat the masqueraded chunk as IEND and should continue walking', () => {
+      const png = buildPng(64, 64, { extraChunks: buildMasqueradeIendChunk() })
+      // Real IEND is still present at the end, so the walker should reach it.
+      expect(readImageMetadata(png)).toEqual({ format: 'png', width: 64, height: 64 })
+    })
+
+    it('should report missing IEND when the masqueraded chunk is the only candidate', () => {
+      const png = buildPng(64, 64, { extraChunks: buildMasqueradeIendChunk(), omitIend: true })
+      expect(() => readImageMetadata(png)).toThrow('Malformed PNG: missing IEND chunk')
+    })
+  })
+
+  describe('and a WebP variant uses high-bit bytes that would mask to VP8/VP8L/VP8X', () => {
+    it('should treat 0xD6 0xD0 0xB8 0xA0 as an unknown variant, not as VP8 ', () => {
+      // 'V' = 0x56, 'P' = 0x50, '8' = 0x38, ' ' = 0x20 — adding 0x80 to each
+      // produces bytes that toString('ascii') would decode as "VP8 ".
+      const buffer = Buffer.alloc(30)
+      buffer.write('RIFF', 0, 'ascii')
+      buffer.writeUInt32LE(22, 4)
+      buffer.write('WEBP', 8, 'ascii')
+      buffer.writeUInt8(0xd6, 12)
+      buffer.writeUInt8(0xd0, 13)
+      buffer.writeUInt8(0xb8, 14)
+      buffer.writeUInt8(0xa0, 15)
+      // Sanitiser replaces non-printable bytes with '?', so the error message
+      // contains '????' rather than the raw bytes.
+      expect(() => readImageMetadata(buffer)).toThrow("Malformed WebP: unknown variant '????'")
+    })
+  })
+
+  describe('and a buffer has high-bit bytes that would mask to the RIFF/WEBP magic', () => {
+    it('should not be detected as WebP', () => {
+      const buffer = Buffer.alloc(30)
+      // 0xD2 0xC9 0xC6 0xC6 -> "RIFF" via toString('ascii'); 0xD7 0xC5 0xC2 0xD0 -> "WEBP".
+      buffer.writeUInt8(0xd2, 0)
+      buffer.writeUInt8(0xc9, 1)
+      buffer.writeUInt8(0xc6, 2)
+      buffer.writeUInt8(0xc6, 3)
+      buffer.writeUInt32LE(22, 4)
+      buffer.writeUInt8(0xd7, 8)
+      buffer.writeUInt8(0xc5, 9)
+      buffer.writeUInt8(0xc2, 10)
+      buffer.writeUInt8(0xd0, 11)
+      buffer.write('VP8 ', 12, 'ascii')
+      expect(() => readImageMetadata(buffer)).toThrow('Unsupported image format')
+    })
+  })
+
+  describe('and a buffer has high-bit bytes that would mask to the GIF89a signature', () => {
+    it('should not be detected as a GIF', () => {
+      // 'G' 0x47 + 0x80 = 0xC7; 'I' 0x49 + 0x80 = 0xC9; 'F' 0x46 + 0x80 = 0xC6;
+      // '8' 0x38 + 0x80 = 0xB8; '9' 0x39 + 0x80 = 0xB9; 'a' 0x61 + 0x80 = 0xE1.
+      const buffer = Buffer.alloc(14)
+      buffer.writeUInt8(0xc7, 0)
+      buffer.writeUInt8(0xc9, 1)
+      buffer.writeUInt8(0xc6, 2)
+      buffer.writeUInt8(0xb8, 3)
+      buffer.writeUInt8(0xb9, 4)
+      buffer.writeUInt8(0xe1, 5)
+      buffer.writeUInt16LE(64, 6)
+      buffer.writeUInt16LE(48, 8)
+      buffer.writeUInt8(0x3b, 13)
+      expect(() => readImageMetadata(buffer)).toThrow('Unsupported image format')
+    })
+  })
+
   describe('and the input is a corpus of seeded random buffers', () => {
     const lcg = (seed: number) => {
       let state = seed >>> 0
