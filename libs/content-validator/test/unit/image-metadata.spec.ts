@@ -106,10 +106,12 @@ const buildWebpUnknownVariant = (variant: string): Buffer => {
 }
 
 const buildGif = (width: number, height: number): Buffer => {
-  const buffer = Buffer.alloc(13)
+  // 6-byte signature + 7-byte logical screen descriptor + 1-byte trailer.
+  const buffer = Buffer.alloc(14)
   buffer.write('GIF89a', 0, 'ascii')
   buffer.writeUInt16LE(width, 6)
   buffer.writeUInt16LE(height, 8)
+  buffer.writeUInt8(0x3b, 13)
   return buffer
 }
 
@@ -347,6 +349,33 @@ describe('when reading image metadata', () => {
       const view = new Uint8Array(sab)
       view.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
       expect(() => readImageMetadata(view)).toThrow('Image input must not be backed by a SharedArrayBuffer')
+    })
+  })
+
+  describe('and the buffer is exactly the PNG signature size (24 bytes)', () => {
+    it('should reject as unsupported rather than throw a bounds-check RangeError', () => {
+      // A 24-byte buffer with the PNG signature does not contain enough room
+      // to read the bit-depth / color-type fields at offsets 24 and 25. The
+      // reader must reject before attempting those reads.
+      const truncated = Buffer.alloc(24)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(truncated, 0)
+      expect(() => readImageMetadata(truncated)).toThrow('Unsupported image format')
+    })
+  })
+
+  describe('and the buffer is a PNG signature plus a partial IHDR (length 30)', () => {
+    it('should reject as unsupported because the full IHDR is not yet present', () => {
+      const truncated = Buffer.alloc(30)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(truncated, 0)
+      expect(() => readImageMetadata(truncated)).toThrow('Unsupported image format')
+    })
+  })
+
+  describe('and the GIF buffer is missing the 0x3B trailer byte', () => {
+    it('should throw with a missing-trailer message', () => {
+      const noTrailer = buildGif(64, 48)
+      noTrailer.writeUInt8(0x00, noTrailer.length - 1)
+      expect(() => readImageMetadata(noTrailer)).toThrow('Malformed GIF: missing trailer byte')
     })
   })
 

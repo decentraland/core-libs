@@ -92,7 +92,11 @@ function assertPositiveDimensions(metadata: ImageMetadata): void {
 }
 
 function isPng(buffer: Buffer): boolean {
-  return buffer.length >= 24 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)
+  // Require the full IHDR chunk (signature + 25-byte IHDR) to be present so
+  // readPngMetadata can safely read every IHDR field, including bit depth at
+  // byte 24 and color type at byte 25. A shorter buffer with the PNG signature
+  // is treated as unrecognised rather than as a truncated PNG.
+  return buffer.length >= PNG_FIRST_CHUNK_END && buffer.subarray(0, 8).equals(PNG_SIGNATURE)
 }
 
 function readPngMetadata(buffer: Buffer): ImageMetadata {
@@ -301,6 +305,12 @@ function isGif(buffer: Buffer): boolean {
 }
 
 function readGifMetadata(buffer: Buffer): ImageMetadata {
+  // Per the GIF89a spec the file must end with a 0x3B trailer byte. Rejecting
+  // missing trailers brings GIF in line with the PNG (IEND) and JPEG (EOI)
+  // termination checks and catches truncated / trailing-data polyglots.
+  if (buffer[buffer.length - 1] !== 0x3b) {
+    throw new Error('Malformed GIF: missing trailer byte')
+  }
   // Logical screen descriptor: width at bytes 6-7, height at 8-9, little-endian.
   return {
     format: 'gif',
