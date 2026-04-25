@@ -29,9 +29,6 @@ jobs:
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Install libvips
-        run: sudo apt-get update && sudo apt-get install -y libvips-dev
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

@@ -1,4 +1,3 @@
-import sharp from 'sharp'
 import type { Avatar, Profile } from '@dcl/schemas'
 import { EntityType } from '@dcl/schemas'
 import { ADR_158_TIMESTAMP, ADR_244_TIMESTAMP, ADR_45_TIMESTAMP } from './timestamps'
@@ -11,6 +10,7 @@ import {
   validateIfTypeMatches,
   validateUpToADR290OptionalityTimestamp
 } from './validations'
+import { readImageMetadata } from '../image-metadata'
 import { OK, fromErrors, validationFailed } from '../types'
 import { safeParseUrn } from '../utils'
 import type { ContentValidatorComponents, DeploymentToValidate, ValidateFn, ValidationResponse } from '../types'
@@ -45,14 +45,14 @@ export function createFaceThumbnailValidateFn(components: ContentValidatorCompon
       const thumbnailBuffer = deployment.files.get(hash)
       if (!thumbnailBuffer) return validationFailed(`Couldn't find thumbnail file with hash: ${hash}`)
       try {
-        const { width, height, format } = await sharp(thumbnailBuffer).metadata()
-        if (!format || format !== 'png') errors.push(`Invalid or unknown image format. Only 'PNG' format is accepted.`)
+        const { width, height, format } = readImageMetadata(thumbnailBuffer)
+        if (format !== 'png') errors.push(`Invalid or unknown image format. Only 'PNG' format is accepted.`)
         if (!width || !height) {
           errors.push(`Couldn't validate thumbnail size for file 'face256'`)
         } else if (width !== defaultThumbnailSize || height !== defaultThumbnailSize) {
           errors.push(`Invalid face256 thumbnail image size (width = ${width} / height = ${height})`)
         }
-      } catch (e) {
+      } catch {
         errors.push(`Couldn't parse face256 thumbnail, please check image format.`)
       }
     }
