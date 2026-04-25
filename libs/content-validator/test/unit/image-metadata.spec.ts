@@ -2,20 +2,39 @@ import { readImageMetadata } from '../../src/image-metadata'
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-const buildPng = (
-  width: number,
-  height: number,
-  options: { ihdrOverride?: string; ihdrLength?: number } = {}
-): Buffer => {
+interface BuildPngOptions {
+  ihdrOverride?: string
+  ihdrLength?: number
+  bitDepth?: number
+  colorType?: number
+  omitIend?: boolean
+  duplicateIhdr?: boolean
+  trailingBytes?: Buffer
+  extraChunks?: Buffer
+}
+
+const buildPng = (width: number, height: number, options: BuildPngOptions = {}): Buffer => {
   const length = Buffer.alloc(4)
   length.writeUInt32BE(options.ihdrLength ?? 13, 0)
   const type = Buffer.from(options.ihdrOverride ?? 'IHDR', 'ascii')
   const data = Buffer.alloc(13)
   data.writeUInt32BE(width, 0)
   data.writeUInt32BE(height, 4)
-  data.writeUInt8(8, 8)
-  data.writeUInt8(6, 9)
-  return Buffer.concat([PNG_SIGNATURE, length, type, data, Buffer.alloc(4)])
+  data.writeUInt8(options.bitDepth ?? 8, 8)
+  data.writeUInt8(options.colorType ?? 6, 9)
+  const ihdr = Buffer.concat([length, type, data, Buffer.alloc(4)])
+  const duplicateIhdr = options.duplicateIhdr ? buildPngChunk('IHDR', data) : Buffer.alloc(0)
+  const extra = options.extraChunks ?? Buffer.alloc(0)
+  const iend = options.omitIend ? Buffer.alloc(0) : buildPngChunk('IEND', Buffer.alloc(0))
+  const trailing = options.trailingBytes ?? Buffer.alloc(0)
+  return Buffer.concat([PNG_SIGNATURE, ihdr, duplicateIhdr, extra, iend, trailing])
+}
+
+const buildPngChunk = (type: string, data: Buffer): Buffer => {
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length, 0)
+  // CRC isn't validated by the reader, so zeros are fine for the test fixture.
+  return Buffer.concat([length, Buffer.from(type, 'ascii'), data, Buffer.alloc(4)])
 }
 
 const buildJpeg = (width: number, height: number, marker = 0xc0): Buffer => {
@@ -156,6 +175,55 @@ describe('when reading image metadata', () => {
     })
   })
 
+  describe('and the PNG buffer is missing the terminating IEND chunk', () => {
+    it('should throw with a missing-IEND message', () => {
+      expect(() => readImageMetadata(buildPng(64, 64, { omitIend: true }))).toThrow('Malformed PNG: missing IEND chunk')
+    })
+  })
+
+  describe('and the PNG buffer has trailing bytes after the IEND chunk', () => {
+    it('should throw with a data-after-IEND message', () => {
+      expect(() =>
+        readImageMetadata(buildPng(64, 64, { trailingBytes: Buffer.from([0xde, 0xad, 0xbe, 0xef]) }))
+      ).toThrow('Malformed PNG: data after IEND chunk')
+    })
+  })
+
+  describe('and the PNG buffer contains a duplicate IHDR chunk', () => {
+    it('should throw with a duplicate-IHDR message', () => {
+      expect(() => readImageMetadata(buildPng(64, 64, { duplicateIhdr: true }))).toThrow(
+        'Malformed PNG: duplicate IHDR chunk'
+      )
+    })
+  })
+
+  describe('and the PNG IHDR declares an invalid color type', () => {
+    it('should throw with an invalid-color-type message', () => {
+      expect(() => readImageMetadata(buildPng(64, 64, { colorType: 5 }))).toThrow('Malformed PNG: invalid color type 5')
+    })
+  })
+
+  describe('and the PNG IHDR declares a bit depth that is not legal for its color type', () => {
+    it('should throw with an invalid-bit-depth message', () => {
+      // Color type 2 (RGB) only allows bit depths 8 and 16; 1 is illegal.
+      expect(() => readImageMetadata(buildPng(64, 64, { colorType: 2, bitDepth: 1 }))).toThrow(
+        'Malformed PNG: invalid bit depth 1 for color type 2'
+      )
+    })
+  })
+
+  describe('and the PNG buffer contains a chunk whose declared length overflows the buffer', () => {
+    it('should reach the end of the chunk chain without finding IEND and throw', () => {
+      // Insert a non-IEND chunk that claims a 4-billion-byte payload.
+      const oversize = Buffer.alloc(8)
+      oversize.writeUInt32BE(0xffffffff, 0)
+      oversize.write('iTXt', 4, 'ascii')
+      expect(() => readImageMetadata(buildPng(64, 64, { extraChunks: oversize }))).toThrow(
+        'Malformed PNG: missing IEND chunk'
+      )
+    })
+  })
+
   describe('and the buffer is a JPEG with a SOF0 marker', () => {
     let metadata: ReturnType<typeof readImageMetadata>
 
@@ -182,8 +250,18 @@ describe('when reading image metadata', () => {
 
   describe('and the JPEG buffer has no SOFn marker', () => {
     it('should throw with a malformed-JPEG message', () => {
-      const onlyHeader = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      // SOI + APP0 (length 16) + 12 bytes of zero payload + EOI.
+      const onlyHeader = Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xd9
+      ])
       expect(() => readImageMetadata(onlyHeader)).toThrow('Malformed JPEG: no SOFn marker found')
+    })
+  })
+
+  describe('and the JPEG buffer is missing the EOI marker', () => {
+    it('should throw with a missing-EOI message', () => {
+      const noEoi = Buffer.concat([buildJpeg(640, 480).subarray(0, -2), Buffer.from([0xaa, 0xbb])])
+      expect(() => readImageMetadata(noEoi)).toThrow('Malformed JPEG: missing EOI marker')
     })
   })
 
@@ -233,6 +311,9 @@ describe('when reading image metadata', () => {
     it('should throw with a truncated-chunk message', () => {
       const truncated = Buffer.alloc(24)
       buildWebpVp8l(64, 48).copy(truncated, 0, 0, 24)
+      // Re-write the RIFF size so the new RIFF-chunk-size check passes and
+      // the per-variant truncation check is the one that fires.
+      truncated.writeUInt32LE(truncated.length - 8, 4)
       expect(() => readImageMetadata(truncated)).toThrow('Malformed WebP: VP8L chunk truncated')
     })
   })
@@ -241,7 +322,16 @@ describe('when reading image metadata', () => {
     it('should throw with a truncated-chunk message', () => {
       const truncated = Buffer.alloc(29)
       buildWebpVp8(320, 240).copy(truncated, 0, 0, 29)
+      truncated.writeUInt32LE(truncated.length - 8, 4)
       expect(() => readImageMetadata(truncated)).toThrow('Malformed WebP: VP8 chunk truncated')
+    })
+  })
+
+  describe('and the WebP RIFF chunk size does not match the buffer length', () => {
+    it('should throw with a RIFF size mismatch message', () => {
+      const tampered = buildWebpVp8(320, 240)
+      tampered.writeUInt32LE(999, 4) // wrong declared size
+      expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: RIFF chunk size does not match buffer length')
     })
   })
 
@@ -440,17 +530,17 @@ describe('when reading image metadata', () => {
   })
 
   describe('and a PNG/JPEG/GIF/BMP buffer has zero width and height', () => {
-    it('should return zero dimensions without throwing (validator handles the rejection)', () => {
-      expect(readImageMetadata(buildPng(0, 0))).toEqual({ format: 'png', width: 0, height: 0 })
-      expect(readImageMetadata(buildJpeg(0, 0))).toEqual({ format: 'jpeg', width: 0, height: 0 })
-      expect(readImageMetadata(buildGif(0, 0))).toEqual({ format: 'gif', width: 0, height: 0 })
-      expect(readImageMetadata(buildBmp(0, 0))).toEqual({ format: 'bmp', width: 0, height: 0 })
+    it('should throw with a non-positive-dimensions error', () => {
+      expect(() => readImageMetadata(buildPng(0, 0))).toThrow('Malformed png: non-positive width 0')
+      expect(() => readImageMetadata(buildJpeg(0, 0))).toThrow('Malformed jpeg: non-positive width 0')
+      expect(() => readImageMetadata(buildGif(0, 0))).toThrow('Malformed gif: non-positive width 0')
+      expect(() => readImageMetadata(buildBmp(0, 0))).toThrow('Malformed bmp: non-positive width 0')
     })
   })
 
   describe('and a BMP buffer has a negative width', () => {
-    it('should return the negative width verbatim (caller decides whether to reject)', () => {
-      expect(readImageMetadata(buildBmp(-1, 100))).toEqual({ format: 'bmp', width: -1, height: 100 })
+    it('should throw because negative widths are illegal per BMP spec', () => {
+      expect(() => readImageMetadata(buildBmp(-1, 100))).toThrow('Malformed bmp: non-positive width -1')
     })
   })
 

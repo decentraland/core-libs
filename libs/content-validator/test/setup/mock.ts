@@ -78,9 +78,14 @@ function buildPngWithDimensions(width: number, height: number): Buffer {
   ihdrData.writeUInt8(8, 8) // bit depth
   ihdrData.writeUInt8(6, 9) // color type: RGBA
   // bytes 10..12 are compression / filter / interlace methods (all 0)
-  const crc = Buffer.alloc(4)
-  crc.writeUInt32BE(crc32(Buffer.concat([ihdrType, ihdrData])), 0)
-  return Buffer.concat([signature, ihdrLength, ihdrType, ihdrData, crc])
+  const ihdrCrc = Buffer.alloc(4)
+  ihdrCrc.writeUInt32BE(crc32(Buffer.concat([ihdrType, ihdrData])), 0)
+  // Empty IEND chunk terminates the PNG: length=0, type="IEND", crc.
+  const iendLength = Buffer.alloc(4)
+  const iendType = Buffer.from('IEND', 'ascii')
+  const iendCrc = Buffer.alloc(4)
+  iendCrc.writeUInt32BE(crc32(iendType), 0)
+  return Buffer.concat([signature, ihdrLength, ihdrType, ihdrData, ihdrCrc, iendLength, iendType, iendCrc])
 }
 
 const CRC32_TABLE = (() => {

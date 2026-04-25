@@ -6,14 +6,33 @@
  * avoid pulling in `sharp` for that — a full image pipeline with native
  * bindings is overkill for a header read, and ships a multi-MB libvips that
  * needs an extra system dependency on every CI runner.
+ *
+ * Beyond reading dimensions, the reader applies structural sanity checks per
+ * format: PNG chunk-chain integrity (single IHDR, terminating IEND, no
+ * trailing data, spec-allowed bit-depth/color-type combination), JPEG
+ * EOI termination, WebP RIFF chunk-size match, and a uniform "non-zero,
+ * non-negative dimensions" contract on the returned width/height.
  */
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const PNG_IHDR_CHUNK_LENGTH = 13
+const PNG_FIRST_CHUNK_END = 33 // 8 (signature) + 4 (length) + 4 (type) + 13 (IHDR data) + 4 (CRC)
+const PNG_CHUNK_OVERHEAD = 12 // length(4) + type(4) + crc(4)
+// Spec-permitted bit-depth + color-type combinations (PNG, ISO/IEC 15948, §11.2.2).
+const PNG_VALID_BIT_DEPTHS_BY_COLOR_TYPE: Record<number, readonly number[]> = {
+  0: [1, 2, 4, 8, 16], // Grayscale
+  2: [8, 16], // Truecolor (RGB)
+  3: [1, 2, 4, 8], // Indexed-colour (Palette)
+  4: [8, 16], // Greyscale + Alpha
+  6: [8, 16] // Truecolor + Alpha (RGBA)
+}
 
 const WEBP_VARIANT_VP8 = 'VP8 '
 const WEBP_VARIANT_VP8L = 'VP8L'
 const WEBP_VARIANT_VP8X = 'VP8X'
+
+const JPEG_EOI_BYTE_1 = 0xff
+const JPEG_EOI_BYTE_2 = 0xd9
 
 /**
  * @public
@@ -37,20 +56,32 @@ export interface ImageMetadata {
  * common formats means a user uploading a JPEG/WebP/GIF/BMP thumbnail gets
  * the precise "Invalid format" error instead of a generic parse failure.
  *
- * Throws if the buffer is not one of the recognised formats. Callers are
- * expected to wrap calls in try/catch to translate the throw into a
- * "couldn't parse" validation error.
+ * Throws if the buffer is not a recognised, structurally-valid image with
+ * non-zero, non-negative dimensions. Callers are expected to wrap calls in
+ * try/catch to translate the throw into a "couldn't parse" validation error.
  * @public
  */
 export function readImageMetadata(input: Uint8Array): ImageMetadata {
   // Wrap as Buffer to access readUInt*BE / equals / toString without copying.
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input.buffer, input.byteOffset, input.byteLength)
-  if (isPng(buffer)) return readPngMetadata(buffer)
-  if (isJpeg(buffer)) return readJpegMetadata(buffer)
-  if (isWebp(buffer)) return readWebpMetadata(buffer)
-  if (isGif(buffer)) return readGifMetadata(buffer)
-  if (isBmp(buffer)) return readBmpMetadata(buffer)
-  throw new Error('Unsupported image format')
+  let metadata: ImageMetadata
+  if (isPng(buffer)) metadata = readPngMetadata(buffer)
+  else if (isJpeg(buffer)) metadata = readJpegMetadata(buffer)
+  else if (isWebp(buffer)) metadata = readWebpMetadata(buffer)
+  else if (isGif(buffer)) metadata = readGifMetadata(buffer)
+  else if (isBmp(buffer)) metadata = readBmpMetadata(buffer)
+  else throw new Error('Unsupported image format')
+  assertPositiveDimensions(metadata)
+  return metadata
+}
+
+function assertPositiveDimensions(metadata: ImageMetadata): void {
+  if (!Number.isInteger(metadata.width) || metadata.width <= 0) {
+    throw new Error(`Malformed ${metadata.format}: non-positive width ${metadata.width}`)
+  }
+  if (!Number.isInteger(metadata.height) || metadata.height <= 0) {
+    throw new Error(`Malformed ${metadata.format}: non-positive height ${metadata.height}`)
+  }
 }
 
 function isPng(buffer: Buffer): boolean {
@@ -64,11 +95,46 @@ function readPngMetadata(buffer: Buffer): ImageMetadata {
   if (buffer.toString('ascii', 12, 16) !== 'IHDR') {
     throw new Error('Malformed PNG: missing IHDR chunk')
   }
-  return {
-    format: 'png',
-    width: buffer.readUInt32BE(16),
-    height: buffer.readUInt32BE(20)
+  const width = buffer.readUInt32BE(16)
+  const height = buffer.readUInt32BE(20)
+  validatePngBitDepthAndColorType(buffer.readUInt8(24), buffer.readUInt8(25))
+  validatePngChunkChain(buffer)
+  return { format: 'png', width, height }
+}
+
+function validatePngBitDepthAndColorType(bitDepth: number, colorType: number): void {
+  const allowed = PNG_VALID_BIT_DEPTHS_BY_COLOR_TYPE[colorType]
+  if (!allowed) {
+    throw new Error(`Malformed PNG: invalid color type ${colorType}`)
   }
+  if (!allowed.includes(bitDepth)) {
+    throw new Error(`Malformed PNG: invalid bit depth ${bitDepth} for color type ${colorType}`)
+  }
+}
+
+function validatePngChunkChain(buffer: Buffer): void {
+  // First chunk after the signature is IHDR (already validated by the caller).
+  // Walk subsequent chunks, requiring exactly one IEND that terminates the
+  // buffer. Reject duplicate IHDR chunks.
+  let i = PNG_FIRST_CHUNK_END
+  while (i + PNG_CHUNK_OVERHEAD <= buffer.length) {
+    const chunkDataLength = buffer.readUInt32BE(i)
+    const type = buffer.toString('ascii', i + 4, i + 8)
+    if (type === 'IHDR') {
+      throw new Error('Malformed PNG: duplicate IHDR chunk')
+    }
+    if (type === 'IEND') {
+      // IEND has zero-length data; the chunk occupies exactly 12 bytes
+      // (length + type + crc) and must be the last bytes in the buffer.
+      if (i + PNG_CHUNK_OVERHEAD !== buffer.length) {
+        throw new Error('Malformed PNG: data after IEND chunk')
+      }
+      return
+    }
+    // Advance past this chunk: length(4) + type(4) + data(N) + crc(4).
+    i += PNG_CHUNK_OVERHEAD + chunkDataLength
+  }
+  throw new Error('Malformed PNG: missing IEND chunk')
 }
 
 function isJpeg(buffer: Buffer): boolean {
@@ -76,6 +142,15 @@ function isJpeg(buffer: Buffer): boolean {
 }
 
 function readJpegMetadata(buffer: Buffer): ImageMetadata {
+  // The buffer must be terminated by an EOI marker (FF D9). This rejects
+  // truncated JPEGs and trailing-data polyglots.
+  if (
+    buffer.length < 4 ||
+    buffer[buffer.length - 2] !== JPEG_EOI_BYTE_1 ||
+    buffer[buffer.length - 1] !== JPEG_EOI_BYTE_2
+  ) {
+    throw new Error('Malformed JPEG: missing EOI marker')
+  }
   // JPEG is a chain of 0xFF-prefixed segments. Dimensions live in any of the
   // SOFn (Start Of Frame) segments — markers 0xC0..0xCF except 0xC4 (DHT),
   // 0xC8 (JPG, reserved), and 0xCC (DAC). The SOFn payload reads up to
@@ -123,6 +198,13 @@ function isWebp(buffer: Buffer): boolean {
 }
 
 function readWebpMetadata(buffer: Buffer): ImageMetadata {
+  // The RIFF chunk size at bytes 4-7 covers everything after the size field
+  // itself, i.e. exactly `buffer.length - 8` for a well-formed file. A
+  // mismatch indicates truncation or trailing data injection.
+  const declaredRiffSize = buffer.readUInt32LE(4)
+  if (declaredRiffSize !== buffer.length - 8) {
+    throw new Error('Malformed WebP: RIFF chunk size does not match buffer length')
+  }
   // After "WEBP" comes a sub-chunk identifier ("VP8 ", "VP8L", or "VP8X")
   // and dimensions are encoded slightly differently per variant.
   const variant = buffer.toString('ascii', 12, 16)
@@ -208,7 +290,8 @@ function readBmpMetadata(buffer: Buffer): ImageMetadata {
   // BITMAPINFOHEADER and its extended variants (40, 52, 56, 108, 124 bytes).
   // Width is signed int32 LE at 18-21, height is signed int32 LE at 22-25.
   // A negative height encodes a top-down DIB; absolute value is the pixel
-  // height.
+  // height. A negative width is illegal per spec — assertPositiveDimensions
+  // enforces that on the way out.
   if (buffer.length < 26) {
     throw new Error('Malformed BMP: BITMAPINFOHEADER truncated')
   }
