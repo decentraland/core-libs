@@ -187,13 +187,17 @@ describe('when validating the wearable thumbnail size', () => {
     })
   })
 
-  describe('and the thumbnail encoded size exceeds 1 MB', () => {
+  describe('and the thumbnail file size exceeds 1 MB', () => {
+    // Validation reads `Buffer.byteLength` directly, not the decoded image, so
+    // we use a fixed-size opaque buffer to keep this test deterministic across
+    // platforms (sharp's PNG encoder produces different sizes on macOS vs Linux).
+    const oversizedThumbnailBytes = 1.5 * 1024 * 1024
     let result: ValidationResponse
 
     beforeEach(async () => {
-      const largeThumbnailBuffer = await createImage(8192)
+      const oversizedThumbnailBuffer = Buffer.alloc(oversizedThumbnailBytes)
       const content = [{ file: fileName, hash }]
-      const files = new Map([[hash, largeThumbnailBuffer]])
+      const files = new Map([[hash, oversizedThumbnailBuffer]])
       const entity = buildEntity({
         type: EntityType.WEARABLE,
         metadata: VALID_WEARABLE_METADATA,
@@ -208,7 +212,7 @@ describe('when validating the wearable thumbnail size', () => {
     it('should return an error reporting the oversized thumbnail', () => {
       expect(result.ok).toBe(false)
       expect(result.errors).toContain(
-        `The thumbnail is too big. The maximum allowed size for thumbnail model files is 1 MB. You can upload up to 1048576 bytes but you tried to upload 1328277.`
+        `The thumbnail is too big. The maximum allowed size for thumbnail model files is 1 MB. You can upload up to 1048576 bytes but you tried to upload ${oversizedThumbnailBytes}.`
       )
     })
   })
