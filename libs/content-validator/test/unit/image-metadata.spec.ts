@@ -387,4 +387,241 @@ describe('when reading image metadata', () => {
       expect(() => readImageMetadata(Buffer.from([0x49, 0x49, 0x2a, 0x00]))).toThrow('Unsupported image format')
     })
   })
+
+  describe('and the buffer is a RIFF container that is not WebP', () => {
+    it('should throw unsupported-format (RIFF/WAVE, not RIFF/WEBP)', () => {
+      const wav = Buffer.alloc(36)
+      wav.write('RIFF', 0, 'ascii')
+      wav.writeUInt32LE(28, 4)
+      wav.write('WAVE', 8, 'ascii')
+      expect(() => readImageMetadata(wav)).toThrow('Unsupported image format')
+    })
+  })
+
+  describe('and the buffer starts with "BM" but the DIB header reports an unknown size', () => {
+    it('should treat it as a BIH variant and read the int32 fields', () => {
+      const buffer = Buffer.alloc(54)
+      buffer.write('BM', 0, 'ascii')
+      buffer.writeUInt32LE(108, 14) // BITMAPV4HEADER size
+      buffer.writeInt32LE(640, 18)
+      buffer.writeInt32LE(480, 22)
+      expect(readImageMetadata(buffer)).toEqual({ format: 'bmp', width: 640, height: 480 })
+    })
+  })
+
+  describe.each([
+    ['PNG', () => buildPng(0x7fffffff, 0x7fffffff), { format: 'png', width: 0x7fffffff, height: 0x7fffffff }],
+    ['JPEG', () => buildJpeg(65535, 65535), { format: 'jpeg', width: 65535, height: 65535 }],
+    ['WebP VP8', () => buildWebpVp8(16383, 16383), { format: 'webp', width: 16383, height: 16383 }],
+    ['WebP VP8L', () => buildWebpVp8l(16384, 16384), { format: 'webp', width: 16384, height: 16384 }],
+    ['WebP VP8X', () => buildWebpVp8x(0x1000000, 0x1000000), { format: 'webp', width: 0x1000000, height: 0x1000000 }],
+    ['GIF', () => buildGif(65535, 65535), { format: 'gif', width: 65535, height: 65535 }],
+    ['BMP (BIH)', () => buildBmp(0x7fffffff, 0x7fffffff), { format: 'bmp', width: 0x7fffffff, height: 0x7fffffff }],
+    ['BMP (BCH)', () => buildBmpCoreHeader(65535, 65535), { format: 'bmp', width: 65535, height: 65535 }]
+  ])('and the buffer is a %s image at the format maximum dimensions', (_label, build, expected) => {
+    it('should return the maximum without overflow', () => {
+      expect(readImageMetadata(build())).toEqual(expected)
+    })
+  })
+
+  describe.each([
+    ['PNG', () => buildPng(1, 1), { format: 'png', width: 1, height: 1 }],
+    ['JPEG', () => buildJpeg(1, 1), { format: 'jpeg', width: 1, height: 1 }],
+    ['WebP VP8', () => buildWebpVp8(1, 1), { format: 'webp', width: 1, height: 1 }],
+    ['WebP VP8L', () => buildWebpVp8l(1, 1), { format: 'webp', width: 1, height: 1 }],
+    ['WebP VP8X', () => buildWebpVp8x(1, 1), { format: 'webp', width: 1, height: 1 }],
+    ['GIF', () => buildGif(1, 1), { format: 'gif', width: 1, height: 1 }],
+    ['BMP (BIH)', () => buildBmp(1, 1), { format: 'bmp', width: 1, height: 1 }],
+    ['BMP (BCH)', () => buildBmpCoreHeader(1, 1), { format: 'bmp', width: 1, height: 1 }]
+  ])('and the buffer is a %s image at 1x1', (_label, build, expected) => {
+    it('should return width and height of 1', () => {
+      expect(readImageMetadata(build())).toEqual(expected)
+    })
+  })
+
+  describe('and a PNG/JPEG/GIF/BMP buffer has zero width and height', () => {
+    it('should return zero dimensions without throwing (validator handles the rejection)', () => {
+      expect(readImageMetadata(buildPng(0, 0))).toEqual({ format: 'png', width: 0, height: 0 })
+      expect(readImageMetadata(buildJpeg(0, 0))).toEqual({ format: 'jpeg', width: 0, height: 0 })
+      expect(readImageMetadata(buildGif(0, 0))).toEqual({ format: 'gif', width: 0, height: 0 })
+      expect(readImageMetadata(buildBmp(0, 0))).toEqual({ format: 'bmp', width: 0, height: 0 })
+    })
+  })
+
+  describe('and a BMP buffer has a negative width', () => {
+    it('should return the negative width verbatim (caller decides whether to reject)', () => {
+      expect(readImageMetadata(buildBmp(-1, 100))).toEqual({ format: 'bmp', width: -1, height: 100 })
+    })
+  })
+
+  describe('and a BMP buffer has the smallest int32 height (top-down DIB extreme)', () => {
+    it('should return the absolute height as a finite Number', () => {
+      const result = readImageMetadata(buildBmp(100, -0x80000000))
+      expect(result.format).toBe('bmp')
+      expect(result.width).toBe(100)
+      expect(result.height).toBe(0x80000000)
+      expect(Number.isFinite(result.height)).toBe(true)
+    })
+  })
+
+  describe('and a JPEG has multiple SOFn markers', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      const sof0 = Buffer.alloc(19)
+      sof0.writeUInt8(0xff, 0)
+      sof0.writeUInt8(0xc0, 1)
+      sof0.writeUInt16BE(17, 2)
+      sof0.writeUInt8(8, 4)
+      sof0.writeUInt16BE(100, 5)
+      sof0.writeUInt16BE(100, 7)
+      sof0.writeUInt8(3, 9)
+      const sof2 = Buffer.alloc(19)
+      sof2.writeUInt8(0xff, 0)
+      sof2.writeUInt8(0xc2, 1)
+      sof2.writeUInt16BE(17, 2)
+      sof2.writeUInt8(8, 4)
+      sof2.writeUInt16BE(200, 5)
+      sof2.writeUInt16BE(200, 7)
+      sof2.writeUInt8(3, 9)
+      metadata = readImageMetadata(Buffer.concat([Buffer.from([0xff, 0xd8]), sof0, sof2, Buffer.from([0xff, 0xd9])]))
+    })
+
+    it('should return dimensions from the first SOFn encountered', () => {
+      expect(metadata).toEqual({ format: 'jpeg', width: 100, height: 100 })
+    })
+  })
+
+  describe('and a JPEG has a maximum-length non-SOF segment before the SOFn', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      // APP0 segment with length 0xFFFF (the maximum) — 2 marker bytes
+      // + 65535 bytes of segment payload (incl. the 2 length bytes themselves).
+      const app0 = Buffer.alloc(2 + 65535)
+      app0.writeUInt8(0xff, 0)
+      app0.writeUInt8(0xe0, 1)
+      app0.writeUInt16BE(65535, 2)
+      const sof = Buffer.alloc(19)
+      sof.writeUInt8(0xff, 0)
+      sof.writeUInt8(0xc0, 1)
+      sof.writeUInt16BE(17, 2)
+      sof.writeUInt8(8, 4)
+      sof.writeUInt16BE(64, 5)
+      sof.writeUInt16BE(48, 7)
+      sof.writeUInt8(3, 9)
+      metadata = readImageMetadata(Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof, Buffer.from([0xff, 0xd9])]))
+    })
+
+    it('should skip past the APP0 segment and find the SOFn', () => {
+      expect(metadata).toEqual({ format: 'jpeg', width: 48, height: 64 })
+    })
+  })
+
+  describe('and a JPEG has a long chain of minimum-length non-SOF segments before the SOFn', () => {
+    let metadata: ReturnType<typeof readImageMetadata>
+
+    beforeEach(() => {
+      // 100 APP0 segments, each with the minimum legal length of 2 (just the
+      // length field, no payload).
+      const segments: Buffer[] = [Buffer.from([0xff, 0xd8])]
+      for (let i = 0; i < 100; i++) {
+        const seg = Buffer.alloc(4)
+        seg.writeUInt8(0xff, 0)
+        seg.writeUInt8(0xe0, 1)
+        seg.writeUInt16BE(2, 2)
+        segments.push(seg)
+      }
+      const sof = Buffer.alloc(19)
+      sof.writeUInt8(0xff, 0)
+      sof.writeUInt8(0xc0, 1)
+      sof.writeUInt16BE(17, 2)
+      sof.writeUInt8(8, 4)
+      sof.writeUInt16BE(7, 5)
+      sof.writeUInt16BE(11, 7)
+      sof.writeUInt8(3, 9)
+      segments.push(sof)
+      segments.push(Buffer.from([0xff, 0xd9]))
+      metadata = readImageMetadata(Buffer.concat(segments))
+    })
+
+    it('should walk every segment and still find the SOFn', () => {
+      expect(metadata).toEqual({ format: 'jpeg', width: 11, height: 7 })
+    })
+  })
+
+  describe('and a WebP starts with a non-VP8/VP8L/VP8X chunk (non-spec encoder)', () => {
+    it('should throw unknown-variant — known limitation, no chunk walking', () => {
+      const buffer = Buffer.alloc(30)
+      buffer.write('RIFF', 0, 'ascii')
+      buffer.writeUInt32LE(22, 4)
+      buffer.write('WEBP', 8, 'ascii')
+      buffer.write('ICCP', 12, 'ascii')
+      expect(() => readImageMetadata(buffer)).toThrow("Malformed WebP: unknown variant 'ICCP'")
+    })
+  })
+
+  describe('and the input is a corpus of seeded random buffers', () => {
+    const lcg = (seed: number) => {
+      let state = seed >>> 0
+      return () => {
+        state = ((state * 1664525) >>> 0) + 1013904223
+        state = state >>> 0
+        return state
+      }
+    }
+    const randomBuffer = (rng: () => number, length: number): Buffer => {
+      const buf = Buffer.alloc(length)
+      for (let i = 0; i < length; i++) buf[i] = rng() & 0xff
+      return buf
+    }
+
+    it('should never crash, hang, or return non-finite dimensions across 1000 random buffers', () => {
+      const rng = lcg(0xdeadbeef)
+      for (let trial = 0; trial < 1000; trial++) {
+        const length = (rng() % 2048) + 1
+        const buf = randomBuffer(rng, length)
+        try {
+          const result = readImageMetadata(buf)
+          expect(typeof result.format).toBe('string')
+          expect(Number.isFinite(result.width)).toBe(true)
+          expect(Number.isFinite(result.height)).toBe(true)
+          expect(Number.isInteger(result.width)).toBe(true)
+          expect(Number.isInteger(result.height)).toBe(true)
+        } catch (err) {
+          expect(err).toBeInstanceOf(Error)
+        }
+      }
+    })
+
+    it('should never crash on 500 mutated copies of valid buffers', () => {
+      const rng = lcg(0xfeedface)
+      const corpus: Buffer[] = [
+        buildPng(1024, 1024),
+        buildJpeg(800, 600),
+        buildWebpVp8(640, 480),
+        buildWebpVp8l(320, 240),
+        buildWebpVp8x(1920, 1080),
+        buildGif(256, 256),
+        buildBmp(100, 100),
+        buildBmpCoreHeader(50, 50)
+      ]
+      for (let trial = 0; trial < 500; trial++) {
+        const base = corpus[rng() % corpus.length]
+        const copy = Buffer.from(base)
+        const flips = (rng() % 5) + 1
+        for (let f = 0; f < flips; f++) {
+          copy[rng() % copy.length] = rng() & 0xff
+        }
+        try {
+          const result = readImageMetadata(copy)
+          expect(typeof result.format).toBe('string')
+          expect(Number.isFinite(result.width)).toBe(true)
+          expect(Number.isFinite(result.height)).toBe(true)
+        } catch (err) {
+          expect(err).toBeInstanceOf(Error)
+        }
+      }
+    })
+  })
 })
