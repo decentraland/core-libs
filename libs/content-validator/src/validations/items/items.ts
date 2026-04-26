@@ -1,7 +1,7 @@
-import sharp from 'sharp'
 import { EntityType, WearableCategory } from '@dcl/schemas'
 import type { Wearable } from '@dcl/schemas'
 import { calculateDeploymentSize } from '..'
+import { readImageMetadata } from '../../image-metadata'
 import { OK, validationFailed } from '../../types'
 import { entityParameters, skinMaxSizeInMb, thumbnailMaxSizeInMb } from '../ADR51'
 import { validateAfterADR45, validateAll, validateIfConditionMet } from '../validations'
@@ -94,16 +94,14 @@ export function createThumbnailMaxSizeIsNotExceededValidateFn(
       return OK
     }
     try {
-      const { width, height, format } = await sharp(thumbnailBuffer).metadata()
-      if (!format || format !== 'png') {
+      const { width, height, format } = readImageMetadata(thumbnailBuffer)
+      if (format !== 'png') {
         errors.push(`Invalid or unknown image format. Only 'PNG' format is accepted.`)
-      }
-      if (!width || !height) {
-        errors.push(`Couldn't validate thumbnail size for file ${metadata.thumbnail}`)
       } else if (width > maxThumbnailDimensionInPx || height > maxThumbnailDimensionInPx) {
         errors.push(`Invalid thumbnail image size (width = ${width} / height = ${height})`)
       }
-    } catch (e) {
+    } catch (err) {
+      logger.debug('readImageMetadata failed', { error: String(err) })
       errors.push(`Couldn't parse thumbnail, please check image format.`)
     }
     return errors.length > 0 ? validationFailed(...errors) : OK
