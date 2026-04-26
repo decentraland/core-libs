@@ -60,11 +60,19 @@ function bufferEqualsAt(buffer: Buffer, offset: number, expected: Buffer): boole
 }
 
 /**
+ * Image formats recognised by {@link readImageMetadata}.
+ *
+ * The reader detects each format by its magic bytes and validates the
+ * minimum structural invariants needed to extract dimensions safely.
  * @public
  */
 export type ImageFormat = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp'
 
 /**
+ * Header-derived dimensions and format of an image.
+ *
+ * Width and height are guaranteed to be positive integers — the reader
+ * throws rather than returning zero, negative, or non-integer values.
  * @public
  */
 export interface ImageMetadata {
