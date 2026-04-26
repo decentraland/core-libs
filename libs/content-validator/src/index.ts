@@ -4,6 +4,8 @@ import type { ContentValidatorComponents, ValidateFn } from './types'
 
 export * from './types'
 export * from './validations'
+export { readImageMetadata } from './image-metadata'
+export type { ImageFormat, ImageMetadata } from './image-metadata'
 
 /**
  * Creates a validator instance with given external calls.

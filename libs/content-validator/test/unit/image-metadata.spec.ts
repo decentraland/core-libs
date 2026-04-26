@@ -615,16 +615,16 @@ describe('when reading image metadata', () => {
 
   describe('and a PNG/JPEG/GIF/BMP buffer has zero width and height', () => {
     it('should throw with a non-positive-dimensions error', () => {
-      expect(() => readImageMetadata(buildPng(0, 0))).toThrow('Malformed png: non-positive width 0')
-      expect(() => readImageMetadata(buildJpeg(0, 0))).toThrow('Malformed jpeg: non-positive width 0')
-      expect(() => readImageMetadata(buildGif(0, 0))).toThrow('Malformed gif: non-positive width 0')
-      expect(() => readImageMetadata(buildBmp(0, 0))).toThrow('Malformed bmp: non-positive width 0')
+      expect(() => readImageMetadata(buildPng(0, 0))).toThrow('Malformed PNG: non-positive width 0')
+      expect(() => readImageMetadata(buildJpeg(0, 0))).toThrow('Malformed JPEG: non-positive width 0')
+      expect(() => readImageMetadata(buildGif(0, 0))).toThrow('Malformed GIF: non-positive width 0')
+      expect(() => readImageMetadata(buildBmp(0, 0))).toThrow('Malformed BMP: non-positive width 0')
     })
   })
 
   describe('and a BMP buffer has a negative width', () => {
     it('should throw because negative widths are illegal per BMP spec', () => {
-      expect(() => readImageMetadata(buildBmp(-1, 100))).toThrow('Malformed bmp: non-positive width -1')
+      expect(() => readImageMetadata(buildBmp(-1, 100))).toThrow('Malformed BMP: non-positive width -1')
     })
   })
 

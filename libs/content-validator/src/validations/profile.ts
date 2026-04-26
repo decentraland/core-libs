@@ -29,6 +29,7 @@ function correspondsToASnapshot(fileName: string, hash: string, metadata: Profil
 }
 
 export function createFaceThumbnailValidateFn(components: ContentValidatorComponents): ValidateFn {
+  const logger = components.logs.getLogger('face thumbnail validator')
   async function validateFn(deployment: DeploymentToValidate): Promise<ValidationResponse> {
     const errors: string[] = []
     const allAvatars: Avatar[] = deployment.entity.metadata?.avatars ?? []
@@ -51,7 +52,8 @@ export function createFaceThumbnailValidateFn(components: ContentValidatorCompon
         } else if (width !== defaultThumbnailSize || height !== defaultThumbnailSize) {
           errors.push(`Invalid face256 thumbnail image size (width = ${width} / height = ${height})`)
         }
-      } catch {
+      } catch (err) {
+        logger.debug('readImageMetadata failed', { error: String(err) })
         errors.push(`Couldn't parse face256 thumbnail, please check image format.`)
       }
     }

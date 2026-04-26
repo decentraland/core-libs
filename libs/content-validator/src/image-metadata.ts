@@ -73,6 +73,16 @@ export interface ImageMetadata {
   height: number
 }
 
+// Display names used in user-facing error messages, matching the casing
+// produced by the format-specific validators (e.g. "Malformed PNG", "Malformed WebP").
+const FORMAT_DISPLAY_NAME: Record<ImageFormat, string> = {
+  png: 'PNG',
+  jpeg: 'JPEG',
+  webp: 'WebP',
+  gif: 'GIF',
+  bmp: 'BMP'
+}
+
 /**
  * Reads the format and pixel dimensions of a recognised image buffer.
  *
@@ -108,11 +118,12 @@ export function readImageMetadata(input: Uint8Array): ImageMetadata {
 }
 
 function assertPositiveDimensions(metadata: ImageMetadata): void {
+  const name = FORMAT_DISPLAY_NAME[metadata.format]
   if (!Number.isInteger(metadata.width) || metadata.width <= 0) {
-    throw new Error(`Malformed ${metadata.format}: non-positive width ${metadata.width}`)
+    throw new Error(`Malformed ${name}: non-positive width ${metadata.width}`)
   }
   if (!Number.isInteger(metadata.height) || metadata.height <= 0) {
-    throw new Error(`Malformed ${metadata.format}: non-positive height ${metadata.height}`)
+    throw new Error(`Malformed ${name}: non-positive height ${metadata.height}`)
   }
 }
 
@@ -251,7 +262,8 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
         width: buffer.readUInt16BE(i + 7)
       }
     }
-    if (i + 4 > buffer.length) break
+    // Loop invariant `i < buffer.length - 8` guarantees i+3 is in bounds,
+    // so the segment-length read below is always safe.
     const segmentLength = buffer.readUInt16BE(i + 2)
     if (segmentLength < 2) break
     i += 2 + segmentLength

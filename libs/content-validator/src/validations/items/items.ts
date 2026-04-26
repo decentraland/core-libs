@@ -100,7 +100,8 @@ export function createThumbnailMaxSizeIsNotExceededValidateFn(
       } else if (width > maxThumbnailDimensionInPx || height > maxThumbnailDimensionInPx) {
         errors.push(`Invalid thumbnail image size (width = ${width} / height = ${height})`)
       }
-    } catch {
+    } catch (err) {
+      logger.debug('readImageMetadata failed', { error: String(err) })
       errors.push(`Couldn't parse thumbnail, please check image format.`)
     }
     return errors.length > 0 ? validationFailed(...errors) : OK
