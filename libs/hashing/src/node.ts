@@ -112,11 +112,13 @@ async function* chunksFromStream(content: AsyncIterable<Uint8Array>, chunkSize: 
 
 // Streaming balanced-tree builder. Mirrors the recursive batched algorithm used
 // by ipfs-unixfs-importer's balanced layout, but folds completed levels into
-// parents on the fly so memory stays bounded by tree depth × MAX_CHILDREN_PER_NODE
+// parents on the fly so memory stays bounded by tree depth × maxChildrenPerNode
 // instead of the total number of leaves.
 class BalancedTreeBuilder {
   private readonly levels: DagNode[][] = [[]]
   private leafCount = 0
+
+  constructor(private readonly maxChildrenPerNode: number) {}
 
   addLeaf(chunk: Uint8Array): void {
     this.leafCount++
@@ -141,11 +143,21 @@ class BalancedTreeBuilder {
         continue
       }
 
+      // The topmost level with a single node is already a complete root
+      // (e.g. all leaves fit under one balanced subtree, or stragglers were
+      // promoted up to it). Mirrors ipfs-unixfs-importer's "return roots[0]
+      // when roots.length === 1" guard, which avoids wrapping a single node
+      // in a redundant unary parent. Lower levels with a single node still
+      // get wrapped so the importer's "promote lone straggler up the tree"
+      // shape is preserved.
       const isTopmost = i === this.levels.length - 1
       carry = isTopmost && level.length === 1 ? level[0] : buildParent(level)
     }
 
-    return carry as DagNode
+    if (carry === undefined) {
+      throw new Error('hashV1: internal error — tree produced no root')
+    }
+    return carry
   }
 
   private pushAt(level: number, node: DagNode): void {
@@ -153,7 +165,7 @@ class BalancedTreeBuilder {
     const bucket = this.levels[level]
     bucket.push(node)
 
-    if (bucket.length === MAX_CHILDREN_PER_NODE) {
+    if (bucket.length === this.maxChildrenPerNode) {
       const parent = buildParent(bucket)
       bucket.length = 0
       this.pushAt(level + 1, parent)
@@ -161,8 +173,11 @@ class BalancedTreeBuilder {
   }
 }
 
-async function hashChunks(chunks: Iterable<Uint8Array> | AsyncIterable<Uint8Array>): Promise<string> {
-  const builder = new BalancedTreeBuilder()
+async function hashChunks(
+  chunks: Iterable<Uint8Array> | AsyncIterable<Uint8Array>,
+  maxChildrenPerNode: number
+): Promise<string> {
+  const builder = new BalancedTreeBuilder(maxChildrenPerNode)
   for await (const chunk of chunks) {
     builder.addLeaf(chunk)
   }
@@ -198,16 +213,36 @@ export async function hashV0(stream: HashableContent): Promise<string> {
  * @public
  */
 export async function hashV1(content: HashableContent): Promise<string> {
-  if (content instanceof Uint8Array && content.length <= CHUNK_SIZE_BYTES) {
+  return _hashV1WithLayout(content, {
+    chunkSize: CHUNK_SIZE_BYTES,
+    maxChildrenPerNode: MAX_CHILDREN_PER_NODE
+  })
+}
+
+/**
+ * **Internal — do not use outside of this package's tests.** Exposes the UnixFS
+ * layout knobs so the balanced tree can be exercised at small fan-outs (e.g.
+ * `maxChildrenPerNode: 3`) without needing the multi-GB inputs the production
+ * defaults would otherwise require. Production callers must use {@link hashV1},
+ * which fixes `chunkSize: 262144` and `maxChildrenPerNode: 174` to match
+ * `ipfs-unixfs-importer`'s defaults.
+ */
+export async function _hashV1WithLayout(
+  content: HashableContent,
+  options: { chunkSize: number; maxChildrenPerNode: number }
+): Promise<string> {
+  const { chunkSize, maxChildrenPerNode } = options
+
+  if (content instanceof Uint8Array && content.length <= chunkSize) {
     return CID.createV1(RAW_CODEC, sha256Digest(content)).toString()
   }
 
   if (content instanceof Uint8Array) {
-    return hashChunks(chunksFromBuffer(content, CHUNK_SIZE_BYTES))
+    return hashChunks(chunksFromBuffer(content, chunkSize), maxChildrenPerNode)
   }
 
   if (isAsyncIterable(content)) {
-    return hashChunks(chunksFromStream(content, CHUNK_SIZE_BYTES))
+    return hashChunks(chunksFromStream(content, chunkSize), maxChildrenPerNode)
   }
 
   throw new Error(
