@@ -132,7 +132,8 @@ The library supports two access validation strategies:
 Direct blockchain queries for ownership verification:
 
 ```typescript
-import { createOnChainAccessCheckValidateFns, createOnChainClient } from '@dcl/content-validator'
+import { createOnChainAccessCheckValidateFns } from '@dcl/content-validator/dist/validations/access/on-chain'
+import { createOnChainClient } from '@dcl/content-validator/dist/validations/access/on-chain/client'
 
 const validateFns = createOnChainAccessCheckValidateFns({
   logs,
@@ -148,7 +149,8 @@ const validateFns = createOnChainAccessCheckValidateFns({
 Uses The Graph for ownership queries (more efficient for bulk queries):
 
 ```typescript
-import { createSubgraphAccessCheckValidateFns, createTheGraphClient } from '@dcl/content-validator'
+import { createSubgraphAccessCheckValidateFns } from '@dcl/content-validator/dist/validations/access/subgraph'
+import { createTheGraphClient } from '@dcl/content-validator/dist/validations/access/subgraph/the-graph-client'
 
 const validateFns = createSubgraphAccessCheckValidateFns({
   logs,
@@ -163,12 +165,12 @@ const validateFns = createSubgraphAccessCheckValidateFns({
 
 ### Development
 
-Install dependencies and run tests:
+Install dependencies and run tests from the monorepo root:
 
 ```bash
-yarn
-yarn build
-yarn test
+pnpm install
+pnpm --filter @dcl/content-validator build
+pnpm --filter @dcl/content-validator test
 ```
 
 ### Debugging Tests
