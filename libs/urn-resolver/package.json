@@ -1,6 +1,6 @@
 {
   "name": "@dcl/urn-resolver",
-  "version": "3.6.0",
+  "version": "3.6.1",
   "description": "URN resolver for Decentraland assets",
   "author": "Decentraland",
   "license": "Apache-2.0",

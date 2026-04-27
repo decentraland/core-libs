@@ -1,5 +1,14 @@
 # @dcl/content-validator
 
+## 7.3.1
+
+### Patch Changes
+
+- Updated dependencies [e219eca]
+- Updated dependencies [ce586e5]
+  - @dcl/hashing@1.2.0
+  - @dcl/urn-resolver@3.6.1
+
 ## 7.3.0
 
 ### Minor Changes
