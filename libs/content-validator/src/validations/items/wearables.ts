@@ -76,6 +76,12 @@ function isSpringBoneName(name: string): boolean {
   return name.toLowerCase().includes(SPRING_BONE_NAME_TOKEN)
 }
 
+function formatErrorField(field: string): string {
+  return field.length > 100
+    ? JSON.stringify(field).slice(1, 100).concat('...')
+    : JSON.stringify(field).slice(1, field.length + 1)
+}
+
 /**
  * Validate spring bones metadata when present on a wearable.
  *
@@ -96,7 +102,7 @@ export async function springBonesMetadataValidateFn(deployment: DeploymentToVali
 
   if (!SpringBonesData.validate(springBones)) {
     const schemaErrors = (SpringBonesData.validate.errors ?? []).map(
-      (e) => `springBones${e.instancePath} ${e.message ?? 'is invalid'}`
+      (e) => `springBones${formatErrorField(e.instancePath)} ${e.message ?? 'is invalid'}`
     )
     return validationFailed(...schemaErrors)
   }
@@ -113,11 +119,15 @@ export async function springBonesMetadataValidateFn(deployment: DeploymentToVali
 
   for (const [modelHash, bones] of Object.entries(springBones.models)) {
     if (!activeHashes.has(modelHash)) {
-      errors.push(`springBones.models key '${modelHash}' does not match any current representation hash`)
+      errors.push(
+        `springBones.models key ${formatErrorField(modelHash)} does not match any current representation hash`
+      )
     }
     for (const boneName of Object.keys(bones)) {
       if (!isSpringBoneName(boneName)) {
-        errors.push(`Bone name '${boneName}' in model '${modelHash}' does not follow the spring bone naming convention`)
+        errors.push(
+          `Bone name ${formatErrorField(boneName)} in model ${formatErrorField(modelHash)} does not follow the spring bone naming convention`
+        )
       }
     }
   }

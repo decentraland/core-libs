@@ -671,220 +671,252 @@ describe('when validating the third party wearable merkle proof', () => {
       )
     })
   })
+})
 
-  describe('Spring bones:', () => {
-    // VALID_WEARABLE_METADATA's representation has mainFile: 'file1', so the active
-    // hash for the representation is whatever 'file1' maps to in entity.content.
-    const fileHash = 'bafkreialsvt77jvpy673cnugp5ggnxfaalfncufweayuk3jbxskh3pelkm'
-    const file2Hash = 'bafkreigreflbn4w3a36rgg2ywlhf2asebqlsd4skg5q5djpklcdcjkbjvi'
-    const baseContent = [
-      { file: 'file1', hash: fileHash },
-      { file: 'file2', hash: file2Hash }
-    ]
-    const validBoneParams = {
-      stiffness: 2,
-      gravityPower: 0,
-      gravityDir: [0, -1, 0] as [number, number, number],
-      drag: 0.5,
-      isRoot: true
-    }
+describe('when validating spring bones metadata', () => {
+  // VALID_WEARABLE_METADATA's representation has mainFile: 'file1', so the active
+  // hash for the representation is whatever 'file1' maps to in entity.content.
+  const fileHash = 'bafkreialsvt77jvpy673cnugp5ggnxfaalfncufweayuk3jbxskh3pelkm'
+  const file2Hash = 'bafkreigreflbn4w3a36rgg2ywlhf2asebqlsd4skg5q5djpklcdcjkbjvi'
+  const baseContent = [
+    { file: 'file1', hash: fileHash },
+    { file: 'file2', hash: file2Hash }
+  ]
+  const validBoneParams = {
+    stiffness: 2,
+    gravityPower: 0,
+    gravityDir: [0, -1, 0] as [number, number, number],
+    drag: 0.5,
+    isRoot: true
+  }
 
-    function buildWearableWithSpringBones(springBones: unknown) {
-      return buildEntity({
-        type: EntityType.WEARABLE,
-        metadata: {
-          ...VALID_WEARABLE_METADATA,
-          data: { ...VALID_WEARABLE_METADATA.data, springBones }
-        },
-        content: baseContent,
-        timestamp
-      })
-    }
-
-    it('passes when no springBones field is present', async () => {
-      const entity = buildEntity({
-        type: EntityType.WEARABLE,
-        metadata: VALID_WEARABLE_METADATA,
-        content: baseContent,
-        timestamp
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeTruthy()
+  function buildWearableWithSpringBones(springBones: unknown) {
+    return buildEntity({
+      type: EntityType.WEARABLE,
+      metadata: {
+        ...VALID_WEARABLE_METADATA,
+        data: { ...VALID_WEARABLE_METADATA.data, springBones }
+      },
+      content: baseContent,
+      timestamp
     })
+  }
 
-    it('passes when models is empty', async () => {
-      const entity = buildWearableWithSpringBones({ version: 1, models: {} })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeTruthy()
+  it('passes when no springBones field is present', async () => {
+    const entity = buildEntity({
+      type: EntityType.WEARABLE,
+      metadata: VALID_WEARABLE_METADATA,
+      content: baseContent,
+      timestamp
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeTruthy()
+  })
 
-    it('passes with a valid hash-keyed entry and a canonical bone name', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: validBoneParams } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeTruthy()
+  it('passes when models is empty', async () => {
+    const entity = buildWearableWithSpringBones({ version: 1, models: {} })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeTruthy()
+  })
+
+  it('passes with a valid hash-keyed entry and a canonical bone name', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: validBoneParams } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeTruthy()
+  })
 
-    it('passes when isRoot is omitted (it is optional)', async () => {
-      const { isRoot: _omit, ...paramsWithoutIsRoot } = validBoneParams
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: paramsWithoutIsRoot } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeTruthy()
+  it('passes when isRoot is omitted (it is optional)', async () => {
+    const { isRoot: _omit, ...paramsWithoutIsRoot } = validBoneParams
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: paramsWithoutIsRoot } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeTruthy()
+  })
 
-    it('passes when center is provided as a string', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, center: 'Avatar_Hips' } } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeTruthy()
+  it('passes when center is provided as a string', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, center: 'Avatar_Hips' } } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeTruthy()
+  })
 
-    it('passes when two representations share the same GLB hash and there is one entry in models', async () => {
-      const sharedHash = fileHash
-      const entity = buildEntity({
-        type: EntityType.WEARABLE,
-        metadata: {
-          ...VALID_WEARABLE_METADATA,
-          data: {
-            ...VALID_WEARABLE_METADATA.data,
-            representations: [
-              {
-                bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseMale'],
-                mainFile: 'male/shared.glb',
-                contents: ['male/shared.glb'],
-                overrideHides: [],
-                overrideReplaces: []
-              },
-              {
-                bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseFemale'],
-                mainFile: 'female/shared.glb',
-                contents: ['female/shared.glb'],
-                overrideHides: [],
-                overrideReplaces: []
-              }
-            ],
-            springBones: {
-              version: 1,
-              models: { [sharedHash]: { Hair_springBone: validBoneParams } }
+  it('passes when two representations share the same GLB hash and there is one entry in models', async () => {
+    const sharedHash = fileHash
+    const entity = buildEntity({
+      type: EntityType.WEARABLE,
+      metadata: {
+        ...VALID_WEARABLE_METADATA,
+        data: {
+          ...VALID_WEARABLE_METADATA.data,
+          representations: [
+            {
+              bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseMale'],
+              mainFile: 'male/shared.glb',
+              contents: ['male/shared.glb'],
+              overrideHides: [],
+              overrideReplaces: []
+            },
+            {
+              bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseFemale'],
+              mainFile: 'female/shared.glb',
+              contents: ['female/shared.glb'],
+              overrideHides: [],
+              overrideReplaces: []
             }
+          ],
+          springBones: {
+            version: 1,
+            models: { [sharedHash]: { Hair_springBone: validBoneParams } }
           }
-        },
-        content: [
-          { file: 'male/shared.glb', hash: sharedHash },
-          { file: 'female/shared.glb', hash: sharedHash }
-        ],
-        timestamp
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeTruthy()
+        }
+      },
+      content: [
+        { file: 'male/shared.glb', hash: sharedHash },
+        { file: 'female/shared.glb', hash: sharedHash }
+      ],
+      timestamp
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeTruthy()
+  })
 
-    it('fails when version is not 1', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 2,
-        models: { [fileHash]: { Hair_springBone_L: validBoneParams } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors).toContain('springBones.version must be 1, got 2')
+  it('fails when models is keyed by a filename that is not a current representation hash', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { 'male/AnimeLong.glb': { Hair_springBone_L: validBoneParams } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors).toContain(
+      `springBones.models key male/AnimeLong.glb does not match any current representation hash`
+    )
+  })
 
-    it('fails when models is keyed by a filename that is not a current representation hash', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { 'male/AnimeLong.glb': { Hair_springBone_L: validBoneParams } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors).toContain(
-        `springBones.models key 'male/AnimeLong.glb' does not match any current representation hash`
-      )
+  it('fails when a stale hash no longer matches any current representation', async () => {
+    const staleHash = 'bafkreistaleshashstalehashstalehashstalehashstalehashstalehashstale'
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [staleHash]: { Hair_springBone_L: validBoneParams } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors).toContain(
+      `springBones.models key ${staleHash} does not match any current representation hash`
+    )
+  })
 
-    it('fails when a stale hash no longer matches any current representation', async () => {
-      const staleHash = 'bafkreistaleshashstalehashstalehashstalehashstalehashstalehashstale'
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [staleHash]: { Hair_springBone_L: validBoneParams } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors).toContain(
-        `springBones.models key '${staleHash}' does not match any current representation hash`
-      )
+  it('fails when a bone name does not contain the springbone token', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_001: validBoneParams } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors).toContain(
+      `Bone name Hair_001 in model ${fileHash} does not follow the spring bone naming convention`
+    )
+  })
 
-    it('fails when a bone name does not contain the springbone token', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_001: validBoneParams } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors).toContain(
-        `Bone name 'Hair_001' in model '${fileHash}' does not follow the spring bone naming convention`
-      )
+  it('fails when version is not 1', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 10,
+      models: { [fileHash]: { Hair_springBone_L: validBoneParams } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('version'))).toBeTruthy()
+  })
 
-    it('fails when stiffness is out of range', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, stiffness: 6 } } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors?.some((e) => e.includes('stiffness'))).toBeTruthy()
+  it('fails when stiffness is out of range', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, stiffness: 6 } } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('stiffness'))).toBeTruthy()
+  })
 
-    it('fails when drag is out of range', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, drag: 1.5 } } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors?.some((e) => e.includes('drag'))).toBeTruthy()
+  it('fails when gravityPower is out of range', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, gravityPower: 11 } } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('gravityPower'))).toBeTruthy()
+  })
 
-    it('fails when gravityDir has the wrong length', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, gravityDir: [0, -1] } } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors?.some((e) => e.includes('gravityDir'))).toBeTruthy()
+  it('fails when drag is out of range', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, drag: 1.5 } } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('drag'))).toBeTruthy()
+  })
 
-    it('fails when gravityDir contains a non-numeric element', async () => {
-      const entity = buildWearableWithSpringBones({
-        version: 1,
-        models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, gravityDir: [0, -1, 'x'] } } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
-      expect(result.errors?.some((e) => e.includes('gravityDir'))).toBeTruthy()
+  it('fails when gravityDir has the wrong length', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, gravityDir: [0, -1] } } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('gravityDir'))).toBeTruthy()
+  })
 
-    it('fails when models is null', async () => {
-      const entity = buildWearableWithSpringBones({ version: 1, models: null })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
+  it('fails when gravityDir contains a non-numeric element', async () => {
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: { [fileHash]: { Hair_springBone_L: { ...validBoneParams, gravityDir: [0, -1, 'x'] } } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('gravityDir'))).toBeTruthy()
+  })
 
-    it('fails when version field is missing entirely', async () => {
-      const entity = buildWearableWithSpringBones({
-        models: { [fileHash]: { Hair_springBone_L: validBoneParams } }
-      })
-      const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
-      expect(result.ok).toBeFalsy()
+  it('fails when models is null', async () => {
+    const entity = buildWearableWithSpringBones({ version: 1, models: null })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('models'))).toBeTruthy()
+  })
+
+  it('fails when version field is missing entirely', async () => {
+    const entity = buildWearableWithSpringBones({
+      models: { [fileHash]: { Hair_springBone_L: validBoneParams } }
     })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.some((e) => e.includes('version'))).toBeTruthy()
+  })
+
+  it('accumulates errors across multiple invalid models entries', async () => {
+    const staleHash = 'bafkreistaleshashstale'
+    const entity = buildWearableWithSpringBones({
+      version: 1,
+      models: {
+        [staleHash]: { Hair_springBone_L: validBoneParams },
+        [fileHash]: { Hair_001: validBoneParams }
+      }
+    })
+    const result = await springBonesMetadataValidateFn(buildDeployment({ entity }))
+    expect(result.ok).toBeFalsy()
+    expect(result.errors?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(result.errors).toContain(
+      `springBones.models key ${staleHash} does not match any current representation hash`
+    )
+    expect(result.errors).toContain(
+      `Bone name Hair_001 in model ${fileHash} does not follow the spring bone naming convention`
+    )
   })
 })
