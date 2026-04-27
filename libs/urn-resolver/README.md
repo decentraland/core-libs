@@ -35,7 +35,7 @@ This library has no external service dependencies. It is a pure parsing library 
 
 ### Prerequisites
 
-- **Node.js**: Version 22.x or higher
+- **Node.js**: `>=22.0.0`
 - **pnpm**: For package management
 
 ### Installation
