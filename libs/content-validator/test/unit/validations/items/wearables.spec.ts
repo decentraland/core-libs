@@ -756,14 +756,14 @@ describe('when validating the third party wearable merkle proof', () => {
             ...VALID_WEARABLE_METADATA.data,
             representations: [
               {
-                bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseMale'] as any,
+                bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseMale'],
                 mainFile: 'male/shared.glb',
                 contents: ['male/shared.glb'],
                 overrideHides: [],
                 overrideReplaces: []
               },
               {
-                bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseFemale'] as any,
+                bodyShapes: ['urn:decentraland:off-chain:base-avatars:BaseFemale'],
                 mainFile: 'female/shared.glb',
                 contents: ['female/shared.glb'],
                 overrideHides: [],

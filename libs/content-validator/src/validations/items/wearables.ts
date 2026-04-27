@@ -1,6 +1,6 @@
 import { keccak256Hash } from '@dcl/hashing'
 import type { ThirdPartyProps, Wearable } from '@dcl/schemas'
-import { EntityType, isThirdParty, SpringBonesData } from '@dcl/schemas'
+import { EntityType, SpringBonesData, isThirdParty } from '@dcl/schemas'
 import { OK, validationFailed } from '../../types'
 import { validateAll, validateIfTypeMatches } from '../validations'
 import type { DeploymentToValidate } from '../..'
