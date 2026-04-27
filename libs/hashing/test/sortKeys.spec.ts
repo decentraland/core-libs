@@ -1,4 +1,5 @@
-import { compareStrings, sortKeys } from '../dist/ADR32'
+import { jest } from '@jest/globals'
+import { compareStrings, sortKeys } from '../src/ADR32'
 import type { EntityContentItemReference } from '../src/ADR32'
 
 const RHS = -1

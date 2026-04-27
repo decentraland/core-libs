@@ -1,6 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { hashV0, hashV1 } from '../dist/node'
+import { fileURLToPath } from 'node:url'
+import { jest } from '@jest/globals'
+// hashV1WithLayout lives in src/_layout.ts (excluded from the published bundle
+// — see tsconfig.json `exclude` and the `files` allowlist) so its layout knobs
+// stay out of the public API. ts-jest in ESM mode loads it directly from
+// source; no separate build is required.
+import { hashV1WithLayout } from '../src/_layout'
+import { hashV0, hashV1 } from '../src/node'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 describe('hashing', () => {
   let bafyFixturePath: string
@@ -134,29 +143,88 @@ describe('hashing', () => {
     })
   })
 
-  describe('when hashing an empty stream with CIDv1', () => {
+  describe('when hashing empty content with CIDv1', () => {
     async function* emptyStream(): AsyncIterable<Uint8Array> {
       // yields nothing
     }
 
-    it('should reject with a no-content error', async () => {
-      await expect(hashV1(emptyStream())).rejects.toThrow('hashV1: no content was provided')
+    it('should produce the same empty raw-leaf CID for an empty buffer and an empty stream', async () => {
+      const bufferHash = await hashV1(new Uint8Array(0))
+      const streamHash = await hashV1(emptyStream())
+      expect(streamHash).toBe(bufferHash)
     })
   })
 
-  describe('when hashing content that exceeds the flat-parent limit', () => {
-    const CHUNK_SIZE_BYTES = 262_144
-    const MAX_FLAT_CHILDREN = 174
-
-    async function* tooManyChunks(): AsyncIterable<Uint8Array> {
-      const chunk = new Uint8Array(CHUNK_SIZE_BYTES)
-      for (let i = 0; i < MAX_FLAT_CHILDREN + 1; i++) {
+  describe('when hashing content that requires a balanced tree', () => {
+    // Reference CIDs produced by ipfs-unixfs-importer's balanced layout for the
+    // same deterministic stream. Regenerate with:
+    //   node scripts/compute-reference-hashes.mjs
+    async function* deterministicStream(chunkCount: number, chunkSize: number): AsyncIterable<Uint8Array> {
+      for (let i = 0; i < chunkCount; i++) {
+        const chunk = new Uint8Array(chunkSize)
+        chunk[0] = i & 0xff
+        chunk[1] = (i >>> 8) & 0xff
+        chunk[2] = (i >>> 16) & 0xff
+        chunk[3] = (i >>> 24) & 0xff
         yield chunk
       }
     }
 
-    it('should reject with a flat-parent-limit error', async () => {
-      await expect(hashV1(tooManyChunks())).rejects.toThrow(/exceeds flat-parent limit of 174 chunks/)
+    describe('and the production layout (chunkSize=262144, maxChildrenPerNode=174) is used', () => {
+      const CHUNK_SIZE_BYTES = 262_144
+      const referenceHashes: Record<number, string> = {
+        175: 'bafybeiaqquy5nm2mwvvewo2w3r4xtr3on2i4m2rco3ls7mpxp3y6rge6e4',
+        200: 'bafybeie6nnyjfmveabfjzy63jdwp2lnsrhcx6vrzallhkadig6f4wcm3le',
+        348: 'bafybeigrzojtcb5aov37ai75cllm4q6xwdnfddxjbujubmzrmtd2tvedc4',
+        349: 'bafybeig3mxowaycxr2re73p2ysbii3ghp4phdm3gv43ieitbjxr52fyfza'
+      }
+
+      describe.each([
+        [175, '174 children + 1 straggler'],
+        [200, 'flat group + 26 stragglers'],
+        [348, 'two full flat groups'],
+        [349, 'two full flat groups + 1 straggler']
+      ])('and the chunk count is %i (%s)', (chunkCount: number) => {
+        it('should match the ipfs-unixfs-importer reference CID', async () => {
+          await expect(hashV1(deterministicStream(chunkCount, CHUNK_SIZE_BYTES))).resolves.toBe(
+            referenceHashes[chunkCount]
+          )
+        })
+      })
+    })
+
+    // Multi-level cascade with the production layout (174^2+ chunks ≈ 7.4 GB) is
+    // impractical to test, so we exercise the same cascade paths with a small
+    // chunkSize / maxChildrenPerNode and the test-only entry point.
+    describe('and a small fan-out layout (chunkSize=16, maxChildrenPerNode=3) is used', () => {
+      const SMALL_CHUNK_SIZE = 16
+      const SMALL_MAX_CHILDREN = 3
+      const referenceHashes: Record<number, string> = {
+        4: 'bafybeifv44dksyuml257iebtu2uxurpux7p4wggecgsv7lj5y6ipdllrhi',
+        9: 'bafybeibcvqxqo6hstepsrwbbiwvzt64owc7277xg27xwwx2yxuurhxfw2y',
+        10: 'bafybeigm7i2cuaaeqgtn4n5nogxsa2ui2f3crkzs33libqdc2amac2jpge',
+        27: 'bafybeif6s5jougkfd3zkouc3sazfqpozva3iaf7mdbfjiq6sk5lkdfv4bm',
+        28: 'bafybeiftg53eyneicsnoiai2xp5fd4up5po3nbxqp5how7jt3qfcwpqf4a',
+        100: 'bafybeicad7rd3hqvnwsiqtbc6ofpaz2j6eeer5pcw44nl6tjadaame2n6y'
+      }
+
+      describe.each([
+        [4, 'one full level-1 group + 1 straggler'],
+        [9, 'three full level-1 groups (root cascades once)'],
+        [10, '3^2 + 1 straggler promoted up two levels'],
+        [27, '3^3 leaves (root cascades twice)'],
+        [28, '3^3 + 1 straggler promoted up three levels'],
+        [100, 'mixed three-level tree']
+      ])('and the chunk count is %i (%s)', (chunkCount: number) => {
+        it('should match the ipfs-unixfs-importer reference CID', async () => {
+          await expect(
+            hashV1WithLayout(deterministicStream(chunkCount, SMALL_CHUNK_SIZE), {
+              chunkSize: SMALL_CHUNK_SIZE,
+              maxChildrenPerNode: SMALL_MAX_CHILDREN
+            })
+          ).resolves.toBe(referenceHashes[chunkCount])
+        })
+      })
     })
   })
 

@@ -30,13 +30,16 @@
     }
   },
   "files": [
-    "dist"
+    "dist/index.*",
+    "dist/node.*",
+    "dist/ADR32.*",
+    "dist/ADR62.*"
   ],
   "scripts": {
-    "build": "tsc --emitDeclarationOnly && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=node --format=cjs --outdir=dist --external:node:* --sourcemap && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=neutral --format=esm --outdir=dist --out-extension:.js=.mjs --packages=external --sourcemap",
+    "build": "tsc --emitDeclarationOnly && rm -f dist/_layout.d.ts dist/_layout.d.ts.map && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=node --format=cjs --outdir=dist --external:node:* --sourcemap && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=neutral --format=esm --outdir=dist --out-extension:.js=.mjs --packages=external --sourcemap",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "test": "pnpm build && jest",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
   },
@@ -60,8 +63,10 @@
   },
   "devDependencies": {
     "@dcl/eslint-config": "^2.4.3",
+    "blockstore-core": "^5.0.4",
     "esbuild": "^0.27.0",
     "eslint": "^8.57.1",
+    "ipfs-unixfs-importer": "^15.4.0",
     "typescript": "^5.3.3"
   },
   "engines": {
