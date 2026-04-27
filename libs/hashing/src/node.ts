@@ -7,13 +7,19 @@ import type { PBLink } from '@ipld/dag-pb'
 
 export type HashableContent = AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array
 
-// Matches the defaults of ipfs-unixfs-importer so hashes are bit-compatible:
-// fixed-size chunks of 262144 bytes, up to 174 children in a flat parent.
+// Matches the defaults of ipfs-unixfs-importer's balanced layout so hashes are
+// bit-compatible: fixed-size 262144-byte chunks, up to 174 children per node.
 const CHUNK_SIZE_BYTES = 262_144
-const MAX_FLAT_CHILDREN = 174
+const MAX_CHILDREN_PER_NODE = 174
 const SHA2_256_CODE = 0x12
 const RAW_CODEC = 0x55
 const DAG_PB_CODEC = 0x70
+
+interface DagNode {
+  cid: CID
+  fileSize: bigint
+  cumulativeSize: number
+}
 
 function isAsyncIterable(content: unknown): content is AsyncIterable<Uint8Array> {
   return (
@@ -27,8 +33,34 @@ function sha256Digest(data: Uint8Array) {
   return create(SHA2_256_CODE, sha256(data))
 }
 
-function rawLeafCid(data: Uint8Array): CID {
-  return CID.createV1(RAW_CODEC, sha256Digest(data))
+function rawLeaf(chunk: Uint8Array): DagNode {
+  return {
+    cid: CID.createV1(RAW_CODEC, sha256Digest(chunk)),
+    fileSize: BigInt(chunk.length),
+    cumulativeSize: chunk.length
+  }
+}
+
+function buildParent(children: DagNode[]): DagNode {
+  const file = new UnixFS({ type: 'file' })
+  const links: PBLink[] = new Array(children.length)
+  let cumulativeSize = 0
+  let fileSize = 0n
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i]
+    file.addBlockSize(child.fileSize)
+    links[i] = { Name: '', Tsize: child.cumulativeSize, Hash: child.cid }
+    cumulativeSize += child.cumulativeSize
+    fileSize += child.fileSize
+  }
+
+  const block = encode(prepare({ Data: file.marshal(), Links: links }))
+  return {
+    cid: CID.createV1(DAG_PB_CODEC, sha256Digest(block)),
+    fileSize,
+    cumulativeSize: cumulativeSize + block.length
+  }
 }
 
 function* chunksFromBuffer(content: Uint8Array, chunkSize: number): Generator<Uint8Array> {
@@ -78,30 +110,63 @@ async function* chunksFromStream(content: AsyncIterable<Uint8Array>, chunkSize: 
   }
 }
 
-async function hashChunks(chunks: Iterable<Uint8Array> | AsyncIterable<Uint8Array>): Promise<string> {
-  const file = new UnixFS({ type: 'file' })
-  const links: PBLink[] = []
+// Streaming balanced-tree builder. Mirrors the recursive batched algorithm used
+// by ipfs-unixfs-importer's balanced layout, but folds completed levels into
+// parents on the fly so memory stays bounded by tree depth × MAX_CHILDREN_PER_NODE
+// instead of the total number of leaves.
+class BalancedTreeBuilder {
+  private readonly levels: DagNode[][] = [[]]
+  private leafCount = 0
 
-  for await (const chunk of chunks) {
-    if (links.length >= MAX_FLAT_CHILDREN) {
-      const limitMb = ((MAX_FLAT_CHILDREN * CHUNK_SIZE_BYTES) / (1024 * 1024)).toFixed(1)
-      throw new Error(`hashV1: content exceeds flat-parent limit of ${MAX_FLAT_CHILDREN} chunks (~${limitMb} MB)`)
+  addLeaf(chunk: Uint8Array): void {
+    this.leafCount++
+    this.pushAt(0, rawLeaf(chunk))
+  }
+
+  finalize(): DagNode {
+    if (this.leafCount === 0) {
+      throw new Error('hashV1: no content was provided')
     }
-    const cid = rawLeafCid(chunk)
-    file.addBlockSize(BigInt(chunk.length))
-    links.push({ Name: '', Tsize: chunk.length, Hash: cid })
+    if (this.leafCount === 1) {
+      return this.levels[0][0]
+    }
+
+    let carry: DagNode | undefined
+    for (let i = 0; i < this.levels.length; i++) {
+      const level = this.levels[i]
+      if (carry !== undefined) level.push(carry)
+
+      if (level.length === 0) {
+        carry = undefined
+        continue
+      }
+
+      const isTopmost = i === this.levels.length - 1
+      carry = isTopmost && level.length === 1 ? level[0] : buildParent(level)
+    }
+
+    return carry as DagNode
   }
 
-  if (links.length === 0) {
-    throw new Error('hashV1: no content was provided')
-  }
+  private pushAt(level: number, node: DagNode): void {
+    if (level === this.levels.length) this.levels.push([])
+    const bucket = this.levels[level]
+    bucket.push(node)
 
-  if (links.length === 1) {
-    return (links[0].Hash as CID).toString()
+    if (bucket.length === MAX_CHILDREN_PER_NODE) {
+      const parent = buildParent(bucket)
+      bucket.length = 0
+      this.pushAt(level + 1, parent)
+    }
   }
+}
 
-  const block = encode(prepare({ Data: file.marshal(), Links: links }))
-  return CID.createV1(DAG_PB_CODEC, sha256Digest(block)).toString()
+async function hashChunks(chunks: Iterable<Uint8Array> | AsyncIterable<Uint8Array>): Promise<string> {
+  const builder = new BalancedTreeBuilder()
+  for await (const chunk of chunks) {
+    builder.addLeaf(chunk)
+  }
+  return builder.finalize().cid.toString()
 }
 
 /**
@@ -134,7 +199,7 @@ export async function hashV0(stream: HashableContent): Promise<string> {
  */
 export async function hashV1(content: HashableContent): Promise<string> {
   if (content instanceof Uint8Array && content.length <= CHUNK_SIZE_BYTES) {
-    return rawLeafCid(content).toString()
+    return CID.createV1(RAW_CODEC, sha256Digest(content)).toString()
   }
 
   if (content instanceof Uint8Array) {

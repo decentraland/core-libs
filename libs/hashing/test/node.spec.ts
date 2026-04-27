@@ -145,18 +145,37 @@ describe('hashing', () => {
   })
 
   describe('when hashing content that exceeds the flat-parent limit', () => {
+    // Reference CIDs produced by ipfs-unixfs-importer's balanced layout for the
+    // same deterministic stream. Regenerate with:
+    //   node scripts/compute-reference-hashes.mjs
     const CHUNK_SIZE_BYTES = 262_144
-    const MAX_FLAT_CHILDREN = 174
+    const referenceHashes: Record<number, string> = {
+      175: 'bafybeiaqquy5nm2mwvvewo2w3r4xtr3on2i4m2rco3ls7mpxp3y6rge6e4',
+      200: 'bafybeie6nnyjfmveabfjzy63jdwp2lnsrhcx6vrzallhkadig6f4wcm3le',
+      348: 'bafybeigrzojtcb5aov37ai75cllm4q6xwdnfddxjbujubmzrmtd2tvedc4',
+      349: 'bafybeig3mxowaycxr2re73p2ysbii3ghp4phdm3gv43ieitbjxr52fyfza'
+    }
 
-    async function* tooManyChunks(): AsyncIterable<Uint8Array> {
-      const chunk = new Uint8Array(CHUNK_SIZE_BYTES)
-      for (let i = 0; i < MAX_FLAT_CHILDREN + 1; i++) {
+    async function* deterministicStream(chunkCount: number): AsyncIterable<Uint8Array> {
+      for (let i = 0; i < chunkCount; i++) {
+        const chunk = new Uint8Array(CHUNK_SIZE_BYTES)
+        chunk[0] = i & 0xff
+        chunk[1] = (i >>> 8) & 0xff
+        chunk[2] = (i >>> 16) & 0xff
+        chunk[3] = (i >>> 24) & 0xff
         yield chunk
       }
     }
 
-    it('should reject with a flat-parent-limit error', async () => {
-      await expect(hashV1(tooManyChunks())).rejects.toThrow(/exceeds flat-parent limit of 174 chunks/)
+    describe.each([
+      [175, '174 children + 1 straggler'],
+      [200, 'flat group + 26 stragglers'],
+      [348, 'two full flat groups'],
+      [349, 'two full flat groups + 1 straggler']
+    ])('and the chunk count is %i (%s)', (chunkCount: number) => {
+      it('should match the ipfs-unixfs-importer reference CID', async () => {
+        await expect(hashV1(deterministicStream(chunkCount))).resolves.toBe(referenceHashes[chunkCount])
+      })
     })
   })
 
