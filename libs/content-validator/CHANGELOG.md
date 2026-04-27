@@ -1,5 +1,22 @@
 # @dcl/content-validator
 
+## 7.3.0
+
+### Minor Changes
+
+- f4df4d4: feat: add spring bones metadata validation
+
+### Patch Changes
+
+- bc65d55: Documentation-only updates to the published READMEs:
+
+  - `@dcl/content-validator`: fix on-chain and subgraph access-checker examples to use the actual subpath imports under `dist/validations/access/...` (the referenced symbols are not re-exported from the package root).
+  - `@dcl/http-commons`: add a README covering errors, middlewares (`errorHandler`, `bearerTokenMiddleware`, `ethAddressNormalizerMiddleware`), and utilities (`getPaginationParams`, `parseJson`, `generateRandomWalletAddress[es]`); add a missing `engines.node >=22.0.0` field to `package.json` for consistency with sibling packages.
+  - `@dcl/urn-resolver`: align the documented Node prerequisite with `package.json` engines (`>=22.0.0`).
+
+- Updated dependencies [bc65d55]
+  - @dcl/urn-resolver@1.0.2
+
 ## 7.2.0
 
 ### Minor Changes
