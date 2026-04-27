@@ -30,13 +30,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist/index.*",
+    "dist/node.*",
+    "dist/ADR32.*",
+    "dist/ADR62.*"
   ],
   "scripts": {
-    "build": "tsc --emitDeclarationOnly && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=node --format=cjs --outdir=dist --external:node:* --sourcemap && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=neutral --format=esm --outdir=dist --out-extension:.js=.mjs --packages=external --sourcemap",
+    "build": "tsc --emitDeclarationOnly && rm -f dist/_layout.d.ts dist/_layout.d.ts.map && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=node --format=cjs --outdir=dist --external:node:* --sourcemap && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=neutral --format=esm --outdir=dist --out-extension:.js=.mjs --packages=external --sourcemap",
+    "build:test-helpers": "esbuild src/_layout.ts --bundle --platform=node --format=cjs --outfile=test/dist/_layout.js --external:node:* --sourcemap && tsc -p tsconfig.test-helpers.json",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist",
-    "test": "pnpm build && jest",
+    "clean": "rm -rf dist test/dist",
+    "test": "pnpm build && pnpm build:test-helpers && jest",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
   },

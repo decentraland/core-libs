@@ -1,6 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { _hashV1WithLayout, hashV0, hashV1 } from '../dist/node'
+// hashV1WithLayout is a test-only entry point built to test/dist/ (not shipped
+// in the package's `files` allowlist) so its layout knobs stay out of the
+// published surface. Run `pnpm build:test-helpers` to regenerate.
+import { hashV1WithLayout } from './dist/_layout'
+import { hashV0, hashV1 } from '../dist/node'
 
 describe('hashing', () => {
   let bafyFixturePath: string
@@ -209,7 +213,7 @@ describe('hashing', () => {
       ])('and the chunk count is %i (%s)', (chunkCount: number) => {
         it('should match the ipfs-unixfs-importer reference CID', async () => {
           await expect(
-            _hashV1WithLayout(deterministicStream(chunkCount, SMALL_CHUNK_SIZE), {
+            hashV1WithLayout(deterministicStream(chunkCount, SMALL_CHUNK_SIZE), {
               chunkSize: SMALL_CHUNK_SIZE,
               maxChildrenPerNode: SMALL_MAX_CHILDREN
             })
