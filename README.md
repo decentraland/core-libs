@@ -14,6 +14,8 @@ core-libs/
 │   ├── crypto-middleware/   # Multi-framework authentication middleware for Decentraland signed requests
 │   ├── crypto-fetch/        # fetch wrapper that signs requests with a Decentraland Identity
 │   ├── hashing/             # Hashing functions for Decentraland Content Identifiers
+│   ├── content-validator/   # Catalyst content validations
+│   ├── urn-resolver/        # URN resolver for Decentraland assets
 ```
 
 ## 🚀 Libraries
@@ -37,6 +39,14 @@ core-libs/
 ### Hashing
 
 - **Hashing** (`@dcl/hashing`) - Hashing functions to calculate Decentraland Content Identifiers
+
+### Content Validator
+
+- **Content Validator** (`@dcl/content-validator`) - Catalyst content validations for Decentraland deployments
+
+### URN Resolver
+
+- **URN Resolver** (`@dcl/urn-resolver`) - URN resolver for Decentraland assets
 
 ## 🛠️ Development
 
@@ -95,7 +105,7 @@ Each library includes comprehensive test suites using Jest. Run tests with:
 pnpm test
 
 # Run tests for a specific library
-cd libraries/http-server-commons && pnpm test
+cd libs/http-commons && pnpm test
 ```
 
 ## 🔧 Configuration
@@ -117,6 +127,8 @@ This project uses [Changesets](https://github.com/changesets/changesets) for aut
 - `@dcl/crypto-middleware`
 - `decentraland-crypto-fetch`
 - `@dcl/hashing`
+- `@dcl/content-validator`
+- `@dcl/urn-resolver`
 
 ### Publishing Workflow
 
