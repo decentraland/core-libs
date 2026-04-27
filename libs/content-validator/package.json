@@ -31,7 +31,7 @@
     "@dcl/block-indexer": "^1.1.2",
     "@dcl/content-hash-tree": "^1.1.4",
     "@dcl/hashing": "workspace:*",
-    "@dcl/schemas": "^26.1.0",
+    "@dcl/schemas": "^26.2.0",
     "@dcl/urn-resolver": "workspace:*",
     "@well-known-components/interfaces": "^1.4.3",
     "@well-known-components/thegraph-component": "^1.6.0",
