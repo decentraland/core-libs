@@ -1,10 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
-// hashV1WithLayout is a test-only entry point built to test/dist/ (not shipped
-// in the package's `files` allowlist) so its layout knobs stay out of the
-// published surface. Run `pnpm build:test-helpers` to regenerate.
-import { hashV1WithLayout } from './dist/_layout'
-import { hashV0, hashV1 } from '../dist/node'
+import { fileURLToPath } from 'node:url'
+import { jest } from '@jest/globals'
+// hashV1WithLayout lives in src/_layout.ts (excluded from the published bundle
+// — see tsconfig.json `exclude` and the `files` allowlist) so its layout knobs
+// stay out of the public API. ts-jest in ESM mode loads it directly from
+// source; no separate build is required.
+import { hashV1WithLayout } from '../src/_layout'
+import { hashV0, hashV1 } from '../src/node'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 describe('hashing', () => {
   let bafyFixturePath: string

@@ -1,4 +1,5 @@
-import { calculateMultipleHashesADR32, calculateMultipleHashesADR32LegacyQmHash } from '../dist/ADR32'
+import { jest } from '@jest/globals'
+import { calculateMultipleHashesADR32, calculateMultipleHashesADR32LegacyQmHash } from '../src/ADR32'
 import type { EntityContentItemReference } from '../src/ADR32'
 
 describe('ADR32', () => {

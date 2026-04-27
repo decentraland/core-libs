@@ -1,4 +1,5 @@
-import { keccak256Hash } from '../dist/ADR62'
+import { jest } from '@jest/globals'
+import { keccak256Hash } from '../src/ADR62'
 
 type WearableMetadata = Record<string, unknown> & {
   merkleProof: {
