@@ -101,10 +101,6 @@ export async function springBonesMetadataValidateFn(deployment: DeploymentToVali
     return validationFailed(...schemaErrors)
   }
 
-  if (springBones.version !== 1) {
-    errors.push(`springBones.version must be 1, got ${springBones.version}`)
-  }
-
   // Build the set of content hashes that current representations point to.
   const representations = wearableMetadata.data?.representations ?? []
   const activeHashes = new Set<string>()

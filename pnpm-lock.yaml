@@ -45,8 +45,8 @@ importers:
         specifier: workspace:*
         version: link:../hashing
       '@dcl/schemas':
-        specifier: https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-24994305798.commit-9523ab7.tgz
-        version: https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-24994305798.commit-9523ab7.tgz
+        specifier: https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-25013430996.commit-5397805.tgz
+        version: https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-25013430996.commit-5397805.tgz
       '@dcl/urn-resolver':
         specifier: workspace:*
         version: link:../urn-resolver
@@ -492,9 +492,9 @@ packages:
   '@dcl/schemas@25.3.0':
     resolution: {integrity: sha512-ChFW3jU3ELN6YsRvs8TZIueBR8/DDxFcWPOeCoPafjLzSRK4GX9wHYrD3Crent07C3i3tm1rX8L/2rw+S39bzQ==}
 
-  '@dcl/schemas@https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-24994305798.commit-9523ab7.tgz':
-    resolution: {tarball: https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-24994305798.commit-9523ab7.tgz}
-    version: 26.1.1-24994305798.commit-9523ab7
+  '@dcl/schemas@https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-25013430996.commit-5397805.tgz':
+    resolution: {tarball: https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-25013430996.commit-5397805.tgz}
+    version: 26.1.1-25013430996.commit-5397805
 
   '@emnapi/core@1.8.1':
     resolution: {integrity: sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg==}
@@ -4196,7 +4196,7 @@ snapshots:
       ajv-keywords: 5.1.0(ajv@8.17.1)
       mitt: 3.0.1
 
-  '@dcl/schemas@https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-24994305798.commit-9523ab7.tgz':
+  '@dcl/schemas@https://sdk-team-cdn.decentraland.org/@dcl/schemas/branch/feat/spring-bones-metadata/dcl-schemas-26.1.1-25013430996.commit-5397805.tgz':
     dependencies:
       ajv: 8.17.1
       ajv-errors: 3.0.0(ajv@8.17.1)
