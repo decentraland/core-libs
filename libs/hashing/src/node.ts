@@ -125,7 +125,7 @@ class BalancedTreeBuilder {
 
   finalize(): DagNode {
     if (this.leafCount === 0) {
-      throw new Error('hashV1: no content was provided')
+      return rawLeaf(new Uint8Array(0))
     }
     if (this.leafCount === 1) {
       return this.levels[0][0]

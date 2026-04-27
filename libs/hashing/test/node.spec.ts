@@ -134,13 +134,15 @@ describe('hashing', () => {
     })
   })
 
-  describe('when hashing an empty stream with CIDv1', () => {
+  describe('when hashing empty content with CIDv1', () => {
     async function* emptyStream(): AsyncIterable<Uint8Array> {
       // yields nothing
     }
 
-    it('should reject with a no-content error', async () => {
-      await expect(hashV1(emptyStream())).rejects.toThrow('hashV1: no content was provided')
+    it('should produce the same empty raw-leaf CID for an empty buffer and an empty stream', async () => {
+      const bufferHash = await hashV1(new Uint8Array(0))
+      const streamHash = await hashV1(emptyStream())
+      expect(streamHash).toBe(bufferHash)
     })
   })
 
