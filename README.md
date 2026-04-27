@@ -22,7 +22,7 @@ core-libs/
 
 ### HTTP Server Commons
 
-- **HTTP Commons** (`@dcl/http-server-commons`) - Middlewares and utilities for HTTP Servers
+- **HTTP Commons** (`@dcl/http-commons`) - Middlewares and utilities for HTTP Servers
 
 ### Crypto
 
@@ -122,7 +122,7 @@ Testing is configured with Jest and `ts-jest` for TypeScript support. The config
 
 This project uses [Changesets](https://github.com/changesets/changesets) for automated version management and publishing to npm:
 
-- `@dcl/http-server-commons`
+- `@dcl/http-commons`
 - `@dcl/crypto`
 - `@dcl/crypto-middleware`
 - `decentraland-crypto-fetch`

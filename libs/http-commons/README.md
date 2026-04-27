@@ -71,7 +71,7 @@ router.use(ethAddressNormalizerMiddleware())
 
 ### `getPaginationParams`
 
-Parses `limit` and `offset` from a `URLSearchParams`. `limit` is clamped to `[1, 100]` (defaulting to `100`); `offset` defaults to `0`.
+Parses `limit` and `offset` from a `URLSearchParams`. `limit` must be a positive integer ≤ `100`; missing, zero, negative, or out-of-range values fall back to `100`. `offset` defaults to `0` if missing or negative.
 
 ```typescript
 import { getPaginationParams } from '@dcl/http-commons'

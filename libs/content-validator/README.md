@@ -165,12 +165,12 @@ const validateFns = createSubgraphAccessCheckValidateFns({
 
 ### Development
 
-Install dependencies and run tests:
+Install dependencies and run tests from the monorepo root:
 
 ```bash
-yarn
-yarn build
-yarn test
+pnpm install
+pnpm --filter @dcl/content-validator build
+pnpm --filter @dcl/content-validator test
 ```
 
 ### Debugging Tests
