@@ -1,0 +1,38 @@
+{
+  "name": "@dcl/single-sign-on-client",
+  "version": "2.0.0",
+  "description": "Code that abstracts interaction with the single sign on iframe.",
+  "author": "Decentraland",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "keywords": [
+    "single-sign-on",
+    "sso",
+    "identity",
+    "decentraland"
+  ],
+  "dependencies": {
+    "@dcl/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@dcl/eslint-config": "^2.4.3",
+    "eslint": "^8.57.1",
+    "jest-environment-jsdom": "^30.0.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

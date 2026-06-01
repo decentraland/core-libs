@@ -16,6 +16,7 @@ core-libs/
 │   ├── hashing/             # Hashing functions for Decentraland Content Identifiers
 │   ├── content-validator/   # Catalyst content validations
 │   ├── urn-resolver/        # URN resolver for Decentraland assets
+│   ├── single-sign-on-client/ # localStorage-backed Decentraland identity store
 ```
 
 ## 🚀 Libraries
@@ -47,6 +48,10 @@ core-libs/
 ### URN Resolver
 
 - **URN Resolver** (`@dcl/urn-resolver`) - URN resolver for Decentraland assets
+
+### Single Sign On Client
+
+- **Single Sign On Client** (`@dcl/single-sign-on-client`) - `localStorage`-backed store for a Decentraland identity, scoped to the current origin
 
 ## 🛠️ Development
 
@@ -129,6 +134,7 @@ This project uses [Changesets](https://github.com/changesets/changesets) for aut
 - `@dcl/hashing`
 - `@dcl/content-validator`
 - `@dcl/urn-resolver`
+- `@dcl/single-sign-on-client`
 
 ### Publishing Workflow
 
