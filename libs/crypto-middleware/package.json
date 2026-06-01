@@ -4,6 +4,11 @@
   "description": "Multi-framework authentication middleware for Decentraland signed requests",
   "author": "Decentraland",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/decentraland/core-libs.git",
+    "directory": "libs/crypto-middleware"
+  },
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": [

@@ -4,6 +4,11 @@
   "description": "Crypto auth for Decentraland",
   "author": "Decentraland",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/decentraland/core-libs.git",
+    "directory": "libs/crypto"
+  },
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": [
