@@ -4,6 +4,11 @@
   "description": "Code that abstracts interaction with the single sign on iframe.",
   "author": "Decentraland",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/decentraland/core-libs.git",
+    "directory": "libs/single-sign-on-client"
+  },
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": [
