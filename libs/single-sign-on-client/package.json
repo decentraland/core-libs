@@ -1,6 +1,6 @@
 {
   "name": "@dcl/single-sign-on-client",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Code that abstracts interaction with the single sign on iframe.",
   "author": "Decentraland",
   "license": "Apache-2.0",
