@@ -1,2 +1,13 @@
 packages:
   - 'libs/*'
+
+# Dependencies allowed to run install/build scripts. pnpm 10+ blocks build
+# scripts by default and errors in CI (ERR_PNPM_IGNORED_BUILDS) until each is
+# explicitly approved. These are native modules (or fetch prebuilt binaries)
+# that the build/test/lint toolchain relies on, so they must be built.
+allowBuilds:
+  eccrypto: true
+  esbuild: true
+  keccak: true
+  secp256k1: true
+  unrs-resolver: true
