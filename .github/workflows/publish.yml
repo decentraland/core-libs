@@ -24,7 +24,7 @@ jobs:
       - name: Setup node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'pnpm'
 
       - name: Get pnpm store directory
@@ -53,6 +53,7 @@ jobs:
           title: 'chore: version packages'
           commit: 'chore: version packages [skip ci]'
           publish: pnpm ci:publish
+          createGithubReleases: true
           commitMode: 'github-api'
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
