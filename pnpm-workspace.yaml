@@ -1,2 +1,21 @@
 packages:
   - 'libs/*'
+
+# Hoist jest packages (notably @jest/globals) into the root node_modules so
+# each workspace lib can import them without declaring a direct dependency.
+# pnpm 10.13+/11 no longer reads hoist patterns from .npmrc; they must live
+# here.
+publicHoistPattern:
+  - '*jest*'
+  - '@jest/*'
+
+# Dependencies allowed to run install/build scripts. pnpm 10+ blocks build
+# scripts by default and errors in CI (ERR_PNPM_IGNORED_BUILDS) until each is
+# explicitly approved. These are native modules (or fetch prebuilt binaries)
+# that the build/test/lint toolchain relies on, so they must be built.
+allowBuilds:
+  eccrypto: true
+  esbuild: true
+  keccak: true
+  secp256k1: true
+  unrs-resolver: true
