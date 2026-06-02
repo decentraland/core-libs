@@ -1,5 +1,11 @@
 # @dcl/single-sign-on-client
 
+## 3.0.1
+
+### Patch Changes
+
+- 5bc1e8d: Add `repository` metadata to package.json so npm provenance validation passes when publishing via OIDC Trusted Publishing.
+
 ## 3.0.0
 
 ### Major Changes
