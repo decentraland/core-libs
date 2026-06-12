@@ -1,21 +1,25 @@
 import { parseJson } from '../../../src/utils'
 
 describe('when parsing a request', () => {
-  it('should parse json correctly', async () => {
-    const request = new Request('http://localhost', {
-      method: 'POST',
-      body: JSON.stringify({ foo: 'bar' })
-    })
+  describe('and the body is valid JSON', () => {
+    it('should resolve with the parsed object', async () => {
+      const request = new Request('http://localhost', {
+        method: 'POST',
+        body: JSON.stringify({ foo: 'bar' })
+      })
 
-    await expect(parseJson(request)).resolves.toEqual({ foo: 'bar' })
+      await expect(parseJson(request)).resolves.toEqual({ foo: 'bar' })
+    })
   })
 
-  it('should parse json correctly', async () => {
-    const request = new Request('http://localhost', {
-      method: 'POST',
-      body: 'xx { xxx } xx'
-    })
+  describe('and the body is not valid JSON', () => {
+    it('should reject with an "Invalid body" error', async () => {
+      const request = new Request('http://localhost', {
+        method: 'POST',
+        body: 'xx { xxx } xx'
+      })
 
-    await expect(parseJson(request)).rejects.toThrow('Invalid body')
+      await expect(parseJson(request)).rejects.toThrow('Invalid body')
+    })
   })
 })
