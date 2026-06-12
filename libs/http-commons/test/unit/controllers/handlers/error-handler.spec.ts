@@ -1,6 +1,6 @@
-import { Request } from 'node-fetch'
-import type { IHttpServerComponent, ILoggerComponent } from '@well-known-components/interfaces'
+import type { ILoggerComponent } from '@well-known-components/interfaces'
 import { createLogComponent } from '@well-known-components/logger'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import { InvalidRequestError, NotAuthorizedError, NotFoundError } from '../../../../src'
 import { errorHandler } from '../../../../src/controllers'
 import type { ComponentsWithLogger } from '../../../../src/types'
@@ -12,7 +12,7 @@ describe('Error Handler', () => {
   beforeEach(async () => {
     logs = await createLogComponent({})
     ctx = {
-      request: new Request('', {
+      request: new Request('http://localhost', {
         method: 'POST',
         body: JSON.stringify({ foo: 'bar' })
       }),

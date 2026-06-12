@@ -19,3 +19,6 @@ allowBuilds:
   keccak: true
   secp256k1: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@dcl/core-commons@0.10.0'
