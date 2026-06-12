@@ -1,5 +1,3 @@
-import type * as nodeFetch from 'node-fetch'
-
 export class InvalidRequestError extends Error {
   constructor(message: string) {
     super(message)
@@ -22,7 +20,7 @@ export class NotAuthorizedError extends Error {
 }
 
 export class HTTPResponseError extends Error {
-  constructor(public response: nodeFetch.Response) {
+  constructor(public response: Response) {
     super(`HTTP Error Response: ${response.status} ${response.statusText} for URL ${response.url}`)
   }
 }

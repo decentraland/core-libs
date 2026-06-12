@@ -1,4 +1,4 @@
-import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import { InvalidRequestError, NotAuthorizedError, NotFoundError } from '../../errors'
 import type { ComponentsWithLogger } from '../../types'
 

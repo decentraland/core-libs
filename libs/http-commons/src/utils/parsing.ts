@@ -1,4 +1,4 @@
-import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import { InvalidRequestError } from '../errors'
 
 export async function parseJson<T>(request: IHttpServerComponent.IRequest): Promise<T> {

@@ -1,9 +1,8 @@
-import { Request } from 'node-fetch'
 import { parseJson } from '../../../src/utils'
 
 describe('when parsing a request', () => {
   it('should parse json correctly', async () => {
-    const request = new Request('', {
+    const request = new Request('http://localhost', {
       method: 'POST',
       body: JSON.stringify({ foo: 'bar' })
     })
@@ -12,7 +11,7 @@ describe('when parsing a request', () => {
   })
 
   it('should parse json correctly', async () => {
-    const request = new Request('', {
+    const request = new Request('http://localhost', {
       method: 'POST',
       body: 'xx { xxx } xx'
     })

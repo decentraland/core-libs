@@ -1,4 +1,4 @@
-import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import { ethAddressNormalizerMiddleware } from '../../../../src/controllers/handlers/eth-address-normalizer-middleware'
 
 describe('ethAddressNormalizerMiddleware', () => {

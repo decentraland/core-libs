@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'crypto'
-import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import { NotAuthorizedError } from '../../errors'
 
 export function bearerTokenMiddleware(
