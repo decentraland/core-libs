@@ -93,7 +93,11 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
 > {
   return async (ctx, next) => {
     try {
-      ctx.verification = await verify<P>(ctx.request.method, ctx.url.pathname, ctx.request.headers.raw(), options)
+      // Build a plain header map for `verify()`. The native (undici) `Headers` used by
+      // @dcl/http-server v2 has no node-fetch-specific `.raw()`; `.entries()` works on both, and
+      // `verify()` normalizes each value via `firstOf`, so single-valued auth headers are unaffected.
+      const headers = Object.fromEntries(ctx.request.headers.entries())
+      ctx.verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
     } catch (err) {
       if (!options.optional) {
         const { status, body } = errorToResponse(err, options)

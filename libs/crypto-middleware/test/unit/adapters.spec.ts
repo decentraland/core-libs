@@ -214,8 +214,9 @@ describe('wellKnownComponents adapter', () => {
   let next: jest.Mock
 
   beforeEach(() => {
+    // Native (undici) Headers — as @dcl/http-server v2 provides — rather than a node-fetch `.raw()` stub.
     ctx = {
-      request: { method: 'GET', headers: { raw: () => ({}) } },
+      request: { method: 'GET', headers: new Headers({ 'x-identity-auth-chain-0': 'link-0' }) },
       url: { pathname: '/bar' }
     } as unknown as Ctx
     next = jest.fn().mockResolvedValue({ status: 200, body: 'ok' })
@@ -230,6 +231,14 @@ describe('wellKnownComponents adapter', () => {
       expect((ctx as unknown as Record<string, unknown>).verification).toEqual(signatureData)
       expect(next).toHaveBeenCalled()
       expect(result).toEqual({ status: 200, body: 'ok' })
+    })
+
+    it('should pass verify a plain header object built from the native Headers', async () => {
+      mockVerify.mockResolvedValueOnce(signatureData)
+
+      await wellKnownComponents()(ctx, next)
+
+      expect(mockVerify).toHaveBeenCalledWith('GET', '/bar', { 'x-identity-auth-chain-0': 'link-0' }, expect.anything())
     })
   })
 
