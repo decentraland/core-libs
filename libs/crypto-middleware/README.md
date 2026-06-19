@@ -15,7 +15,6 @@ If you use the Express or Koa adapters, also install the framework as a peer dep
 ```bash
 pnpm add express        # for the Express adapter
 pnpm add koa            # for the Koa adapter
-pnpm add passport       # for the Passport adapter
 ```
 
 Requires Node.js >= 22 (uses global `fetch`).
@@ -58,21 +57,6 @@ app.use(dcl.koa())
 app.use((ctx: Context & dcl.DecentralandSignatureData) => {
   ctx.body = { address: ctx.auth }
 })
-```
-
-### Passport
-
-```ts
-import passport from 'passport'
-import * as dcl from '@dcl/crypto-middleware'
-
-passport.use(dcl.passport())
-
-app.get(
-  '/user/required',
-  passport.authenticate('decentraland'),
-  (req, res) => res.json({ address: req.auth })
-)
 ```
 
 ## Options
@@ -124,5 +108,5 @@ wellKnownComponents({ onError: (err) => ({ ok: false, message: err.message, caus
 ### From `@dcl/platform-crypto-middleware`
 
 - `fetcher` is now optional — defaults to the global `fetch`.
-- Express, Koa, and Passport adapters are available in addition to `wellKnownComponents`.
+- Express and Koa adapters are available in addition to `wellKnownComponents`.
 - Metadata validation error is now `Invalid metadata content: <json>` (was `Invalid metadata`).
