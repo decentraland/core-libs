@@ -147,9 +147,6 @@ importers:
       '@types/koa':
         specifier: ^2.13.4
         version: 2.15.0
-      '@types/passport-strategy':
-        specifier: ^0.2.35
-        version: 0.2.38
       '@well-known-components/fetch-component':
         specifier: ^2.0.2
         version: 2.0.2
@@ -162,9 +159,6 @@ importers:
       koa:
         specifier: ^2.13.3
         version: 2.16.4
-      passport-strategy:
-        specifier: ^1.0.0
-        version: 1.0.0
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -1322,12 +1316,6 @@ packages:
 
   '@types/node@24.10.4':
     resolution: {integrity: sha512-vnDVpYPMzs4wunl27jHrfmwojOGKya0xyM3sH+UE5iv5uPS6vX7UIoh6m+vQc5LGBq52HBKPIn/zcSZVzeDEZg==}
-
-  '@types/passport-strategy@0.2.38':
-    resolution: {integrity: sha512-GC6eMqqojOooq993Tmnmp7AUTbbQSgilyvpCYQjT+H6JfG/g6RGc7nXEniZlp0zyKJ0WUdOiZWLBZft9Yug1uA==}
-
-  '@types/passport@1.0.17':
-    resolution: {integrity: sha512-aciLyx+wDwT2t2/kJGJR2AEeBz0nJU4WuRX04Wu9Dqc5lSUtwu0WERPHYsLhF9PtseiAMPBGNUOtFjxZ56prsg==}
 
   '@types/pbkdf2@3.1.2':
     resolution: {integrity: sha512-uRwJqmiXmh9++aSu1VNEn3iIxWOhd8AHXNSdlaLfdAAdSTY9jYVeGWnzejM3dvrkbqE3/hyQkQQ29IFATEGlew==}
@@ -3450,10 +3438,6 @@ packages:
   parseurl@1.3.3:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
-
-  passport-strategy@1.0.0:
-    resolution: {integrity: sha512-CB97UUvDKJde2V0KDWWB3lyf6PC3FaZP7YxZ2G8OAtn9p4HI9j9JLP9qjOGZFvyl8uwNT8qM+hGnz/n16NI7oA==}
-    engines: {node: '>= 0.4.0'}
 
   path-exists@3.0.0:
     resolution: {integrity: sha512-bpC7GYwiDYQ4wYLe+FA8lhRjhQCMcQGuSgGGqDkg/QerRWw9CmGRT0iSOVRSZJ29NMLZgIzqaljJ63oaL4NIJQ==}
@@ -5830,15 +5814,6 @@ snapshots:
   '@types/node@24.10.4':
     dependencies:
       undici-types: 7.16.0
-
-  '@types/passport-strategy@0.2.38':
-    dependencies:
-      '@types/express': 4.17.25
-      '@types/passport': 1.0.17
-
-  '@types/passport@1.0.17':
-    dependencies:
-      '@types/express': 4.17.25
 
   '@types/pbkdf2@3.1.2':
     dependencies:
@@ -8669,8 +8644,6 @@ snapshots:
       entities: 6.0.1
 
   parseurl@1.3.3: {}
-
-  passport-strategy@1.0.0: {}
 
   path-exists@3.0.0: {}
 
