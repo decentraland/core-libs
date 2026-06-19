@@ -1,7 +1,6 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
-import { DecentralandStrategy } from './strategy'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -26,7 +25,6 @@ export {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_TIMESTAMP_HEADER,
   AUTH_METADATA_HEADER,
-  DecentralandStrategy,
   RequestError,
   createAuthChainHeaders,
   verify
@@ -78,11 +76,6 @@ export function koa(options: Options = {}): k.Middleware {
 
     return next()
   }
-}
-
-/** Passport strategy */
-export function passport(defaultOptions: Options = {}): DecentralandStrategy {
-  return new DecentralandStrategy(defaultOptions)
 }
 
 /** Well-Known Components */

@@ -31,7 +31,7 @@ core-libs/
 
 ### Crypto Middleware
 
-- **Crypto Middleware** (`@dcl/crypto-middleware`) - Authentication middleware for Decentraland signed requests with Express, Koa, Passport and Well-Known Components adapters
+- **Crypto Middleware** (`@dcl/crypto-middleware`) - Authentication middleware for Decentraland signed requests with Express, Koa, and Well-Known Components adapters
 
 ### Crypto Fetch
 
