@@ -1,4 +1,4 @@
-import type { IFetchComponent } from '@well-known-components/interfaces'
+import type { IFetchComponent } from '@dcl/core-commons'
 import { AuthLinkType } from '@dcl/crypto'
 import type { AuthChain } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'

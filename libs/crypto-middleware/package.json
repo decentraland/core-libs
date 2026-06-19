@@ -32,8 +32,8 @@
     "well-known-components"
   ],
   "dependencies": {
-    "@dcl/crypto": "workspace:*",
-    "@well-known-components/interfaces": "^1.4.3"
+    "@dcl/core-commons": "^0.10.0",
+    "@dcl/crypto": "workspace:*"
   },
   "peerDependencies": {
     "express": "^4.0.0 || ^5.0.0",

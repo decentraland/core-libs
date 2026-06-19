@@ -1,4 +1,4 @@
-import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
 import { DecentralandStrategy } from './strategy'

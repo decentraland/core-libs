@@ -1,4 +1,4 @@
-import type { IHttpServerComponent } from '@well-known-components/interfaces'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import RequestError from '../../src/errors'
 import { express, koa, wellKnownComponents } from '../../src/index'
 import verify from '../../src/verify'
