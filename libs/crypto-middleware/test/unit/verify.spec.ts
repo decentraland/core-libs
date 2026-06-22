@@ -381,6 +381,22 @@ describe('verifyAuthChainHeaders', () => {
     })
   })
 
+  describe('when the metadata header is an explicit null', () => {
+    it('should resolve with the auth and an empty metadata object', async () => {
+      const timestamp = Date.now()
+      const method = 'get'
+      const path = '/path/to/resource'
+      const payload = [method, path, timestamp, JSON.stringify(null)].join(':').toLowerCase()
+      const chain = Authenticator.signPayload(identity, payload)
+      const headers = createAuthChainHeaders(chain, timestamp, null as unknown as Record<string, unknown>)
+
+      await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).resolves.toEqual({
+        auth: identity.authChain[0].payload.toLowerCase(),
+        authMetadata: {}
+      })
+    })
+  })
+
   describe('when the metadata header differs from the one that was signed', () => {
     it('should reject with an Invalid signature error', async () => {
       const timestamp = Date.now()

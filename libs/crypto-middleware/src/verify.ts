@@ -176,7 +176,15 @@ export function verifyMetadata(value?: string | string[]): Record<string, unknow
     throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  // Treat an explicit JSON `null` like a missing metadata header and fall back to an
+  // empty object. This keeps callers migrating from @dcl/platform-crypto-middleware
+  // (which returned `null` as-is) working, while still guaranteeing authMetadata is an
+  // object that downstream code can safely dereference.
+  if (parsed === null) {
+    return {}
+  }
+
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 

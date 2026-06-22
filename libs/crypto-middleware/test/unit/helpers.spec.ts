@@ -216,8 +216,8 @@ describe('verifyMetadata', () => {
   })
 
   describe('when the value is null', () => {
-    it('should throw an Invalid chain metadata error', () => {
-      expect(() => verifyMetadata('null')).toThrow('Invalid chain metadata')
+    it('should return an empty object', () => {
+      expect(verifyMetadata('null')).toEqual({})
     })
   })
 
