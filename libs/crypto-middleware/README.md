@@ -73,7 +73,7 @@ app.use((ctx: Context & dcl.DecentralandSignatureData) => {
 
 ## Metadata handling
 
-`metadataValidator` is the library's only structural guard on the `x-identity-metadata` header — `verify()` itself only checks that the value is JSON-parseable and shaped as an object (not a primitive, not an array, not `null`). Consumers are responsible for:
+`metadataValidator` is the library's only structural guard on the `x-identity-metadata` header — `verify()` itself only checks that the value is JSON-parseable and shaped as an object (not a primitive, not an array). An explicit JSON `null` is treated like a missing header and falls back to an empty object (`{}`), so `authMetadata` is always a safe object to dereference. Consumers are responsible for:
 
 - **Size.** HTTP servers cap total header size (commonly 8–32 KB), which bounds input, but nothing prevents a pathological JSON object within that budget.
 - **Shape.** If `P` has required fields, assert them inside `metadataValidator` — the type parameter is a contract, not a runtime check. The parsed value is cast, not validated.
