@@ -256,7 +256,7 @@ export default async function verify<P extends Record<string, unknown> = Record<
   const metadata = verifyMetadata(rawMetadata) as P
 
   if (options.metadataValidator && !options.metadataValidator(metadata)) {
-    throw new RequestError(`Invalid metadata content: ${JSON.stringify(metadata)}`, 400)
+    throw new RequestError(`Invalid metadata content: ${safe(JSON.stringify(metadata))}`, 400)
   }
 
   const payload = createPayload(method, path, rawTimestamp, rawMetadata)
