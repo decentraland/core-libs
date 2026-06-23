@@ -1,6 +1,6 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
 import RequestError from '../../src/errors'
-import { express, koa, wellKnownComponents } from '../../src/index'
+import { AUTH_CHAIN_HEADER_PREFIX, AUTH_TIMESTAMP_HEADER, express, koa, wellKnownComponents } from '../../src/index'
 import verify from '../../src/verify'
 import type { DecentralandSignatureContext } from '../../src/types'
 import type { NextFunction, Request, Response } from 'express'
@@ -239,6 +239,31 @@ describe('wellKnownComponents adapter', () => {
       await wellKnownComponents()(ctx, next)
 
       expect(mockVerify).toHaveBeenCalledWith('GET', '/bar', { 'x-identity-auth-chain-0': 'link-0' }, expect.anything())
+    })
+
+    it('should pass verify only the signature-related headers and omit unrelated ones', async () => {
+      mockVerify.mockResolvedValueOnce(signatureData)
+      ctx = {
+        request: {
+          method: 'GET',
+          headers: new Headers({
+            [`${AUTH_CHAIN_HEADER_PREFIX}0`]: 'link-0',
+            [AUTH_TIMESTAMP_HEADER]: '123',
+            cookie: 'session=secret',
+            'user-agent': 'jest'
+          })
+        },
+        url: { pathname: '/bar' }
+      } as unknown as Ctx
+
+      await wellKnownComponents()(ctx, next)
+
+      expect(mockVerify).toHaveBeenCalledWith(
+        'GET',
+        '/bar',
+        { [`${AUTH_CHAIN_HEADER_PREFIX}0`]: 'link-0', [AUTH_TIMESTAMP_HEADER]: '123' },
+        expect.anything()
+      )
     })
   })
 

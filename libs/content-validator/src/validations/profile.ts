@@ -176,19 +176,26 @@ export function createProfileImagesValidateFn(components: ContentValidatorCompon
     const allAvatars: Avatar[] = deployment.entity.metadata?.avatars ?? []
 
     const calculatedHashes = await components.externalCalls.calculateFilesHashes(deployment.files)
+
+    // Per-avatar requirement: every avatar must declare a face and body thumbnail hash.
     for (const avatar of allAvatars) {
       const faceHash = avatar.avatar?.snapshots?.face256
       const bodyHash = avatar.avatar?.snapshots?.body
 
       if (!faceHash || !bodyHash)
         return validationFailed(`Couldn't find hash for face or body thumbnails on profile metadata`)
+    }
 
-      // validate all hashes
-      Array.from(calculatedHashes.entries()).forEach(([key, entry]) => {
-        if (!(key === entry.calculatedHash)) {
+    // The uploaded files' hashes don't depend on the avatar, so validate them once
+    // instead of re-scanning (and re-reporting every mismatch) once per avatar — that
+    // was O(avatars × files). Guarded by avatar count to preserve the previous
+    // behavior, where this ran inside the avatar loop and so not at all without avatars.
+    if (allAvatars.length > 0) {
+      for (const [key, entry] of calculatedHashes.entries()) {
+        if (key !== entry.calculatedHash) {
           errors.push(`Mismatch of hash found for file. Expected: ${key} but got ${entry.calculatedHash}`)
         }
-      })
+      }
     }
 
     return fromErrors(...errors)

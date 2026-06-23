@@ -209,6 +209,21 @@ describe('verifyEIP1654Sign', () => {
       await expect(verifyEIP1654Sign(chain, payload, { fetcher })).rejects.toThrow(/returned HTTP 502/)
       expect(textSpy).not.toHaveBeenCalled()
     })
+
+    it('should cancel the response body when one is present so the connection is not leaked', async () => {
+      const cancelSpy = jest.fn().mockResolvedValue(undefined)
+      ;(fetcher.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: jest.fn(),
+        body: { cancel: cancelSpy }
+      })
+
+      const payload = '0123456789'
+      const chain = Authenticator.signPayload(identity, payload)
+      await expect(verifyEIP1654Sign(chain, payload, { fetcher })).rejects.toThrow(/returned HTTP 502/)
+      expect(cancelSpy).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('when the catalyst responds with invalid JSON', () => {
