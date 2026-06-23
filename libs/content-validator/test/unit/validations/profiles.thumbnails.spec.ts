@@ -324,6 +324,49 @@ describe('when validating profile images', () => {
     })
   })
 
+  describe('and multiple avatars reference the same mismatched file', () => {
+    let wrongBodyHash: string
+
+    beforeEach(() => {
+      wrongBodyHash = 'aDifferentHash'
+      face256Hash = 'bafybeiasb5vpmaounyilfuxbd3lryvosl4yefqrfahsb2esg46q6tu6y5s'
+      bodyHash = 'bafybeiasb5vpmaounyilfuxbd3lryvosl4yefqrfahsb2esg46q6tu6y5t'
+
+      // Two avatars that both declare valid face/body hashes (fresh objects, so the
+      // shared VALID_PROFILE_METADATA isn't mutated).
+      const avatarWithSnapshots = {
+        ...VALID_PROFILE_METADATA.avatars[0],
+        avatar: {
+          ...VALID_PROFILE_METADATA.avatars[0].avatar,
+          snapshots: { face256: face256Hash, body: bodyHash }
+        }
+      }
+      deployment = buildDeployment({
+        entity: buildProfileEntity({
+          timestamp: ADR_45_TIMESTAMP + 1000,
+          metadata: { ...VALID_PROFILE_METADATA, avatars: [avatarWithSnapshots, avatarWithSnapshots] }
+        }),
+        files
+      })
+
+      // One uploaded file's hash mismatches.
+      calculatedFileHashes.set(face256Hash, { calculatedHash: face256Hash, buffer: new Uint8Array() })
+      calculatedFileHashes.set(bodyHash, { calculatedHash: wrongBodyHash, buffer: new Uint8Array() })
+      files.set(face256Hash, new Uint8Array())
+      files.set(bodyHash, new Uint8Array())
+    })
+
+    it('should report each mismatched file only once, not once per avatar', async () => {
+      const result: ValidationResponse = await validateFn(deployment)
+
+      expect(result.ok).toBe(false)
+      const mismatchErrors = (result.errors ?? []).filter((error) =>
+        error.startsWith('Mismatch of hash found for file')
+      )
+      expect(mismatchErrors).toHaveLength(1)
+    })
+  })
+
   describe('and the face256 hash is missing', () => {
     beforeEach(() => {
       deployment.entity.metadata.avatars[0].avatar.snapshots = {

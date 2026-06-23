@@ -108,7 +108,12 @@ export async function verifyEIP1654Sign(
     body: JSON.stringify({ authChain, timestamp: payload })
   }
 
-  let response: { ok: boolean; status: number; text: () => Promise<string> }
+  let response: {
+    ok: boolean
+    status: number
+    text: () => Promise<string>
+    body?: { cancel?: () => Promise<void> } | null
+  }
   try {
     response = options.fetcher
       ? await options.fetcher.fetch(url, init as unknown as Parameters<typeof options.fetcher.fetch>[1])
@@ -118,6 +123,11 @@ export async function verifyEIP1654Sign(
   }
 
   if (!response.ok) {
+    // Release the response body (without reading it) before discarding the
+    // response, so the undici socket isn't left checked out of the pool with its
+    // bytes buffered until GC. Cancelling rather than reading keeps the rejection
+    // independent of the body content.
+    await response.body?.cancel?.().catch(() => undefined)
     throw new RequestError(`Catalyst "${catalyst.origin}" returned HTTP ${response.status}`, 503)
   }
 
@@ -231,20 +241,25 @@ export default async function verify<P extends Record<string, unknown> = Record<
   headers: Record<string, string | string[] | undefined>,
   options: VerifyAuthChainHeadersOptions<P> = {}
 ): Promise<DecentralandSignatureData<P>> {
+  // Read each header once; the timestamp and metadata are needed both for validation
+  // and for the signed payload below.
+  const rawTimestamp = headers[AUTH_TIMESTAMP_HEADER]
+  const rawMetadata = headers[AUTH_METADATA_HEADER]
+
   const authChain = extractAuthChain(headers, options.maxChainLength)
-  const timestamp = verifyTimestamp(headers[AUTH_TIMESTAMP_HEADER])
+  const timestamp = verifyTimestamp(rawTimestamp)
 
   // Fail fast on expired signatures — avoids invoking a user-supplied metadataValidator
   // and the catalyst round-trip for replayed / stale requests.
   verifyExpiration(timestamp, options)
 
-  const metadata = verifyMetadata(headers[AUTH_METADATA_HEADER]) as P
+  const metadata = verifyMetadata(rawMetadata) as P
 
   if (options.metadataValidator && !options.metadataValidator(metadata)) {
     throw new RequestError(`Invalid metadata content: ${JSON.stringify(metadata)}`, 400)
   }
 
-  const payload = createPayload(method, path, headers[AUTH_TIMESTAMP_HEADER], headers[AUTH_METADATA_HEADER])
+  const payload = createPayload(method, path, rawTimestamp, rawMetadata)
   const ownerAddress = await verifySign(authChain, payload, options)
 
   return {
