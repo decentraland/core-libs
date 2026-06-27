@@ -14,8 +14,6 @@ import {
   VerifyAuthChainHeadersOptions
 } from './types'
 import verify from './verify'
-import type * as e from 'express'
-import type * as k from 'koa'
 
 export {
   Options,
@@ -68,45 +66,6 @@ function errorToResponse(err: unknown, options: Pick<Options, 'onError'>): { sta
   const onError = options.onError ?? DEFAULT_ERROR_FORMAT
   const asError = err instanceof Error ? err : new Error(String(err))
   return { status, body: onError(asError) }
-}
-
-/** Express middleware */
-export function express(
-  options: Options = {}
-): (req: e.Request, res: e.Response, next: e.NextFunction) => Promise<void> {
-  return async (req: e.Request, res: e.Response, next: e.NextFunction) => {
-    try {
-      const data = await verify(req.method, req.baseUrl + req.path, req.headers, options)
-      Object.assign(req, data)
-      next()
-    } catch (err) {
-      if (!options.optional) {
-        const { status, body } = errorToResponse(err, options)
-        res.status(status).send(body)
-      } else {
-        next()
-      }
-    }
-  }
-}
-
-/** Koa middleware */
-export function koa(options: Options = {}): k.Middleware {
-  return async (ctx, next) => {
-    try {
-      const data = await verify(ctx.method, ctx.path, ctx.headers, options)
-      Object.assign(ctx, data)
-    } catch (err) {
-      if (!options.optional) {
-        const { status, body } = errorToResponse(err, options)
-        ctx.status = status
-        ctx.body = body
-        return
-      }
-    }
-
-    return next()
-  }
 }
 
 /** Well-Known Components */
