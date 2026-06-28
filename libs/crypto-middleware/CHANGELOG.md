@@ -1,5 +1,11 @@
 # @dcl/crypto-middleware
 
+## 5.0.0
+
+### Major Changes
+
+- ac6204c: Drop the Express and Koa middlewares; only the Well-Known Components middleware (`wellKnownComponents`) remains. This removes the optional `express` and `koa` peer dependencies and their `.d.ts` type references, so consumers no longer need `skipLibCheck` to build against this package.
+
 ## 4.1.1
 
 ### Patch Changes
