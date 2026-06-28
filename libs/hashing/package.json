@@ -64,7 +64,7 @@
   "devDependencies": {
     "@dcl/eslint-config": "^2.4.3",
     "blockstore-core": "^5.0.4",
-    "esbuild": "^0.27.0",
+    "esbuild": "^0.28.1",
     "eslint": "^8.57.1",
     "ipfs-unixfs-importer": "^15.4.0",
     "typescript": "^5.3.3"
