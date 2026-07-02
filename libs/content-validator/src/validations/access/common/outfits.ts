@@ -1,6 +1,6 @@
 import type { Outfits } from '@dcl/schemas'
-import { parseUrn } from '@dcl/urn-resolver'
 import { OK, validationFailed } from '../../../types'
+import { safeParseUrn } from '../../../utils'
 import type {
   ContentValidatorComponents,
   DeploymentToValidate,
@@ -18,7 +18,7 @@ export function createOutfitsWearablesOwnershipValidateFn(
     if (!urn.startsWith('dcl://')) {
       return urn
     }
-    const parsed = await parseUrn(urn)
+    const parsed = await safeParseUrn(urn)
     return parsed?.uri?.toString()
   }
 

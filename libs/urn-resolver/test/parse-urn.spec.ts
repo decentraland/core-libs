@@ -19,6 +19,61 @@ describe('when parsing a URN', () => {
     })
   })
 
+  describe('and the input is malformed', () => {
+    describe('and the input is an empty string', () => {
+      it('should return null instead of throwing', async () => {
+        const result = await parseUrn('')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the input is not a URL', () => {
+      it('should return null instead of throwing', async () => {
+        const result = await parseUrn('not-a-url')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the input is a string of colons', () => {
+      it('should return null instead of throwing', async () => {
+        const result = await parseUrn('::::')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the URN contains a malformed percent-escape', () => {
+      it('should return null instead of throwing a URIError', async () => {
+        const result = await parseUrn('urn:decentraland:off-chain:reg:%GG')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the URN contains a valid percent-encoded segment', () => {
+      it('should decode the segment and resolve the off-chain asset', async () => {
+        const result = await parseUrn('urn:decentraland:off-chain:static-portable-experiences:quest%201')
+        expect(result).toMatchObject({
+          type: 'off-chain',
+          registry: 'static-portable-experiences',
+          id: 'quest 1'
+        })
+      })
+    })
+
+    describe('and the URN is a LAND URN with a non-numeric position', () => {
+      it('should return null instead of throwing a BigInt SyntaxError', async () => {
+        const result = await parseUrn('urn:decentraland:ethereum:LAND:foo')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the URN is a LAND URN with an out-of-bounds position', () => {
+      it('should return null instead of throwing a bounds error', async () => {
+        const result = await parseUrn('urn:decentraland:ethereum:LAND:9999999,9999999')
+        expect(result).toBeNull()
+      })
+    })
+  })
+
   describe('and the URN is a LAND URN', () => {
     describe('and the network is sepolia with an atBlock query parameter', () => {
       it('should return the sepolia LAND asset with decoded x/y coordinates', async () => {
@@ -217,6 +272,19 @@ describe('when parsing a URN', () => {
     describe('and it is referenced by a known collection name', () => {
       it('should resolve the collection to its contract address and keep the collection name', async () => {
         const result = await parseUrn('urn:decentraland:ethereum:collections-v1:community_contest')
+        expect(result).toMatchObject({
+          type: 'blockchain-collection-v1',
+          blockchain: 'ethereum',
+          network: 'mainnet',
+          id: '0x32b7495895264ac9d0b12d32afd435453458b1c6',
+          collectionName: 'community_contest'
+        })
+      })
+    })
+
+    describe('and the network is Ethereum in mixed case', () => {
+      it('should resolve the collection by name the same as the lowercase network', async () => {
+        const result = await parseUrn('urn:decentraland:Ethereum:collections-v1:community_contest')
         expect(result).toMatchObject({
           type: 'blockchain-collection-v1',
           blockchain: 'ethereum',

@@ -14,7 +14,11 @@ export const metadataSchemaValidateFn = validateAfterADR45(async function valida
   deployment: DeploymentToValidate
 ): Promise<ValidationResponse> {
   const { type, metadata } = deployment.entity
-  const validator = entityParameters[type].validate
+  const parameters = entityParameters[type]
+  if (!parameters) {
+    return validationFailed(`The entity type (${type}) is not a known entity type.`)
+  }
+  const validator = parameters.validate
   if (validator(metadata)) {
     return OK
   }
@@ -54,7 +58,10 @@ function validateIfEmote(validateFn: ValidateFn): ValidateFn {
 export const metadataVersionIsCorrectForTimestampValidateFn = validateIfEmote(
   validateAfterADR74(async function validateFn(deployment: DeploymentToValidate): Promise<ValidationResponse> {
     const entity = deployment.entity
-    const matchingAdrs = ADRMetadataVersionTimelines[entity.type].filter((v) => v.timestamp < entity.timestamp)
+    // Inclusive at the boundary: an entity deployed exactly at an ADR timestamp is governed
+    // by that ADR. This mirrors validateAfterADR74, which runs this validation for timestamps
+    // >= ADR_74_TIMESTAMP.
+    const matchingAdrs = ADRMetadataVersionTimelines[entity.type].filter((v) => v.timestamp <= entity.timestamp)
     const adrNumber = matchingAdrs.length > 0 ? matchingAdrs[matchingAdrs.length - 1].number : undefined
     const expectedDataField = `${entity.type}DataADR${adrNumber}`
     return `${expectedDataField}` in deployment.entity.metadata

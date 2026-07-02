@@ -102,6 +102,34 @@ describe('when validating outfit wearables ownership', () => {
       )
     })
   })
+
+  describe('and an outfit references a malformed dcl:// wearable URN', () => {
+    let result: ValidationResponse
+    const malformedUrn = 'dcl://collections/%'
+
+    beforeEach(async () => {
+      const entity = buildOutfitsEntity({
+        outfits: [outfitWithWearables(0, malformedUrn)],
+        namesForExtraSlots: []
+      })
+      const deployment = buildDeployment({ entity })
+      const externalCalls = buildExternalCalls({
+        isAddressOwnedByDecentraland: () => true,
+        ownerAddress: () => OWNER_ADDRESS
+      })
+      const itemsOwnership = createItemsOwnershipWith(OWNER_ADDRESS, [])
+      const validateFn = createOutfitsWearablesOwnershipValidateFn({ externalCalls }, itemsOwnership)
+      result = await validateFn(deployment)
+    })
+
+    afterEach(() => {
+      jest.resetAllMocks()
+    })
+
+    it('should complete validation without throwing and skip the malformed urn', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
 })
 
 describe('when validating outfit names ownership', () => {

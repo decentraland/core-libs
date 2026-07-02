@@ -226,6 +226,14 @@ export function verifyExpiration(
   }
 }
 
+/**
+ * Builds the canonical signed-fetch payload. NOTE: the payload is lowercased, matching
+ * the wire protocol used by every Decentraland signer (the Explorer/kernel signer,
+ * `@dcl/crypto-fetch`, the legacy `decentraland-crypto-middleware`). This means the
+ * signature authenticates method/path/metadata case-insensitively only — see the caveat
+ * on `DecentralandSignatureData.authMetadata`. The lowercasing must not be removed here
+ * without a coordinated protocol change, or requests from other signers will fail to verify.
+ */
 export function createPayload(
   method: string,
   path: string,

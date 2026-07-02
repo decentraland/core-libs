@@ -228,6 +228,54 @@ describe('hashing', () => {
     })
   })
 
+  describe('when hashing with an invalid layout configuration', () => {
+    let content: Uint8Array
+
+    beforeEach(() => {
+      content = new Uint8Array([1, 2, 3, 4])
+    })
+
+    describe('and the chunkSize is zero', () => {
+      it('should reject with an invalid chunkSize error', async () => {
+        await expect(hashV1WithLayout(content, { chunkSize: 0, maxChildrenPerNode: 3 })).rejects.toThrow(
+          'Invalid chunkSize provided to hashV1'
+        )
+      })
+    })
+
+    describe('and the chunkSize is not an integer', () => {
+      it('should reject with an invalid chunkSize error', async () => {
+        await expect(hashV1WithLayout(content, { chunkSize: 1.5, maxChildrenPerNode: 3 })).rejects.toThrow(
+          'Invalid chunkSize provided to hashV1'
+        )
+      })
+    })
+
+    describe('and the maxChildrenPerNode is one', () => {
+      it('should reject with an invalid maxChildrenPerNode error', async () => {
+        await expect(hashV1WithLayout(content, { chunkSize: 16, maxChildrenPerNode: 1 })).rejects.toThrow(
+          'Invalid maxChildrenPerNode provided to hashV1'
+        )
+      })
+    })
+
+    describe('and the maxChildrenPerNode is not an integer', () => {
+      it('should reject with an invalid maxChildrenPerNode error', async () => {
+        await expect(hashV1WithLayout(content, { chunkSize: 16, maxChildrenPerNode: 2.5 })).rejects.toThrow(
+          'Invalid maxChildrenPerNode provided to hashV1'
+        )
+      })
+    })
+
+    describe('and the options are valid', () => {
+      it('should resolve to a CIDv1 hash of the content', async () => {
+        await expect(hashV1WithLayout(content, { chunkSize: 16, maxChildrenPerNode: 3 })).resolves.toEqual(
+          expect.stringMatching(/^bafk/)
+        )
+      })
+    })
+  })
+
   describe('when hashing an unsupported value with CIDv1', () => {
     let content: unknown
 

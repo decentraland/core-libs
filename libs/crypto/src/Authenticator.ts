@@ -61,6 +61,11 @@ export async function validateSignature(
 }
 
 export function isValidAuthChain(authChain: AuthChain): boolean {
+  // An empty chain has no SIGNER and cannot establish any authority.
+  if (authChain.length === 0) {
+    return false
+  }
+
   for (const [index, authLink] of authChain.entries()) {
     // SIGNER should be the first one
     if (index === 0 && authLink.type !== AuthLinkType.SIGNER) {
@@ -315,7 +320,7 @@ export const EIP_1654_SIGNED_ENTITY_VALIDATOR: ValidatorType = async (
 }
 
 const ERROR_VALIDATOR: ValidatorType = async (_: string, __: AuthLink) => {
-  return { error: 'Error Validator.' }
+  throw new Error('Unknown auth link type')
 }
 
 export function getEphemeralSignatureType(signature: string): AuthLinkType {

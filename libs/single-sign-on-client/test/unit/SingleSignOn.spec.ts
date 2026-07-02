@@ -55,6 +55,34 @@ describe('getIdentity', () => {
     })
   })
 
+  describe('when the stored value is valid JSON but not a well-formed identity', () => {
+    const malformedValues: Record<string, string> = {
+      null: 'null',
+      'a number': '123',
+      'a string': '"hello"',
+      'a boolean': 'true',
+      'an empty object': '{}'
+    }
+
+    Object.entries(malformedValues).forEach(([description, storedValue]) => {
+      describe(`and the stored value is ${description}`, () => {
+        beforeEach(() => {
+          localStorage.setItem(USER_KEY, storedValue)
+        })
+
+        it('should return null without throwing', () => {
+          expect(() => getIdentity(VALID_USER)).not.toThrow()
+          expect(getIdentity(VALID_USER)).toBeNull()
+        })
+
+        it('should remove the malformed value from local storage', () => {
+          getIdentity(VALID_USER)
+          expect(localStorage.getItem(USER_KEY)).toBeNull()
+        })
+      })
+    })
+  })
+
   describe('when the stored identity is expired', () => {
     beforeEach(() => {
       localStorage.setItem(USER_KEY, JSON.stringify(buildIdentity(new Date(Date.now() - 60_000))))

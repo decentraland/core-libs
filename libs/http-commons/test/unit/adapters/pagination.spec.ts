@@ -29,6 +29,33 @@ describe('when getting the pagination params', () => {
     })
   })
 
+  describe('and the limit is set to a value using exponential notation', () => {
+    it('should return the default limit instead of leniently parsing it', () => {
+      expect(getPaginationParams(new URLSearchParams({ limit: '1e2' }))).toEqual({
+        limit: 100,
+        offset: 0
+      })
+    })
+  })
+
+  describe('and the limit is set to a numeric string with trailing characters', () => {
+    it('should return the default limit instead of leniently parsing it', () => {
+      expect(getPaginationParams(new URLSearchParams({ limit: '10abc' }))).toEqual({
+        limit: 100,
+        offset: 0
+      })
+    })
+  })
+
+  describe('and the offset is set to a numeric string with trailing characters', () => {
+    it('should default the offset to 0 instead of leniently parsing it', () => {
+      expect(getPaginationParams(new URLSearchParams({ offset: '20abc' }))).toEqual({
+        limit: 100,
+        offset: 0
+      })
+    })
+  })
+
   describe('and the limit is set to a valid value', () => {
     it('should return the value as the limit', () => {
       expect(getPaginationParams(new URLSearchParams({ limit: '10' }))).toEqual({

@@ -11,6 +11,16 @@
   },
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

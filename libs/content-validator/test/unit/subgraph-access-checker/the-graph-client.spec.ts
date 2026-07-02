@@ -410,4 +410,63 @@ describe('when querying TheGraph client', () => {
       })
     })
   })
+
+  describe('and the client checks third-party item ownership', () => {
+    describe('and the URNs contain a third-party item', () => {
+      let theGraphClient: ReturnType<typeof buildSubgraphAccessCheckerComponents>['theGraphClient']
+      const thirdPartyUrn = 'urn:decentraland:matic:collections-thirdparty:some-third-party:some-collection:some-item'
+
+      beforeEach(() => {
+        const subGraphs = buildSubGraphs()
+        theGraphClient = buildSubgraphAccessCheckerComponents({ subGraphs }).theGraphClient
+      })
+
+      afterEach(() => {
+        jest.resetAllMocks()
+      })
+
+      it('should fail closed and report the third-party URN as not owned', async () => {
+        await expect(theGraphClient.ownsItemsAtTimestamp('0x1', [thirdPartyUrn], 10)).resolves.toEqual({
+          result: false,
+          failing: [thirdPartyUrn]
+        })
+      })
+    })
+
+    describe('and the URNs contain only regular items owned by the signer', () => {
+      let theGraphClient: ReturnType<typeof buildSubgraphAccessCheckerComponents>['theGraphClient']
+      const ownedUrn = 'urn:decentraland:matic:collections-v2:0x04e7f74e73e951c61edd80910e46c3fece5ebe80:2'
+
+      beforeEach(() => {
+        const subGraphs = buildSubGraphs({
+          L1: {
+            collections: createMockSubgraphComponent(),
+            blocks: createMockSubgraphComponent(),
+            landManager: createMockSubgraphComponent(),
+            ensOwner: createMockSubgraphComponent()
+          },
+          L2: {
+            thirdPartyRegistry: createMockSubgraphComponent(),
+            blocks: createMockSubgraphComponent(
+              jest.fn().mockResolvedValueOnce({ min: [{ number: 123400 }], max: [] })
+            ),
+            collections: createMockSubgraphComponent(
+              jest.fn().mockResolvedValue({
+                items: [{ urn: ownedUrn, tokenId: '321' }]
+              })
+            )
+          }
+        })
+        theGraphClient = buildSubgraphAccessCheckerComponents({ subGraphs }).theGraphClient
+      })
+
+      afterEach(() => {
+        jest.resetAllMocks()
+      })
+
+      it('should report ownership', async () => {
+        await expect(theGraphClient.ownsItemsAtTimestamp('0x1', [ownedUrn], 10)).resolves.toEqual({ result: true })
+      })
+    })
+  })
 })

@@ -1,7 +1,7 @@
 import type { Avatar, Entity } from '@dcl/schemas'
 import { EthAddress } from '@dcl/schemas'
-import { parseUrn } from '@dcl/urn-resolver'
 import { OK, validationFailed } from '../../../types'
+import { safeParseUrn } from '../../../utils'
 import { isOldEmote } from '../../profile'
 import { ADR_74_TIMESTAMP, ADR_75_TIMESTAMP } from '../../timestamps'
 import { validateAfterADR75, validateAll } from '../../validations'
@@ -45,7 +45,7 @@ export function createItemOwnershipValidateFn(
     if (!urn.startsWith('dcl://')) {
       return urn
     }
-    const parsed = await parseUrn(urn)
+    const parsed = await safeParseUrn(urn)
     return parsed?.uri?.toString()
   }
 

@@ -80,17 +80,27 @@ export async function resolveLandAsset(
   let result: BlockchainLandAsset | undefined = undefined
   const contract = await getContract(groups.network, 'LandProxy')
 
-  let { x, y } = LandUtils.parseParcelPosition(groups.position)
+  let x: number
+  let y: number
+  let tokenId: ReturnType<typeof LandUtils.encodeTokenId>
+  try {
+    ;({ x, y } = LandUtils.parseParcelPosition(groups.position))
 
-  if (isNaN(x) || isNaN(y)) {
-    const decoded = LandUtils.decodeTokenId(groups.position)
-    x = Number(decoded.x)
-    y = Number(decoded.y)
+    if (isNaN(x) || isNaN(y)) {
+      const decoded = LandUtils.decodeTokenId(groups.position)
+      x = Number(decoded.x)
+      y = Number(decoded.y)
+    }
+
+    if (isNaN(x) || isNaN(y)) return
+
+    tokenId = LandUtils.encodeTokenId(x, y)
+  } catch {
+    // A malformed (non-numeric) or out-of-bounds LAND position makes BigInt() /
+    // requireBounds throw. Resolve to undefined (parseUrn -> null) instead of
+    // propagating the error, matching the "return null on bad input" contract.
+    return
   }
-
-  if (isNaN(x) || isNaN(y)) return
-
-  const tokenId = LandUtils.encodeTokenId(x, y)
 
   if (contract) {
     const r = await resolveEthereumAsset(uri, {
@@ -206,8 +216,28 @@ export async function resolveOffchainAsset(
   }
 }
 
+// Conservative CID charset. base32 (CIDv1) and base58btc (CIDv0) are alphanumeric only,
+// so any '/', '%', '?', ':' or other unexpected char signals a malformed/malicious value.
+const cidPattern = /^[A-Za-z0-9]+$/
+
 export async function resolveEntityV3(uri: URL, groups: Record<'cid', string>): Promise<EntityV3Asset | undefined> {
+  // Reject cids that could escape the content path (e.g. '../../' via '..%2f..%2f').
+  if (!cidPattern.test(groups.cid)) return
+
   const baseUrl = uri.searchParams.get('baseUrl') ?? undefined
+
+  if (baseUrl !== undefined) {
+    // baseUrl is concatenated into the resolved content URL, so it must be a well-formed
+    // http(s) URL. Anything else (javascript:, data:, malformed) is rejected so the URN
+    // fails to resolve instead of emitting an attacker-controlled URL.
+    let parsedBaseUrl: URL
+    try {
+      parsedBaseUrl = new URL(baseUrl)
+    } catch {
+      return
+    }
+    if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') return
+  }
 
   return {
     namespace: 'decentraland',
@@ -223,7 +253,7 @@ export async function resolveCollectionV1AssetByCollectionName(
   groups: Record<'network' | 'collectionName' | 'name', string>
 ): Promise<BlockchainCollectionV1Asset | undefined> {
   // this only works in mainnet
-  if (groups.network !== 'ethereum') return
+  if (groups.network.toLowerCase() !== 'ethereum') return
 
   const collection = await getCollection(groups.collectionName)
 
@@ -244,7 +274,7 @@ export async function resolveCollectionV1ItemByCollectionName(
   groups: Record<'network' | 'collectionName' | 'name' | 'tokenId', string>
 ): Promise<BlockchainCollectionV1Item | undefined> {
   // this only works in mainnet
-  if (groups.network !== 'ethereum') return
+  if (groups.network.toLowerCase() !== 'ethereum') return
 
   const collection = await getCollection(groups.collectionName)
 
@@ -396,7 +426,7 @@ export async function resolveCollectionV1ByCollectionName(
   groups: Record<'network' | 'collectionName', string>
 ): Promise<BlockchainCollectionV1 | undefined> {
   // this only works in mainnet
-  if (groups.network !== 'ethereum') return
+  if (groups.network.toLowerCase() !== 'ethereum') return
   let result: BlockchainCollectionV1 | undefined = undefined
 
   const collection = await getCollection(groups.collectionName)

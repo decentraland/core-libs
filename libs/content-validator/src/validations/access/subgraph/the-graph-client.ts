@@ -81,7 +81,15 @@ export const createTheGraphClient = (
       return permissionOk()
     }
 
-    const { ethereum, matic } = await splitItemsURNsByTypeAndNetwork(urnsToCheck)
+    const { ethereum, matic, ethereumThirdParty, maticThirdParty } = await splitItemsURNsByTypeAndNetwork(urnsToCheck)
+
+    // The subgraph access checker has no mechanism to verify third-party wearable/emote
+    // ownership (only the on-chain access checker does). Rather than silently accepting
+    // these items -- which would let a profile reference an unowned third-party item and
+    // pass ownership validation -- we fail closed and reject any third-party URN.
+    // Consumers that need third-party support must use the on-chain access checker.
+    const thirdPartyUrns = [...ethereumThirdParty, ...maticThirdParty].map((item) => item.urn)
+
     const ethereumItemsOwnersPromise = ownsItemsAtTimestampInBlockchain(
       ethAddress,
       ethereum,
@@ -102,10 +110,17 @@ export const createTheGraphClient = (
       maticItemsOwnersPromise
     ])
 
-    if (ethereumItemsOwnership.result && maticItemsOwnership.result) return permissionOk()
-    else {
-      return permissionError([...(ethereumItemsOwnership.failing ?? []), ...(maticItemsOwnership.failing ?? [])])
+    // Overall ownership only holds if the ethereum and matic items are owned AND there are
+    // no third-party URNs (which cannot be verified here).
+    if (ethereumItemsOwnership.result && maticItemsOwnership.result && thirdPartyUrns.length === 0) {
+      return permissionOk()
     }
+
+    return permissionError([
+      ...thirdPartyUrns,
+      ...(ethereumItemsOwnership.failing ?? []),
+      ...(maticItemsOwnership.failing ?? [])
+    ])
   }
 
   const ownsItemsAtTimestampInBlockchain = async (

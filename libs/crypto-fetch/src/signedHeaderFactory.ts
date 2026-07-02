@@ -27,6 +27,11 @@ export default function signedHeaderFactory(options: SignedHeaderFactoryOptions 
     const headers = new HeadersImpl(init)
     const timestamp = String(Date.now())
     const data = JSON.stringify(metadata)
+    // The signed payload is lowercased to match the canonical Decentraland signed-fetch
+    // wire protocol (see `@dcl/crypto-middleware`). As a consequence the signature covers
+    // method/path/metadata case-insensitively only: the verifier receives the metadata
+    // header bytes as sent here, but authenticates their lowercased form. Keep this in sync
+    // with the verifier — removing the lowercasing on either side breaks interoperability.
     const payload = [method, path, timestamp, data].join(':').toLowerCase()
 
     let i = 0
