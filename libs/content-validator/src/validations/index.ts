@@ -33,7 +33,9 @@ export async function calculateDeploymentSize(
   // Fetch in batches of `fetchContentFileSizeConcurrency` (default 1 = sequential, the previous
   // behavior). A caller can raise it to parallelize, and the batching keeps a large content list from
   // fanning out into an unbounded number of concurrent storage operations.
-  const concurrency = Math.max(1, externalCalls.fetchContentFileSizeConcurrency ?? 1)
+  // `|| 1` (not `?? 1`) so a 0, negative, or NaN value falls back to 1 rather than degenerating the
+  // loop (a NaN batch size would slice to an empty batch and silently skip every unfetched hash).
+  const concurrency = Math.max(1, externalCalls.fetchContentFileSizeConcurrency || 1)
   for (let i = 0; i < hashesToFetch.length; i += concurrency) {
     const batch = hashesToFetch.slice(i, i + concurrency)
     const fetchedSizes = await Promise.all(batch.map((hash) => externalCalls.fetchContentFileSize(hash)))

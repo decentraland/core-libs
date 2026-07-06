@@ -116,6 +116,29 @@ describe('when calculating the deployment size', () => {
         expect(maxInFlight).toBe(contentHashes.length)
       })
     })
+
+    describe.each([
+      ['zero', 0],
+      ['negative', -5],
+      ['NaN', NaN]
+    ])('and the configured concurrency is %s', (_label, badConcurrency) => {
+      let result: number | string
+
+      beforeEach(async () => {
+        result = await calculateDeploymentSize(
+          deployment,
+          buildExternalCalls({ fetchContentFileSize, fetchContentFileSizeConcurrency: badConcurrency })
+        )
+      })
+
+      it('should fall back to fetching every file (not silently skip any)', () => {
+        expect(fetchContentFileSize).toHaveBeenCalledTimes(contentHashes.length)
+      })
+
+      it('should return the full summed size', () => {
+        expect(result).toBe(contentHashes.length * 100)
+      })
+    })
   })
 
   describe('and a content file cannot be found in storage', () => {
