@@ -1,5 +1,5 @@
 import { adr45ValidateFn } from './ADR45'
-import { createContentValidateFn } from './content'
+import { allHashesInUploadedFilesAreReportedInTheEntityValidateFn, createContentValidateFn } from './content'
 import { entityStructureValidationFn } from './entity-structure'
 import { ipfsHashingValidateFn } from './ipfs-hashing'
 import { emoteValidateFn } from './items/emotes'
@@ -68,5 +68,31 @@ export function createValidateFns(components: ContentValidatorComponents): Valid
     sceneValidateFn,
     createContentValidateFn(components),
     createOutfitsValidateFn(components)
+  ]
+}
+
+/**
+ * The validations that apply to a partial (staging) deployment — everything checkable BEFORE all of the
+ * entity's content is present. Intended for multi-request uploads that stage content across several
+ * requests. Deliberately excludes, versus {@link createValidateFns}:
+ *  - the size validation — a staging caller enforces a cumulative size budget across requests instead;
+ *  - content completeness — only checkable once every referenced file is present (checked at finalize
+ *    via the full {@link createValidateFns}); the "no extra/unreferenced files" half is kept here;
+ *  - the access check — appended separately (see {@link createStagingValidator}'s `includeAccessCheck`),
+ *    since it is the expensive on-chain/subgraph call and may be skipped on a trusted resume request.
+ *
+ * Non-scene type validations are omitted: `sceneValidateFn` self-guards to scene entities, and staging
+ * is only used for scenes.
+ * @public
+ */
+export function createStagingValidateFns(components: ContentValidatorComponents): ValidateFn[] {
+  return [
+    entityStructureValidationFn,
+    ipfsHashingValidateFn,
+    metadataValidateFn,
+    adr45ValidateFn,
+    createSignatureValidateFn(components),
+    sceneValidateFn,
+    allHashesInUploadedFilesAreReportedInTheEntityValidateFn
   ]
 }
