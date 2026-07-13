@@ -1,6 +1,6 @@
 import { OK } from './types'
 import { createStagingValidateFns, createValidateFns } from './validations'
-import type { ContentValidatorComponents, ValidateFn } from './types'
+import type { ContentValidatorComponents, StagingValidatorOptions, ValidateFn } from './types'
 
 export * from './types'
 export * from './validations'
@@ -8,9 +8,14 @@ export { readImageMetadata } from './image-metadata'
 export type { ImageFormat, ImageMetadata } from './image-metadata'
 
 // Runs the given validations in order and returns the first failure (or OK). Short-circuits like the
-// deployment pipeline expects, and logs the failing validation's errors.
-function runSequentially(components: ContentValidatorComponents, validateFns: ValidateFn[]): ValidateFn {
-  const logs = components.logs.getLogger('ContentValidator')
+// deployment pipeline expects, and logs the failing validation's errors under `loggerName` (so, e.g.,
+// the staging validator's failures are distinguishable from the full validator's in the logs).
+function runSequentially(
+  components: ContentValidatorComponents,
+  validateFns: ValidateFn[],
+  loggerName: string
+): ValidateFn {
+  const logs = components.logs.getLogger(loggerName)
   return async function validateFn(deployment) {
     for (const validate of validateFns) {
       const result = await validate(deployment)
@@ -28,7 +33,7 @@ function runSequentially(components: ContentValidatorComponents, validateFns: Va
  * @public
  */
 export const createValidator = (components: ContentValidatorComponents): ValidateFn =>
-  runSequentially(components, [...createValidateFns(components), components.accessValidateFn])
+  runSequentially(components, [...createValidateFns(components), components.accessValidateFn], 'ContentValidator')
 
 /**
  * Creates a validator for a partial (staging) deployment — the content-independent subset that can be
@@ -42,9 +47,10 @@ export const createValidator = (components: ContentValidatorComponents): Validat
  */
 export const createStagingValidator = (
   components: ContentValidatorComponents,
-  options: { includeAccessCheck?: boolean } = {}
+  options: StagingValidatorOptions = {}
 ): ValidateFn =>
-  runSequentially(components, [
-    ...createStagingValidateFns(components),
-    ...(options.includeAccessCheck ? [components.accessValidateFn] : [])
-  ])
+  runSequentially(
+    components,
+    [...createStagingValidateFns(components), ...(options.includeAccessCheck ? [components.accessValidateFn] : [])],
+    'ContentValidator:staging'
+  )

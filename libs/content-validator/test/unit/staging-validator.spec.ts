@@ -165,4 +165,23 @@ describe('when calling createStagingValidator', () => {
       expect(result.errors?.some((error) => error.includes('IPFS'))).toBe(true)
     })
   })
+
+  describe('and a non-scene entity is validated', () => {
+    let result: ValidationResponse
+
+    beforeEach(async () => {
+      const deployment = buildDeployment({
+        entity: buildEntity({ type: EntityType.WEARABLE, pointers: ['0x1'], timestamp: ADR_45_TIMESTAMP - 1000 })
+      })
+      const validateFn = createStagingValidator(
+        buildComponents({ accessValidateFn: jest.fn().mockResolvedValue(OK) as jest.MockedFunction<ValidateFn> })
+      )
+      result = await validateFn(deployment)
+    })
+
+    it('should reject it (the staging validator is scene-only)', () => {
+      expect(result.ok).toBe(false)
+      expect(result.errors?.some((error) => error.includes('only supports scene entities'))).toBe(true)
+    })
+  })
 })

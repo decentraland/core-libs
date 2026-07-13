@@ -92,6 +92,18 @@ export interface ValidationResponse {
 export type ValidateFn = (deployment: DeploymentToValidate) => Promise<ValidationResponse>
 
 /**
+ * Options for the staging (partial-deployment) validator.
+ * @public
+ */
+export interface StagingValidatorOptions {
+  /**
+   * Include the (expensive) access check in the staging validation. Defaults to false: a caller may
+   * skip it on a trusted resume request, and the full validator still runs it at finalize.
+   */
+  includeAccessCheck?: boolean
+}
+
+/**
  * @public
  */
 export const OK: ValidationResponse = Object.freeze({ ok: true })
