@@ -53,6 +53,13 @@ export interface DeploymentToValidate {
 export interface ExternalCalls {
   isContentStoredAlready: (hashes: string[]) => Promise<Map<string, boolean>>
   fetchContentFileSize: (hash: string) => Promise<number | undefined>
+  /**
+   * How many `fetchContentFileSize` calls `calculateDeploymentSize` may run concurrently. Defaults to
+   * 1 (sequential — one storage round-trip at a time) when unset, preserving the previous behavior;
+   * set it higher to parallelize size fetching for deployments with many content files, bounded so a
+   * large content list can't fan out into an unbounded number of concurrent storage operations.
+   */
+  fetchContentFileSizeConcurrency?: number
   validateSignature: (
     entityId: string,
     auditInfo: LocalDeploymentAuditInfo,
@@ -83,6 +90,18 @@ export interface ValidationResponse {
  * @public
  */
 export type ValidateFn = (deployment: DeploymentToValidate) => Promise<ValidationResponse>
+
+/**
+ * Options for the staging (partial-deployment) validator.
+ * @public
+ */
+export interface StagingValidatorOptions {
+  /**
+   * Include the (expensive) access check in the staging validation. Defaults to false: a caller may
+   * skip it on a trusted resume request, and the full validator still runs it at finalize.
+   */
+  includeAccessCheck?: boolean
+}
 
 /**
  * @public
