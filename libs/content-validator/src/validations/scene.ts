@@ -22,7 +22,26 @@ export const noWorldsConfigurationValidateFn = validateAfterADR173(async functio
 })
 
 /**
- * Validate that given scene deployment thumbnail is a file embedded in the deployment
+ * A scene `navmapThumbnail` must be a relative path to a file embedded in the deployment
+ * (see ADR-236). Reject values that carry a URI scheme (`https:`, `data:`, `javascript:`, …),
+ * are protocol-relative (`//host/…`), or contain the HTML-breakout characters `<`, `>` or `"`.
+ *
+ * Beyond being unresolvable, an absolute-URL thumbnail is a stored-XSS vector: downstream
+ * consumers such as the Places social/OpenGraph endpoint keep a `https://`-prefixed value
+ * verbatim and interpolate it into HTML, so a filename like
+ * `https://x"><script>…</script><meta name="y` becomes live markup. Constraining the field
+ * to a relative path at the deployment gate stops the payload from ever being accepted.
+ */
+function isRelativeThumbnailPath(path: string): boolean {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path) || path.startsWith('//')) {
+    return false
+  }
+  return !/[<>"]/.test(path)
+}
+
+/**
+ * Validate that given scene deployment thumbnail is a relative path to a file embedded in the
+ * deployment
  * @public
  */
 export const embeddedThumbnail = validateAfterADR236(async function validateFn(
@@ -30,6 +49,11 @@ export const embeddedThumbnail = validateAfterADR236(async function validateFn(
 ): Promise<ValidationResponse> {
   const sceneThumbnail = deployment.entity.metadata?.display?.navmapThumbnail
   if (sceneThumbnail) {
+    if (!isRelativeThumbnailPath(sceneThumbnail)) {
+      return validationFailed(
+        `Scene thumbnail '${sceneThumbnail}' must be a relative path to a file included in the deployment, not an absolute URL.`
+      )
+    }
     const isFilePresent = (deployment.entity.content ?? []).some(
       (content: ContentMapping) => content.file === sceneThumbnail
     )
