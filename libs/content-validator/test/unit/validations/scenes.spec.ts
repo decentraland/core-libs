@@ -99,7 +99,7 @@ describe('when validating that the scene thumbnail is embedded', () => {
     it('should return an error stating the thumbnail must be a relative path', () => {
       expect(result.ok).toBe(false)
       expect(result.errors).toContain(
-        "Scene thumbnail 'https://example.com/image.png' must be a relative path to a file included in the deployment, not an absolute URL."
+        "Scene thumbnail 'https://example.com/image.png' must be a relative path to a file included in the deployment."
       )
     })
   })
@@ -126,7 +126,7 @@ describe('when validating that the scene thumbnail is embedded', () => {
     it('should reject the deployment instead of accepting the crafted filename', () => {
       expect(result.ok).toBe(false)
       expect(result.errors).toContain(
-        `Scene thumbnail '${breakoutThumbnail}' must be a relative path to a file included in the deployment, not an absolute URL.`
+        `Scene thumbnail '${breakoutThumbnail}' must be a relative path to a file included in the deployment.`
       )
     })
   })
@@ -156,9 +156,13 @@ describe('when validating that the scene thumbnail is embedded', () => {
   describe('and the thumbnail is a non-relative value that is also declared as a content file', () => {
     const rejectedThumbnails = [
       { description: 'a protocol-relative url', value: '//evil.example/x.png' },
+      { description: 'a root-absolute path', value: '/thumb.png' },
       { description: 'a data uri', value: 'data:text/html,<b>x</b>' },
       { description: 'a javascript uri', value: 'javascript:alert(1)' },
       { description: 'a mixed-case http scheme', value: 'HtTpS://evil.example/x.png' },
+      { description: 'a path with leading whitespace', value: ' thumb.png' },
+      { description: 'a path with trailing whitespace', value: 'thumb.png ' },
+      { description: 'a path containing a control character', value: 'thumb\nname.png' },
       { description: 'a relative path containing HTML-breakout characters', value: 'thumb".png' }
     ]
 
@@ -183,7 +187,7 @@ describe('when validating that the scene thumbnail is embedded', () => {
         it('should reject the deployment with the relative-path error', () => {
           expect(result.ok).toBe(false)
           expect(result.errors).toContain(
-            `Scene thumbnail '${value}' must be a relative path to a file included in the deployment, not an absolute URL.`
+            `Scene thumbnail '${value}' must be a relative path to a file included in the deployment.`
           )
         })
       })
