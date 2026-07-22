@@ -79,7 +79,7 @@ describe('when validating that the scene thumbnail is embedded', () => {
     })
   })
 
-  describe('and the thumbnail references a URL instead of an embedded file', () => {
+  describe('and the thumbnail is an absolute URL instead of an embedded file', () => {
     let result: ValidationResponse
 
     beforeEach(async () => {
@@ -96,11 +96,101 @@ describe('when validating that the scene thumbnail is embedded', () => {
       result = await embeddedThumbnail(deployment)
     })
 
-    it('should return an error stating the thumbnail must be included in the deployment', () => {
+    it('should return an error stating the thumbnail must be a relative path', () => {
       expect(result.ok).toBe(false)
       expect(result.errors).toContain(
-        "Scene thumbnail 'https://example.com/image.png' must be a file included in the deployment."
+        "Scene thumbnail 'https://example.com/image.png' must be a relative path to a file included in the deployment."
       )
+    })
+  })
+
+  describe('and the thumbnail is an absolute URL with HTML-breakout characters that is also declared as a content file', () => {
+    let result: ValidationResponse
+    let breakoutThumbnail: string
+
+    beforeEach(async () => {
+      breakoutThumbnail = 'https://example.com/x"><script>alert(1)</script><meta name="y'
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          display: { ...VALID_SCENE_METADATA.display, navmapThumbnail: breakoutThumbnail }
+        },
+        content: [{ file: breakoutThumbnail, hash: 'thumbnailHash' }],
+        timestamp
+      })
+      const deployment = buildDeployment({ entity, files })
+      result = await embeddedThumbnail(deployment)
+    })
+
+    it('should reject the deployment instead of accepting the crafted filename', () => {
+      expect(result.ok).toBe(false)
+      expect(result.errors).toContain(
+        `Scene thumbnail '${breakoutThumbnail}' must be a relative path to a file included in the deployment.`
+      )
+    })
+  })
+
+  describe('and the thumbnail is a relative path inside a subdirectory', () => {
+    let result: ValidationResponse
+
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          display: { ...VALID_SCENE_METADATA.display, navmapThumbnail: 'images/thumbnail.png' }
+        },
+        content: [{ file: 'images/thumbnail.png', hash: 'thumbnailHash' }],
+        timestamp
+      })
+      const deployment = buildDeployment({ entity, files })
+      result = await embeddedThumbnail(deployment)
+    })
+
+    it('should return ok', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
+
+  describe('and the thumbnail is a non-relative value that is also declared as a content file', () => {
+    const rejectedThumbnails = [
+      { description: 'a protocol-relative url', value: '//evil.example/x.png' },
+      { description: 'a root-absolute path', value: '/thumb.png' },
+      { description: 'a data uri', value: 'data:text/html,<b>x</b>' },
+      { description: 'a javascript uri', value: 'javascript:alert(1)' },
+      { description: 'a mixed-case http scheme', value: 'HtTpS://evil.example/x.png' },
+      { description: 'a path with leading whitespace', value: ' thumb.png' },
+      { description: 'a path with trailing whitespace', value: 'thumb.png ' },
+      { description: 'a path containing a control character', value: 'thumb\nname.png' },
+      { description: 'a relative path containing HTML-breakout characters', value: 'thumb".png' }
+    ]
+
+    rejectedThumbnails.forEach(({ description, value }) => {
+      describe(`and it is ${description}`, () => {
+        let result: ValidationResponse
+
+        beforeEach(async () => {
+          const entity = buildEntity({
+            type: EntityType.SCENE,
+            metadata: {
+              ...VALID_SCENE_METADATA,
+              display: { ...VALID_SCENE_METADATA.display, navmapThumbnail: value }
+            },
+            content: [{ file: value, hash: 'thumbnailHash' }],
+            timestamp
+          })
+          const deployment = buildDeployment({ entity, files })
+          result = await embeddedThumbnail(deployment)
+        })
+
+        it('should reject the deployment with the relative-path error', () => {
+          expect(result.ok).toBe(false)
+          expect(result.errors).toContain(
+            `Scene thumbnail '${value}' must be a relative path to a file included in the deployment.`
+          )
+        })
+      })
     })
   })
 
