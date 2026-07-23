@@ -110,6 +110,9 @@ async function verifyMerkleProofedEntity(
   return validMerkleProofedEntity
 }
 
+// Verifies merkle-root membership only. The id/content/required-key binding is enforced separately by
+// item validation (thirdParty*MerkleProofContentValidateFn); both run in the full validator, so this is
+// not a complete security check on its own.
 export function createThirdPartyAssetValidateFn(
   components: Pick<SubgraphAccessCheckerComponents, 'externalCalls' | 'logs' | 'theGraphClient' | 'subGraphs'>
 ): ThirdPartyAssetValidateFn {
