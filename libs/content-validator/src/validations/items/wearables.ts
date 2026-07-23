@@ -26,6 +26,8 @@ export async function wearableRepresentationContentValidateFn(
   return OK
 }
 
+const REQUIRED_THIRD_PARTY_WEARABLE_HASHING_KEYS = ['id', 'content', 'data'] as const
+
 export async function thirdPartyWearableMerkleProofContentValidateFn(
   deployment: DeploymentToValidate
 ): Promise<ValidationResponse> {
@@ -39,6 +41,15 @@ export async function thirdPartyWearableMerkleProofContentValidateFn(
   // Check the id in the metadata matches the pointer being deployed
   if (wearableMetadata.id.toLowerCase() !== entity.pointers[0].toLowerCase()) {
     return validationFailed(`The id '${wearableMetadata.id}' does not match the pointer '${entity.pointers[0]}'`)
+  }
+
+  // Fields not in the hashing keys aren't committed by the leaf, so the checks below could be met with
+  // attacker-chosen values unless they are required here
+  const missingKey = REQUIRED_THIRD_PARTY_WEARABLE_HASHING_KEYS.find(
+    (key) => !wearableMetadata.merkleProof.hashingKeys.includes(key)
+  )
+  if (missingKey) {
+    return validationFailed(`The third-party wearable merkle proof must commit the '${missingKey}' field`)
   }
 
   // Check the content files declared inside the metadata is exactly the same as the files uploaded with the entity

@@ -11,10 +11,6 @@ import {
 import { createSizeValidateFn } from '../../../../src/validations/size'
 import { ADR_45_TIMESTAMP } from '../../../../src/validations/timestamps'
 import { buildDeployment } from '../../../setup/deployments'
-import {
-  VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT,
-  VALID_THIRD_PARTY_WEARABLE_BASE_METADATA
-} from '../../../setup/emotes'
 import { buildEntity, buildWearableEntity } from '../../../setup/entity'
 import { buildComponents, buildExternalCalls, createImage } from '../../../setup/mock'
 import { VALID_THIRD_PARTY_WEARABLE, VALID_WEARABLE_METADATA } from '../../../setup/wearable'
@@ -513,10 +509,10 @@ describe('when validating the third party wearable merkle proof', () => {
       const entity = buildEntity({
         type: EntityType.WEARABLE,
         pointers: [metadata.id],
-        metadata: VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity,
-        content: Object.keys(VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content).map((file) => ({
+        metadata,
+        content: Object.keys(metadata.content).map((file) => ({
           file,
-          hash: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[file]
+          hash: metadata.content[file]
         }))
       })
       const deployment = buildDeployment({ entity })
@@ -549,10 +545,10 @@ describe('when validating the third party wearable merkle proof', () => {
       const entity = buildEntity({
         type: EntityType.WEARABLE,
         pointers: ['some-other-pointer'],
-        metadata: VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity,
-        content: Object.keys(VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content).map((file) => ({
+        metadata,
+        content: Object.keys(metadata.content).map((file) => ({
           file,
-          hash: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[file]
+          hash: metadata.content[file]
         }))
       })
       const deployment = buildDeployment({ entity })
@@ -570,12 +566,12 @@ describe('when validating the third party wearable merkle proof', () => {
 
     beforeEach(async () => {
       const entity = buildWearableEntity({
-        metadata: VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity,
-        pointers: [VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity.id],
+        metadata,
+        pointers: [metadata.id],
         content: [
-          ...Object.keys(VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content).map((file) => ({
+          ...Object.keys(metadata.content).map((file) => ({
             file,
-            hash: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[file]
+            hash: metadata.content[file]
           })),
           { file: 'some-other-file', hash: 'some-other-hash' }
         ]
@@ -597,13 +593,13 @@ describe('when validating the third party wearable merkle proof', () => {
 
     beforeEach(async () => {
       const entity = buildWearableEntity({
-        metadata: VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity,
-        pointers: [VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity.id],
-        content: Object.keys(VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content)
+        metadata,
+        pointers: [metadata.id],
+        content: Object.keys(metadata.content)
           .slice(1)
           .map((file) => ({
             file,
-            hash: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[file]
+            hash: metadata.content[file]
           }))
       })
       const deployment = buildDeployment({ entity })
@@ -623,15 +619,15 @@ describe('when validating the third party wearable merkle proof', () => {
 
     beforeEach(async () => {
       const entity = buildWearableEntity({
-        metadata: VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity,
-        pointers: [VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity.id],
+        metadata,
+        pointers: [metadata.id],
         content: [
-          { file: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[0], hash: 'some-other-hash' },
-          ...Object.keys(VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content)
+          { file: Object.keys(metadata.content)[0], hash: 'some-other-hash' },
+          ...Object.keys(metadata.content)
             .slice(1)
             .map((file) => ({
               file,
-              hash: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[file]
+              hash: metadata.content[file]
             }))
         ]
       })
@@ -654,10 +650,10 @@ describe('when validating the third party wearable merkle proof', () => {
       const entity = buildEntity({
         type: EntityType.WEARABLE,
         pointers: [metadata.id],
-        metadata: { ...VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT.entity, name: 'otherName' },
-        content: Object.keys(VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content).map((file) => ({
+        metadata: { ...metadata, name: 'otherName' },
+        content: Object.keys(metadata.content).map((file) => ({
           file,
-          hash: VALID_THIRD_PARTY_WEARABLE_BASE_METADATA.content[file]
+          hash: metadata.content[file]
         }))
       })
       const deployment = buildDeployment({ entity })
@@ -666,9 +662,38 @@ describe('when validating the third party wearable merkle proof', () => {
 
     it('should return an error reporting the metadata hash mismatch', () => {
       expect(result.ok).toBe(false)
-      expect(result.errors).toContain(
-        "The entity hash provided '124ce3f2650617ee506608461299c1097161768b15de11dc3cb617a65bb82334' is different to the one calculated from the metadata 'd78f642b785a7a63dece99cd8c68479c8033f69178dc54e348f24e8ecfeb2a08'"
+      expect(result.errors).toContainEqual(
+        expect.stringContaining('is different to the one calculated from the metadata')
       )
+    })
+  })
+
+  describe('and the merkle proof hashing keys omit the data field', () => {
+    let result: ValidationResponse
+
+    beforeEach(async () => {
+      const metadataWithoutDataKey = {
+        ...metadata,
+        merkleProof: {
+          ...metadata.merkleProof,
+          hashingKeys: metadata.merkleProof.hashingKeys.filter((key) => key !== 'data')
+        }
+      }
+      const entity = buildWearableEntity({
+        pointers: [metadata.id],
+        metadata: metadataWithoutDataKey,
+        content: Object.keys(metadata.content).map((file) => ({
+          file,
+          hash: metadata.content[file]
+        }))
+      })
+      const deployment = buildDeployment({ entity })
+      result = await thirdPartyWearableMerkleProofContentValidateFn(deployment)
+    })
+
+    it('should return an error because the proof does not commit the data field', () => {
+      expect(result.ok).toBe(false)
+      expect(result.errors).toContain(`The third-party wearable merkle proof must commit the 'data' field`)
     })
   })
 })
