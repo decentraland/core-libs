@@ -65,6 +65,9 @@ async function verifyMerkleProofedEntity(
   return verified
 }
 
+// Verifies merkle-root membership only. The id/content/required-key binding is enforced separately by
+// item validation (thirdParty*MerkleProofContentValidateFn); both run in the full validator, so this is
+// not a complete security check on its own.
 export function createThirdPartyAssetValidateFn(
   components: Pick<OnChainAccessCheckerComponents, 'externalCalls' | 'logs' | 'client' | 'L2'>
 ): ThirdPartyAssetValidateFn {

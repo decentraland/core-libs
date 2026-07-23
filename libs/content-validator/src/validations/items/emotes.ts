@@ -1,5 +1,6 @@
 import type { Emote } from '@dcl/schemas'
 import { EntityType, OutcomeGroup, StartAnimation } from '@dcl/schemas'
+import { thirdPartyMerkleProofContentValidateFn } from './third-party'
 import { OK, validationFailed } from '../../types'
 import { ADR_74_TIMESTAMP } from '../timestamps'
 import { validateAll, validateIfTypeMatches } from '../validations'
@@ -85,7 +86,18 @@ export async function emoteADR287ValidateFn(deployment: DeploymentToValidate): P
   return OK
 }
 
+export async function thirdPartyEmoteMerkleProofContentValidateFn(
+  deployment: DeploymentToValidate
+): Promise<ValidationResponse> {
+  return thirdPartyMerkleProofContentValidateFn(deployment, ['id', 'content', 'emoteDataADR74'], 'emote')
+}
+
 export const emoteValidateFn = validateIfTypeMatches(
   EntityType.EMOTE,
-  validateAll(wasCreatedAfterADR74ValidateFn, emoteRepresentationContentValidateFn, emoteADR287ValidateFn)
+  validateAll(
+    wasCreatedAfterADR74ValidateFn,
+    emoteRepresentationContentValidateFn,
+    emoteADR287ValidateFn,
+    thirdPartyEmoteMerkleProofContentValidateFn
+  )
 )

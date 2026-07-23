@@ -1,6 +1,6 @@
-import { keccak256Hash } from '@dcl/hashing'
-import type { ThirdPartyProps, Wearable } from '@dcl/schemas'
-import { EntityType, SpringBonesData, isThirdParty } from '@dcl/schemas'
+import type { Wearable } from '@dcl/schemas'
+import { EntityType, SpringBonesData } from '@dcl/schemas'
+import { thirdPartyMerkleProofContentValidateFn } from './third-party'
 import { OK, validationFailed } from '../../types'
 import { validateAll, validateIfTypeMatches } from '../validations'
 import type { DeploymentToValidate } from '../..'
@@ -29,45 +29,7 @@ export async function wearableRepresentationContentValidateFn(
 export async function thirdPartyWearableMerkleProofContentValidateFn(
   deployment: DeploymentToValidate
 ): Promise<ValidationResponse> {
-  const { entity } = deployment
-  if (!isThirdParty(entity.metadata)) {
-    return OK
-  }
-
-  const wearableMetadata = entity.metadata as Wearable & ThirdPartyProps
-
-  // Check the id in the metadata matches the pointer being deployed
-  if (wearableMetadata.id.toLowerCase() !== entity.pointers[0].toLowerCase()) {
-    return validationFailed(`The id '${wearableMetadata.id}' does not match the pointer '${entity.pointers[0]}'`)
-  }
-
-  // Check the content files declared inside the metadata is exactly the same as the files uploaded with the entity
-  const allContentInFiles = Object.keys(wearableMetadata.content).every((content) => {
-    const contentFile = entity.content.find((file) => file.file === content)
-    if (!contentFile) {
-      return false
-    }
-    return contentFile.hash === wearableMetadata.content[content]
-  })
-
-  const allFilesInContent = entity.content.every((content) => {
-    return wearableMetadata.content[content.file] === content.hash
-  })
-  if (!allContentInFiles || !allFilesInContent) {
-    return validationFailed('The content declared in the metadata does not match the files uploaded with the entity')
-  }
-
-  // Re-create the entity hash and check it matches the one provided in the metadata
-  const merkleProof = wearableMetadata.merkleProof
-
-  const entityHash = keccak256Hash(wearableMetadata, merkleProof.hashingKeys)
-  if (entityHash !== merkleProof.entityHash) {
-    return validationFailed(
-      `The entity hash provided '${merkleProof.entityHash}' is different to the one calculated from the metadata '${entityHash}'`
-    )
-  }
-
-  return OK
+  return thirdPartyMerkleProofContentValidateFn(deployment, ['id', 'content', 'data'], 'wearable')
 }
 
 const SPRING_BONE_NAME_TOKEN = 'springbone'
