@@ -668,20 +668,20 @@ describe('when validating the third party wearable merkle proof', () => {
     })
   })
 
-  describe('and the merkle proof hashing keys omit the data field', () => {
+  describe.each(['id', 'content', 'data'])('and the merkle proof hashing keys omit the %s field', (omittedKey) => {
     let result: ValidationResponse
 
     beforeEach(async () => {
-      const metadataWithoutDataKey = {
+      const metadataWithoutKey = {
         ...metadata,
         merkleProof: {
           ...metadata.merkleProof,
-          hashingKeys: metadata.merkleProof.hashingKeys.filter((key) => key !== 'data')
+          hashingKeys: metadata.merkleProof.hashingKeys.filter((key) => key !== omittedKey)
         }
       }
       const entity = buildWearableEntity({
         pointers: [metadata.id],
-        metadata: metadataWithoutDataKey,
+        metadata: metadataWithoutKey,
         content: Object.keys(metadata.content).map((file) => ({
           file,
           hash: metadata.content[file]
@@ -691,9 +691,9 @@ describe('when validating the third party wearable merkle proof', () => {
       result = await thirdPartyWearableMerkleProofContentValidateFn(deployment)
     })
 
-    it('should return an error because the proof does not commit the data field', () => {
+    it('should return an error because the proof does not commit the field', () => {
       expect(result.ok).toBe(false)
-      expect(result.errors).toContain(`The third-party wearable merkle proof must commit the 'data' field`)
+      expect(result.errors).toContain(`The third-party wearable merkle proof must commit the '${omittedKey}' field`)
     })
   })
 })

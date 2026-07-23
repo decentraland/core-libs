@@ -100,4 +100,37 @@ describe('when validating a third-party emote against its merkle-committed conte
       )
     })
   })
+
+  describe.each(['id', 'content', 'emoteDataADR74'])(
+    'and the merkle proof hashing keys omit the %s field',
+    (omittedKey) => {
+      let result: ValidationResponse
+
+      beforeEach(async () => {
+        const metadataWithoutKey = {
+          ...approvedEmoteMetadata,
+          merkleProof: {
+            ...approvedEmoteMetadata.merkleProof,
+            hashingKeys: approvedEmoteMetadata.merkleProof.hashingKeys.filter((key) => key !== omittedKey)
+          }
+        } as unknown as Emote & ThirdPartyProps
+        const entity = buildEmoteEntity({
+          pointers: [officialPointer],
+          metadata: metadataWithoutKey,
+          content: [
+            { file: 'file1', hash: committedContent.file1 },
+            { file: 'file2', hash: committedContent.file2 }
+          ],
+          timestamp: ADR_74_TIMESTAMP + 1
+        })
+        const deployment: DeploymentToValidate = { entity, files: new Map(), auditInfo: buildAuditInfo() }
+        result = await emoteValidateFn(deployment)
+      })
+
+      it('should reject because the proof does not commit the field', () => {
+        expect(result.ok).toBe(false)
+        expect(result.errors).toContain(`The third-party emote merkle proof must commit the '${omittedKey}' field`)
+      })
+    }
+  )
 })
