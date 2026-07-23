@@ -1,6 +1,6 @@
 {
   "name": "@dcl/content-validator",
-  "version": "7.4.1",
+  "version": "7.4.2",
   "description": "Catalyst content validations",
   "author": "Decentraland",
   "license": "Apache-2.0",
