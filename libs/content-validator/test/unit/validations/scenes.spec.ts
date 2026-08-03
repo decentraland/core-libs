@@ -94,6 +94,25 @@ describe('when validating the scene base parcel', () => {
       expect(result.ok).toBe(false)
     })
   })
+
+  describe('and more than one thousand unique canonical parcels match the pointers', () => {
+    beforeEach(async () => {
+      const parcels = Array.from({ length: 1001 }, (_, index) => `${index},0`)
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        pointers: parcels,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '0,0', parcels }
+        }
+      })
+      result = await sceneParcelsMatchPointersValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should leave parcel count enforcement to the target platform', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
 })
 
 describe('when validating the scene has no worldConfiguration', () => {

@@ -84,7 +84,6 @@ export const embeddedThumbnail = validateAfterADR236(async function validateFn(
  * @public
  */
 const PARCEL_COORDINATE_PATTERN = /^(?:0|-?[1-9]\d*),(?:0|-?[1-9]\d*)$/
-const MAX_SCENE_PARCELS = 1000
 
 /**
  * Validate that every representation of a scene's parcel identity agrees before an access
@@ -102,8 +101,7 @@ export const sceneParcelsMatchPointersValidateFn = async function validateFn(
 
   const pointers = deployment.entity.pointers
   if (
-    pointers.length > MAX_SCENE_PARCELS ||
-    pointers.some((pointer) => pointer.length > 32 || !PARCEL_COORDINATE_PATTERN.test(pointer)) ||
+    pointers.some((pointer) => !PARCEL_COORDINATE_PATTERN.test(pointer)) ||
     new Set(pointers).size !== pointers.length
   ) {
     return validationFailed('Scene pointers must be unique canonical parcel coordinates.')
@@ -111,8 +109,7 @@ export const sceneParcelsMatchPointersValidateFn = async function validateFn(
 
   const sceneParcels = scene.parcels
   if (
-    sceneParcels.length > MAX_SCENE_PARCELS ||
-    sceneParcels.some((parcel) => parcel.length > 32 || !PARCEL_COORDINATE_PATTERN.test(parcel)) ||
+    sceneParcels.some((parcel) => !PARCEL_COORDINATE_PATTERN.test(parcel)) ||
     new Set(sceneParcels).size !== sceneParcels.length
   ) {
     return validationFailed('Scene parcels must be unique canonical parcel coordinates.')
