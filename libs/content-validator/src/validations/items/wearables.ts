@@ -54,7 +54,6 @@ export async function springBonesMetadataValidateFn(deployment: DeploymentToVali
   const { entity } = deployment
   const wearableMetadata = entity.metadata as Wearable
 
-  // Spring bones are optional — skip validation if not present
   const springBones = wearableMetadata?.data?.springBones
   if (!springBones) {
     return OK
@@ -69,7 +68,6 @@ export async function springBonesMetadataValidateFn(deployment: DeploymentToVali
     return validationFailed(...schemaErrors)
   }
 
-  // Build the set of content hashes that current representations point to.
   const representations = wearableMetadata.data?.representations ?? []
   const activeHashes = new Set<string>()
   for (const representation of representations) {

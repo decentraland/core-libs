@@ -9,27 +9,16 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # Required so the runner can mint an OIDC token; pnpm exchanges it
-      # with the npm registry for a short-lived publish credential (Trusted
-      # Publishing). Replaces the long-lived NPM_TOKEN secret that used to
-      # be written into ~/.npmrc.
       id-token: write
     runs-on: ubuntu-latest
-    # Prevents multiple jobs from running at the same time
     concurrency:
       group: publish-packages
       cancel-in-progress: false
     steps:
       - name: Checkout repository
-        # Pinned by commit SHA. Tags on third-party actions are mutable; a
-        # SHA is not. Bump deliberately when reviewing a new release rather
-        # than tracking a floating tag.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup pnpm
-        # Pinned to v6.0.8 by commit SHA. Tags on third-party actions are
-        # mutable; a SHA is not. Bump deliberately when reviewing a new
-        # release rather than tracking a floating tag.
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
       - name: Setup node.js
@@ -38,12 +27,6 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
-      # Node 24 ships with an npm older than 11.5.1; Trusted Publishing landed
-      # in npm 11.5.1.
-      # pnpm publish shells through npm under the hood, so the npm CLI on the
-      # runner is what needs to support the OIDC exchange. Pin to a known-good
-      # version that has trusted publishing rather than tracking @latest, so a
-      # future npm release can't break this workflow without us noticing.
       - name: Install npm with Trusted Publishing support
         run: npm install -g npm@^11.5.1
 
@@ -60,9 +43,6 @@ jobs:
 
       - name: Create Release Pull Request or Publish
         id: changesets
-        # Pinned to v1.8.0 by commit SHA. Tags on third-party actions are
-        # mutable; a SHA is not. Bump deliberately when reviewing a new
-        # release rather than tracking a floating tag.
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
           title: 'chore: version packages'
@@ -72,6 +52,4 @@ jobs:
           commitMode: 'github-api'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # changeset publish shells through `npm publish`; this env flips on
-          # provenance the same way the previous `--provenance` flag did.
           NPM_CONFIG_PROVENANCE: 'true'

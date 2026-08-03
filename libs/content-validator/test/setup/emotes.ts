@@ -113,7 +113,6 @@ export const VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT = buildEntityMeta
   ['someOtherHash1', 'someOtherHash2']
 )
 
-// Using the entity, the keys to be hashed and the other node hashes, build the merkle proof for the entity and return a new proofed entity.
 function buildEntityMetadataWithMerkleProof(
   baseEntity: Omit<Emote & ThirdPartyProps, 'merkleProof'>,
   otherNodeHashes: string[]

@@ -332,8 +332,6 @@ describe('when validating profile images', () => {
       face256Hash = 'bafybeiasb5vpmaounyilfuxbd3lryvosl4yefqrfahsb2esg46q6tu6y5s'
       bodyHash = 'bafybeiasb5vpmaounyilfuxbd3lryvosl4yefqrfahsb2esg46q6tu6y5t'
 
-      // Two avatars that both declare valid face/body hashes (fresh objects, so the
-      // shared VALID_PROFILE_METADATA isn't mutated).
       const avatarWithSnapshots = {
         ...VALID_PROFILE_METADATA.avatars[0],
         avatar: {
@@ -349,7 +347,6 @@ describe('when validating profile images', () => {
         files
       })
 
-      // One uploaded file's hash mismatches.
       calculatedFileHashes.set(face256Hash, { calculatedHash: face256Hash, buffer: new Uint8Array() })
       calculatedFileHashes.set(bodyHash, { calculatedHash: wrongBodyHash, buffer: new Uint8Array() })
       files.set(face256Hash, new Uint8Array())

@@ -15,9 +15,6 @@ function firstOf(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
-// Truncates user-supplied fragments echoed into error messages. Prevents unbounded
-// growth of response bodies and limits the size of any attacker-controlled bytes
-// that may appear in log lines or HTML-rendered error views.
 function safe(value: unknown, max = 64): string {
   const s = typeof value === 'string' ? value : String(value ?? '')
   return s.length > max ? s.slice(0, max) + '…' : s
@@ -78,10 +75,6 @@ export function extractAuthChain(
 }
 
 export async function verifyPersonalSign(authChain: AuthChain, payload: string): Promise<string> {
-  // SAFETY: `@dcl/crypto` types the third argument as HTTPProvider but accepts null at
-  // runtime for personal-signature verification (no contract call needed). EIP-1654
-  // chains — which do require a provider for contract-wallet validation — are routed
-  // to `verifyEIP1654Sign` (catalyst-based) and never reach this path.
   const verification = await Authenticator.validateSignature(payload, authChain, null as never)
 
   if (!verification.ok) {
@@ -123,10 +116,6 @@ export async function verifyEIP1654Sign(
   }
 
   if (!response.ok) {
-    // Release the response body (without reading it) before discarding the
-    // response, so the undici socket isn't left checked out of the pool with its
-    // bytes buffered until GC. Cancelling rather than reading keeps the rejection
-    // independent of the body content.
     await response.body?.cancel?.().catch(() => undefined)
     throw new RequestError(`Catalyst "${catalyst.origin}" returned HTTP ${response.status}`, 503)
   }
@@ -186,10 +175,6 @@ export function verifyMetadata(value?: string | string[]): Record<string, unknow
     throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
   }
 
-  // Treat an explicit JSON `null` like a missing metadata header and fall back to an
-  // empty object. This keeps callers migrating from @dcl/platform-crypto-middleware
-  // (which returned `null` as-is) working, while still guaranteeing authMetadata is an
-  // object that downstream code can safely dereference.
   if (parsed === null) {
     return {}
   }
@@ -215,9 +200,6 @@ export function verifyExpiration(
       401
     )
   }
-  // Guard against timestamps that are so far in the future that the signature effectively
-  // never expires. A legitimate signer's clock should not be more than one expiration
-  // window ahead of the server.
   if (timestamp > now + expiration) {
     throw new RequestError(
       `Signature timestamp is too far in the future: signature timestamp: ${timestamp}, local timestamp: ${now}`,
@@ -241,16 +223,12 @@ export default async function verify<P extends Record<string, unknown> = Record<
   headers: Record<string, string | string[] | undefined>,
   options: VerifyAuthChainHeadersOptions<P> = {}
 ): Promise<DecentralandSignatureData<P>> {
-  // Read each header once; the timestamp and metadata are needed both for validation
-  // and for the signed payload below.
   const rawTimestamp = headers[AUTH_TIMESTAMP_HEADER]
   const rawMetadata = headers[AUTH_METADATA_HEADER]
 
   const authChain = extractAuthChain(headers, options.maxChainLength)
   const timestamp = verifyTimestamp(rawTimestamp)
 
-  // Fail fast on expired signatures — avoids invoking a user-supplied metadataValidator
-  // and the catalyst round-trip for replayed / stale requests.
   verifyExpiration(timestamp, options)
 
   const metadata = verifyMetadata(rawMetadata) as P

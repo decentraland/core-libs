@@ -21,13 +21,11 @@ export function createAccessValidateFn(
       deployment.entity.type === EntityType.SCENE &&
       deployment.entity.pointers.some((p) => p.toLowerCase().startsWith('default'))
 
-    // Default scenes were removed from the Content Servers after https://github.com/decentraland/catalyst/issues/878
     if (isDefaultScene) {
       return validationFailed(
         `Scene pointers should only contain two integers separated by a comma, for example (10,10) or (120,-45).`
       )
     }
-    // Legacy entities still need to be synchronized
     if (deployedBeforeDCLLaunch && externalCalls.isAddressOwnedByDecentraland(address)) {
       return OK
     }

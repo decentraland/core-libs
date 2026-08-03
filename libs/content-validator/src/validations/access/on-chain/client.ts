@@ -26,10 +26,6 @@ function permissionError(failing?: string[]): PermissionResult {
 }
 
 export function timestampBounds(timestampMs: number): { upper: number; lower: number } {
-  /*
-   * This mimics the original behavior of looking up to 8 seconds after the entity timestamp
-   * and up to 5 minutes and 7 seconds before
-   */
   const timestampSec = Math.ceil(timestampMs / 1000) + 8
   const timestamp5MinAgo = Math.max(timestampSec - 60 * 5 - 7, 0)
 
@@ -101,7 +97,6 @@ export function createOnChainClient(
     const ignoredSet = new Set([
       ...ethereum.filter(({ type }) => type === 'blockchain-collection-v1-asset').map(({ urn }) => urn),
       ...matic.filter(({ type }) => type === 'blockchain-collection-v2-asset').map(({ urn }) => urn),
-      // ...ethereumThirdParty should never contain assets (only items), so no need to filter
       ...maticThirdParty.filter(({ type }) => type === 'blockchain-collection-third-party').map(({ urn }) => urn)
     ])
     if (ignoredSet.size > 0) {
@@ -213,7 +208,6 @@ export function createOnChainClient(
     let blockNumberFiveMinBeforeDeployment = result[1]
 
     if (blockNumberFiveMinBeforeDeployment && blockNumberFiveMinBeforeDeployment.timestamp < lower) {
-      // Mimic the way TheGraph was calculating this
       blockNumberFiveMinBeforeDeployment = {
         ...blockNumberFiveMinBeforeDeployment,
         block: blockNumberFiveMinBeforeDeployment.block + 1

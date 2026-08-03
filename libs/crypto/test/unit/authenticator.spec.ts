@@ -18,8 +18,6 @@ jest.mock('../../src/contracts/SignatureValidator', () => ({
 
 jest.setTimeout(999999)
 
-// ERC1654 isValidSignature magic value: bytes4(keccak256("isValidSignature(bytes32,bytes)")).
-// Returned by a contract wallet to indicate that a signature is valid.
 const ERC1654_MAGIC_VALUE_BYTES = new Uint8Array([0x16, 0x26, 0xba, 0x7e])
 
 describe('Authenticator', () => {
@@ -30,8 +28,6 @@ describe('Authenticator', () => {
     mainnetProvider = new HTTPProvider(process.env.ETHEREUM_MAINNET_RPC || '', {
       fetch
     } as unknown as ConstructorParameters<typeof HTTPProvider>[1])
-    // Default: contract rejects the signature. EIP-1654 tests override this
-    // with the magic value to simulate a contract wallet that accepts it.
     isValidSignatureMock = jest.fn().mockResolvedValue(new Uint8Array())
     ;(SignatureValidator as jest.Mock).mockResolvedValue({
       isValidSignature: isValidSignatureMock
@@ -399,7 +395,6 @@ describe('Authenticator', () => {
       beforeEach(() => {
         identity = EthCrypto.createIdentity()
         ephemeral = EthCrypto.createIdentity()
-        // Negative TTL, so the ephemeral is "expired" against the current time.
         chain = Authenticator.createAuthChain(identity, ephemeral, -5, 'message')
       })
 

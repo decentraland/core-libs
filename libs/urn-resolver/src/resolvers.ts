@@ -24,49 +24,30 @@ import type {
  * @public
  */
 export const resolvers: RouteMap<DecentralandAssetIdentifier> = {
-  // Resolver for static offchain assets (quests deployed to static servers, not content server)
   'decentraland:off-chain:{registry}:{name}': resolveOffchainAsset,
-  // Resolver for deployed entities. Deployed entities are used to specify portable experience identifiers that may be deployed anywhere in the web.
   'decentraland:entity:{cid}': resolveEntityV3,
-  // collections v1 asset (by contract)
   'decentraland:{network}:collections-v1:{contract(0x[a-fA-F0-9]+)}:{name}': resolveCollectionV1Asset,
-  // collections v1 item (by asset name and token id)
   'decentraland:{network}:collections-v1:{contract(0x[a-fA-F0-9]+)}:{name}:{tokenId([0-9]+)}': resolveCollectionV1Item,
-  // collections v1 asset (by name)
   'decentraland:{network}:collections-v1:{collectionName}:{name}': resolveCollectionV1AssetByCollectionName,
-  // collections v1 item (by asset name and token id)
   'decentraland:{network}:collections-v1:{collectionName}:{name}:{tokenId([0-9]+)}':
     resolveCollectionV1ItemByCollectionName,
-  // collections v2 asset (hex)
   'decentraland:{network}:collections-v2:{contract(0x[a-fA-F0-9]+)}:{id(0x[a-fA-F0-9]+)}': resolveCollectionV2Asset,
-  // collections v2 item (by collection hex and token id)
   'decentraland:{network}:collections-v2:{contract(0x[a-fA-F0-9]+)}:{id(0x[a-fA-F0-9]+)}:{tokenId([0-9]+)}':
     resolveCollectionV2Item,
-  // collections v2 asset (id)
   'decentraland:{network}:collections-v2:{contract(0x[a-fA-F0-9]+)}:{id([0-9]+)}': resolveCollectionV2Asset,
-  // collections v2 item (by collection asset and token id)
   'decentraland:{network}:collections-v2:{contract(0x[a-fA-F0-9]+)}:{id([0-9]+)}:{tokenId([0-9]+)}':
     resolveCollectionV2Item,
-  // collections v1 (by contract)
   'decentraland:{network}:collections-v1:{contract(0x[a-fA-F0-9]+)}': resolveCollectionV1,
-  // collections v1 (by name)
   'decentraland:{network}:collections-v1:{collectionName}': resolveCollectionV1ByCollectionName,
-  // collections v2
   'decentraland:{network}:collections-v2:{contract(0x[a-fA-F0-9]+)}': resolveCollectionV2,
-  // resolve LAND by position
   'decentraland:{network}:LAND:{position}': resolveLandAsset,
 
-  // resolve third party provider
   'decentraland:{network}:collections-thirdparty:{thirdPartyName}': resolveThirdPartyProvider,
-  // resolve third party collections
   'decentraland:{network}:collections-thirdparty:{thirdPartyName}:{collectionId}': resolveThirdPartyCollection,
-  // resolve third party assets
   'decentraland:{network}:collections-thirdparty:{thirdPartyName}:{collectionId}:{itemId}': resolveThirdPartyAsset,
-  // resolve third party items
   'decentraland:{network}:collections-thirdparty:{thirdPartyName}:{collectionId}:{itemId}:{nftChain}:{nftContractAddress(0x[a-fA-F0-9]+)}:{nftTokenId([0-9]+)}':
     resolveThirdPartyItem,
 
-  // resolve 721 assets
   'decentraland:{network}:erc721:{contract(0x[a-fA-F0-9]+)}:{tokenId}': resolveErc721Asset
 }
 
@@ -131,7 +112,6 @@ function parseHostAndPath(uri: URL): { host: string; path: string[] } {
   let path: string[]
 
   if (uri.pathname.startsWith('//')) {
-    // Web URL object does not recognize dcl:// and therefore pathname has an extra /
     const res = uri.pathname.replace(/^\/\//, '').split('/')
     host = res[0]
     path = res.slice(1)
@@ -222,7 +202,6 @@ export async function resolveCollectionV1AssetByCollectionName(
   uri: URL,
   groups: Record<'network' | 'collectionName' | 'name', string>
 ): Promise<BlockchainCollectionV1Asset | undefined> {
-  // this only works in mainnet
   if (groups.network !== 'ethereum') return
 
   const collection = await getCollection(groups.collectionName)
@@ -243,7 +222,6 @@ export async function resolveCollectionV1ItemByCollectionName(
   uri: URL,
   groups: Record<'network' | 'collectionName' | 'name' | 'tokenId', string>
 ): Promise<BlockchainCollectionV1Item | undefined> {
-  // this only works in mainnet
   if (groups.network !== 'ethereum') return
 
   const collection = await getCollection(groups.collectionName)
@@ -395,7 +373,6 @@ export async function resolveCollectionV1ByCollectionName(
   uri: URL,
   groups: Record<'network' | 'collectionName', string>
 ): Promise<BlockchainCollectionV1 | undefined> {
-  // this only works in mainnet
   if (groups.network !== 'ethereum') return
   let result: BlockchainCollectionV1 | undefined = undefined
 

@@ -8,13 +8,10 @@ import { buildAuditInfo } from '../../../setup/deployments'
 import { buildEmoteEntity } from '../../../setup/entity'
 import type { DeploymentToValidate, ValidationResponse } from '../../../../src/types'
 
-// A third-party emote's uploaded files must match the `content` map committed inside its merkle leaf.
 const EMOTE_HASHING_KEYS = ['content', 'id', 'name', 'description', 'i18n', 'image', 'thumbnail', 'emoteDataADR74']
 
 const officialPointer = 'urn:decentraland:amoy:collections-thirdparty:jean-pier:somecollection:someitemid'
 
-// A legitimately-approved third-party emote whose committed content, uploaded files and representations
-// all reference the same two files.
 const committedContent: Record<string, string> = {
   file1: 'QmLegitModelHashXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX1',
   file2: 'QmLegitModelHashXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX2'
@@ -82,7 +79,6 @@ describe('when validating a third-party emote against its merkle-committed conte
       const entity = buildEmoteEntity({
         pointers: [officialPointer],
         metadata: approvedEmoteMetadata,
-        // Same committed metadata (so the leaf hash is preserved) but attacker-controlled file hashes.
         content: [
           { file: 'file1', hash: 'QmAttackerControlledHashXXXXXXXXXXXXXXXXXXXXXX1' },
           { file: 'file2', hash: 'QmAttackerControlledHashXXXXXXXXXXXXXXXXXXXXXX2' }

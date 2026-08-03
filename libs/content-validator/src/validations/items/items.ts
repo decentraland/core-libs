@@ -38,7 +38,6 @@ export function createDeploymentMaxSizeExcludingThumbnailIsNotExceededValidateFn
     if (typeof totalDeploymentSizeInB === 'string') return validationFailed(totalDeploymentSizeInB)
     const thumbnailSize = deployment.files.get(thumbnailHash)?.byteLength ?? 0
 
-    // Check if thumbnail size exceeds the allowed maximum
     if (thumbnailSize > thumbnailMaxSizeInMb * 1024 * 1024) {
       return validationFailed(
         `The thumbnail is too big. The maximum allowed size for thumbnail model files is ${thumbnailMaxSizeInMb} MB. You can upload up to ${
@@ -71,7 +70,6 @@ export function createThumbnailMaxSizeIsNotExceededValidateFn(
   const { externalCalls, logs } = components
   const logger = logs.getLogger('thumbnail size validator')
   async function validateFn(deployment: DeploymentToValidate) {
-    // read thumbnail field from metadata
     const metadata = deployment.entity.metadata as Wearable
 
     const hash = deployment.entity.content?.find(({ file }) => file === metadata.thumbnail)?.hash
@@ -80,14 +78,12 @@ export function createThumbnailMaxSizeIsNotExceededValidateFn(
     }
 
     const errors: string[] = []
-    // check size
     const thumbnailBuffer = deployment.files.get(hash)
     if (!thumbnailBuffer) {
       const isHashStored = (await externalCalls.isContentStoredAlready([hash])).get(hash) ?? false
       if (!isHashStored) {
         return validationFailed(`Couldn't find thumbnail file with hash: ${hash}`)
       }
-      // otherwise, thumbnail was already uploaded and won't be validated again
       logger.debug(`Thumbnail file with hash: ${hash} is not in the deployment, but it is already stored`, {
         type: deployment.entity.type
       })

@@ -22,7 +22,6 @@ export function createV1andV2collectionAssetValidateFn({
     const network = asset.network
 
     if (L1_NETWORKS.includes(network)) {
-      // L1 collections are deployed by Decentraland Address
       const isAllowlistedCollection = asset.uri.toString().startsWith('urn:decentraland:ethereum:collections-v1')
       if (!externalCalls.isAddressOwnedByDecentraland(ethAddress) || !isAllowlistedCollection) {
         return validationFailed(
@@ -34,7 +33,6 @@ export function createV1andV2collectionAssetValidateFn({
       const { timestamp, content, metadata } = deployment.entity
 
       const calculateHashes = () => {
-        // Compare both by key and hash
         const compare = (a: { key: string; hash: string }, b: { key: string; hash: string }) => {
           if (a.hash > b.hash) return 1
           else if (a.hash < b.hash) return -1

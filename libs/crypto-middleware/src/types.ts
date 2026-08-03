@@ -18,9 +18,6 @@ export const DEFAULT_EXPIRATION = 1000 * 60
 export const DEFAULT_MAX_CHAIN_LENGTH = 10
 export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string } => {
   const statusCode = err instanceof RequestError ? err.statusCode : 500
-  // 5xx responses hide the internal message to avoid echoing backend detail
-  // (catalyst hostnames, upstream errors) to clients. Consumers that need
-  // the full message can provide their own `onError` formatter.
   if (statusCode >= 500) {
     return { ok: false, message: 'Internal error' }
   }

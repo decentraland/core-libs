@@ -238,7 +238,6 @@ describe('ethAddressNormalizerMiddleware', () => {
     })
   })
 
-  // Helpers
   const createMockContext = (
     params: Record<string, unknown> = {}
   ): IHttpServerComponent.DefaultContext<Record<string, unknown>> & { params: Record<string, unknown> } => {

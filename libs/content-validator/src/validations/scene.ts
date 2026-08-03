@@ -14,7 +14,6 @@ export const noWorldsConfigurationValidateFn = validateAfterADR173(async functio
   const sceneHasWorldConfiguration = deployment.entity.metadata?.worldConfiguration !== undefined
   if (sceneHasWorldConfiguration) {
     return validationFailed(
-      // Start of Selection
       'The scene.json contains a worldConfiguration section, which is not allowed for Genesis City scenes (see ADR-173: http://adr.decentraland.org/adr/ADR-173). Please remove it and try again.'
     )
   }
@@ -36,15 +35,12 @@ export const noWorldsConfigurationValidateFn = validateAfterADR173(async functio
  * to a relative path at the deployment gate stops the payload from ever being accepted.
  */
 function isRelativeThumbnailPath(path: string): boolean {
-  // A URI scheme, protocol-relative (`//…`) or root-absolute (`/…`) path is not relative.
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path) || path.startsWith('/')) {
     return false
   }
-  // Reject leading/trailing whitespace and any control character.
   if (path !== path.trim() || /\p{Cc}/u.test(path)) {
     return false
   }
-  // Reject HTML-breakout characters so the value can never inject markup downstream.
   return !/[<>"]/.test(path)
 }
 

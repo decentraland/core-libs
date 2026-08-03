@@ -1,5 +1,3 @@
-// Regenerates the reference CIDs hard-coded in test/node.spec.ts.
-// Run with: node libs/hashing/scripts/compute-reference-hashes.mjs
 
 import { BlackHoleBlockstore } from 'blockstore-core'
 import { fixedSize } from 'ipfs-unixfs-importer/chunker'

@@ -50,8 +50,6 @@ describe('when calculating the deployment size', () => {
     beforeEach(() => {
       inFlight = 0
       maxInFlight = 0
-      // Track the peak number of simultaneous in-flight fetches: increment on entry, yield (so batched
-      // fetches overlap), then decrement — so maxInFlight reflects the concurrency the loop allowed.
       fetchContentFileSize = jest.fn(async (_hash: string) => {
         inFlight++
         maxInFlight = Math.max(maxInFlight, inFlight)
