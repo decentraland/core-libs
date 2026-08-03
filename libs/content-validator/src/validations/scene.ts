@@ -1,5 +1,5 @@
 import type { ContentMapping } from '@dcl/schemas'
-import { EntityType } from '@dcl/schemas'
+import { EntityType, SceneParcels } from '@dcl/schemas'
 import { validateAfterADR173, validateAfterADR236, validateAll, validateIfTypeMatches } from './validations'
 import { OK, validationFailed } from '../types'
 import type { DeploymentToValidate, ValidationResponse } from '../types'
@@ -74,10 +74,66 @@ export const embeddedThumbnail = validateAfterADR236(async function validateFn(
 })
 
 /**
+ * Validate the semantic scene-parcel invariant that is not expressible in the nested JSON schema:
+ * the declared base must be one of the parcels occupied by the scene.
+ *
+ * `Scene.validate` embeds `SceneParcels.schema`, but it does not invoke `SceneParcels.validate`,
+ * where this membership check lives. Keeping the check in the deployment validator prevents the
+ * base parcel from becoming an unauthorized downstream identity while access checks authorize only
+ * the entity pointers.
+ * @public
+ */
+const PARCEL_COORDINATE_PATTERN = /^(?:0|-?[1-9]\d*),(?:0|-?[1-9]\d*)$/
+const MAX_SCENE_PARCELS = 1000
+
+/**
+ * Validate that every representation of a scene's parcel identity agrees before an access
+ * validator authorizes the deployment. Exact canonical strings are required so aliases such as
+ * `00,1` cannot pass distinctness checks and later collapse to the same database coordinate.
+ * @public
+ */
+export const sceneParcelsMatchPointersValidateFn = async function validateFn(
+  deployment: DeploymentToValidate
+): Promise<ValidationResponse> {
+  const scene = deployment.entity.metadata?.scene
+  if (!scene || !SceneParcels.validate(scene)) {
+    return validationFailed('The scene base parcel must be included in the scene parcels.')
+  }
+
+  const pointers = deployment.entity.pointers
+  if (
+    pointers.length > MAX_SCENE_PARCELS ||
+    pointers.some((pointer) => pointer.length > 32 || !PARCEL_COORDINATE_PATTERN.test(pointer)) ||
+    new Set(pointers).size !== pointers.length
+  ) {
+    return validationFailed('Scene pointers must be unique canonical parcel coordinates.')
+  }
+
+  const sceneParcels = scene.parcels
+  if (
+    sceneParcels.length > MAX_SCENE_PARCELS ||
+    sceneParcels.some((parcel) => parcel.length > 32 || !PARCEL_COORDINATE_PATTERN.test(parcel)) ||
+    new Set(sceneParcels).size !== sceneParcels.length
+  ) {
+    return validationFailed('Scene parcels must be unique canonical parcel coordinates.')
+  }
+
+  const pointerSet = new Set(pointers)
+  if (pointerSet.size !== sceneParcels.length || sceneParcels.some((parcel) => !pointerSet.has(parcel))) {
+    return validationFailed('The scene parcels must match the entity pointers.')
+  }
+
+  return OK
+}
+
+/** @deprecated Use sceneParcelsMatchPointersValidateFn. */
+export const sceneBaseIsIncludedInParcelsValidateFn = sceneParcelsMatchPointersValidateFn
+
+/**
  * Validate that given scene deployment is valid
  * @public
  */
 export const sceneValidateFn = validateIfTypeMatches(
   EntityType.SCENE,
-  validateAll(noWorldsConfigurationValidateFn, embeddedThumbnail)
+  validateAll(sceneParcelsMatchPointersValidateFn, noWorldsConfigurationValidateFn, embeddedThumbnail)
 )
