@@ -12,11 +12,12 @@
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "node ../../scripts/build-package.mjs",
+    "dev": "node ../../scripts/build-package.mjs --watch",
     "clean": "rm -rf dist",
     "test": "jest",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
@@ -29,19 +30,51 @@
     "ethereum"
   ],
   "dependencies": {
-    "@dcl/schemas": "^25.2.0",
-    "eth-connect": "^6.0.3",
-    "ethereum-cryptography": "^2.0.0"
+    "@dcl/schemas": "^26.2.0",
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0"
   },
   "devDependencies": {
-    "@dcl/eslint-config": "^2.4.3",
-    "eslint": "^8.57.1",
-    "eth-crypto": "^2.3.0",
-    "node-fetch": "^2.7.0",
+    "@dcl/eslint-config": "^3.1.0",
     "@types/node-fetch": "^2.6.12",
-    "typescript": "^5.3.3"
+    "esbuild": "^0.27.0",
+    "eslint": "^9.39.5",
+    "eth-connect": "^6.0.3",
+    "eth-crypto": "^4.1.0",
+    "node-fetch": "^2.7.0",
+    "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
+  },
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./crypto": {
+      "import": {
+        "types": "./dist/crypto.d.mts",
+        "default": "./dist/crypto.mjs"
+      },
+      "require": {
+        "types": "./dist/crypto.d.ts",
+        "default": "./dist/crypto.js"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "crypto": [
+        "./dist/crypto.d.ts"
+      ]
+    }
   }
 }

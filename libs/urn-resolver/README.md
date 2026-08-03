@@ -35,7 +35,7 @@ This library has no external service dependencies. It is a pure parsing library 
 
 ### Prerequisites
 
-- **Node.js**: `>=22.0.0`
+- **Node.js**: `>=24.0.0`
 - **pnpm**: For package management
 
 ### Installation
@@ -170,7 +170,7 @@ brew install jq
 
 ### Build
 
-The library is built with Node.js 22.x from the monorepo root.
+The library is built with Node.js 24.x from the monorepo root.
 
 ```bash
 pnpm install

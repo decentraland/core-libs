@@ -6,10 +6,11 @@ export * from './types'
 export * from './validations'
 export { readImageMetadata } from './image-metadata'
 export type { ImageFormat, ImageMetadata } from './image-metadata'
+export { createOnChainAccessCheckValidateFns } from './validations/access/on-chain'
+export { createOnChainClient } from './validations/access/on-chain/client'
+export { createSubgraphAccessCheckValidateFns } from './validations/access/subgraph'
+export { createTheGraphClient } from './validations/access/subgraph/the-graph-client'
 
-// Runs the given validations in order and returns the first failure (or OK). Short-circuits like the
-// deployment pipeline expects, and logs the failing validation's errors under `loggerName` (so, e.g.,
-// the staging validator's failures are distinguishable from the full validator's in the logs).
 function runSequentially(
   components: ContentValidatorComponents,
   validateFns: ValidateFn[],

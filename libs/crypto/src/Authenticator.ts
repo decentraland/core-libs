@@ -1,18 +1,20 @@
-// eslint-disable-next-line import/no-named-as-default
-import RequestManager, { bytesToHex, hexToBytes, sha3, stringToUtf8Bytes } from 'eth-connect'
+import { keccak_256 } from '@noble/hashes/sha3.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { SignatureValidator } from './contracts/SignatureValidator'
 import {
   ethSign,
   recoverAddressFromEthSignature,
   createEthereumMessageHash as utilsCreateEthereumMessage
 } from './crypto'
+import { hexToBytes } from './eth/hex'
+import { EthClient } from './eth/rpc'
 import Blocks from './helper/blocks'
 import { moveMinutes } from './helper/utils'
 import { AuthLinkType } from './types'
+import type { EthProvider } from './eth/rpc'
 import type { AuthChain, AuthIdentity, AuthLink, EthAddress, IdentityType, Signature, ValidationResult } from './types'
 
 export const VALID_SIGNATURE = 'VALID_SIGNATURE'
-// bytes4(keccak256("isValidSignature(bytes32,bytes)")
 export const ERC1654_MAGIC_VALUE = '1626ba7e'
 
 const PERSONAL_SIGNATURE_LENGTH = 132
@@ -62,12 +64,10 @@ export async function validateSignature(
 
 export function isValidAuthChain(authChain: AuthChain): boolean {
   for (const [index, authLink] of authChain.entries()) {
-    // SIGNER should be the first one
     if (index === 0 && authLink.type !== AuthLinkType.SIGNER) {
       return false
     }
 
-    // SIGNER should be unique
     if (authLink.type === AuthLinkType.SIGNER && index !== 0) {
       return false
     }
@@ -76,11 +76,16 @@ export function isValidAuthChain(authChain: AuthChain): boolean {
   return true
 }
 
-// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1271.md
-// Note: intentionally does NOT apply the "\x19Ethereum Signed Message:\n" prefix —
-// EIP-1271 wallets verify against the raw keccak256 of the message bytes.
+/**
+ * Hashes a message for EIP-1271 smart-contract signature validation.
+ *
+ * Intentionally does NOT apply the `\x19Ethereum Signed Message:\n` prefix: EIP-1271
+ * wallets verify against the raw keccak256 of the message bytes.
+ *
+ * @see https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1271.md
+ */
 export function createEIP1271MessageHash(msg: string): Uint8Array {
-  return hexToBytes(sha3(stringToUtf8Bytes(msg)))
+  return keccak_256(utf8ToBytes(msg))
 }
 
 export function createSimpleAuthChain(finalPayload: string, ownerAddress: EthAddress, signature: Signature): AuthChain {
@@ -339,8 +344,6 @@ export function parseEphemeralPayload(payload: string): {
   ephemeralAddress: string
   expiration: number
 } {
-  // authLink payload structure: <human-readable message>\nEphemeral address: <ephemeral-eth-address>\nExpiration: <timestamp>
-  // authLink payload example: Decentraland Login\nEphemeral address: 0x123456\nExpiration: 2020-01-20T22:57:11.334Z
   const message = payload.replace(/\r/g, '')
   const payloadParts: string[] = message.split('\n')
 
@@ -383,7 +386,7 @@ export async function isValidEIP1271Signature(
 
   try {
     result = bytesToHex(await signatureValidator.isValidSignature(hashedMessage, _signature, block))
-  } catch (e) {
+  } catch {
     // Can revert if the signature is not valid
   }
 
@@ -394,7 +397,7 @@ export async function isValidEIP1271Signature(
   const hashedMessageWithPrefix = utilsCreateEthereumMessage(message)
   try {
     result = bytesToHex(await signatureValidator.isValidSignature(hashedMessageWithPrefix, _signature, block))
-  } catch (e) {
+  } catch {
     // Can revert if the signature is not valid
   }
 
@@ -411,7 +414,7 @@ async function isValidEIP1654Message(
   if (!provider) {
     throw new Error('Missing provider')
   }
-  const requestManager = new RequestManager(provider)
+  const requestManager = new EthClient(provider as EthProvider)
   const signatureValidator = await SignatureValidator(requestManager, contractAddress)
 
   let result = await isValidEIP1271Signature(signatureValidator, message, signature)
@@ -420,7 +423,6 @@ async function isValidEIP1654Message(
     return true
   }
 
-  // check based on the dateToValidateExpirationInMillis
   const dater = new Blocks(requestManager)
   try {
     const { block } = await dater.getDate(dateToValidateExpirationInMillis, false)

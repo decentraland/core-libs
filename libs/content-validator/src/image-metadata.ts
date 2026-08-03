@@ -18,19 +18,15 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 const PNG_IHDR_BYTES = Buffer.from('IHDR', 'ascii')
 const PNG_IEND_BYTES = Buffer.from('IEND', 'ascii')
 const PNG_IHDR_CHUNK_LENGTH = 13
-const PNG_FIRST_CHUNK_END = 33 // 8 (signature) + 4 (length) + 4 (type) + 13 (IHDR data) + 4 (CRC)
-const PNG_CHUNK_OVERHEAD = 12 // length(4) + type(4) + crc(4)
-// PNG spec (ISO/IEC 15948 §5.3): chunk lengths shall not exceed 2^31-1 bytes
-// even though the wire field is 4 bytes. Anything above that is a parser
-// differential — some readers reject, some accept the high bit silently.
+const PNG_FIRST_CHUNK_END = 33
+const PNG_CHUNK_OVERHEAD = 12
 const PNG_MAX_CHUNK_LENGTH = 0x7fffffff
-// Spec-permitted bit-depth + color-type combinations (PNG, ISO/IEC 15948, §11.2.2).
 const PNG_VALID_BIT_DEPTHS_BY_COLOR_TYPE: Record<number, readonly number[]> = {
   0: [1, 2, 4, 8, 16], // Grayscale
   2: [8, 16], // Truecolor (RGB)
   3: [1, 2, 4, 8], // Indexed-colour (Palette)
   4: [8, 16], // Greyscale + Alpha
-  6: [8, 16] // Truecolor + Alpha (RGBA)
+  6: [8, 16]
 }
 
 const WEBP_RIFF_BYTES = Buffer.from('RIFF', 'ascii')
@@ -81,8 +77,6 @@ export interface ImageMetadata {
   height: number
 }
 
-// Display names used in user-facing error messages, matching the casing
-// produced by the format-specific validators (e.g. "Malformed PNG", "Malformed WebP").
 const FORMAT_DISPLAY_NAME: Record<ImageFormat, string> = {
   png: 'PNG',
   jpeg: 'JPEG',
@@ -105,14 +99,9 @@ const FORMAT_DISPLAY_NAME: Record<ImageFormat, string> = {
  * @public
  */
 export function readImageMetadata(input: Uint8Array): ImageMetadata {
-  // Reject SharedArrayBuffer-backed inputs: a concurrent writer could race the
-  // parser between length checks and reads (TOCTOU). The reader operates on
-  // bytes only; callers who need shared memory must copy into a regular
-  // ArrayBuffer first.
   if (typeof SharedArrayBuffer !== 'undefined' && input.buffer instanceof SharedArrayBuffer) {
     throw new Error('Image input must not be backed by a SharedArrayBuffer')
   }
-  // Wrap as Buffer to access readUInt*BE / equals / toString without copying.
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input.buffer, input.byteOffset, input.byteLength)
   let metadata: ImageMetadata
   if (isPng(buffer)) metadata = readPngMetadata(buffer)
@@ -136,10 +125,6 @@ function assertPositiveDimensions(metadata: ImageMetadata): void {
 }
 
 function isPng(buffer: Buffer): boolean {
-  // Require the full IHDR chunk (signature + 25-byte IHDR) to be present so
-  // readPngMetadata can safely read every IHDR field, including bit depth at
-  // byte 24 and color type at byte 25. A shorter buffer with the PNG signature
-  // is treated as unrecognised rather than as a truncated PNG.
   return buffer.length >= PNG_FIRST_CHUNK_END && buffer.subarray(0, 8).equals(PNG_SIGNATURE)
 }
 
@@ -169,8 +154,6 @@ function validatePngBitDepthAndColorType(bitDepth: number, colorType: number): v
 }
 
 function validatePngIhdrMethods(compression: number, filter: number, interlace: number): void {
-  // Per PNG spec (ISO/IEC 15948 §11.2.2), only deflate (0) compression and
-  // filter method 0 are defined. Interlace must be 0 (none) or 1 (Adam7).
   if (compression !== 0) {
     throw new Error(`Malformed PNG: invalid compression method ${compression}`)
   }
@@ -183,9 +166,6 @@ function validatePngIhdrMethods(compression: number, filter: number, interlace: 
 }
 
 function validatePngChunkChain(buffer: Buffer): void {
-  // First chunk after the signature is IHDR (already validated by the caller).
-  // Walk subsequent chunks, requiring exactly one IEND that terminates the
-  // buffer. Reject duplicate IHDR chunks.
   let i = PNG_FIRST_CHUNK_END
   while (i + PNG_CHUNK_OVERHEAD <= buffer.length) {
     const chunkDataLength = buffer.readUInt32BE(i)
@@ -196,11 +176,6 @@ function validatePngChunkChain(buffer: Buffer): void {
       throw new Error('Malformed PNG: duplicate IHDR chunk')
     }
     if (bufferEqualsAt(buffer, i + 4, PNG_IEND_BYTES)) {
-      // IEND has zero-length data per ISO/IEC 15948. Validate both the
-      // declared length AND the chunk footprint: a file that declares a
-      // non-zero IEND length but only contains the 12-byte footprint would
-      // otherwise pass us while strict readers reject (they expect more
-      // bytes for IEND data + CRC).
       if (chunkDataLength !== 0) {
         throw new Error('Malformed PNG: IEND chunk must have zero length')
       }
@@ -209,7 +184,6 @@ function validatePngChunkChain(buffer: Buffer): void {
       }
       return
     }
-    // Advance past this chunk: length(4) + type(4) + data(N) + crc(4).
     i += PNG_CHUNK_OVERHEAD + chunkDataLength
   }
   throw new Error('Malformed PNG: missing IEND chunk')
@@ -220,8 +194,6 @@ function isJpeg(buffer: Buffer): boolean {
 }
 
 function readJpegMetadata(buffer: Buffer): ImageMetadata {
-  // The buffer must be terminated by an EOI marker (FF D9). This rejects
-  // truncated JPEGs and trailing-data polyglots.
   if (
     buffer.length < 4 ||
     buffer[buffer.length - 2] !== JPEG_EOI_BYTE_1 ||
@@ -229,10 +201,6 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
   ) {
     throw new Error('Malformed JPEG: missing EOI marker')
   }
-  // JPEG is a chain of 0xFF-prefixed segments. Dimensions live in any of the
-  // SOFn (Start Of Frame) segments — markers 0xC0..0xCF except 0xC4 (DHT),
-  // 0xC8 (JPG, reserved), and 0xCC (DAC). The SOFn payload reads up to
-  // buffer[i + 8], so we need `i + 8 < buffer.length`.
   let i = 2
   while (i < buffer.length - 8) {
     if (buffer[i] !== 0xff) {
@@ -240,38 +208,25 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
       continue
     }
     const marker = buffer[i + 1]
-    // Skip fill bytes (0xFF padding before a real marker).
     if (marker === 0x00 || marker === 0xff) {
       i++
       continue
     }
-    // Standalone markers have no length field. Advance past the marker only
-    // so we don't read the next two bytes as a bogus segment length and
-    // desynchronise the parser. TEM=0x01, RST0..7=0xD0..0xD7, SOI=0xD8,
-    // EOI=0xD9.
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
       i += 2
       continue
     }
-    // SOS (Start Of Scan) marks the boundary between marker stream and
-    // entropy-coded image data. SOFn must appear before SOS in any valid
-    // JPEG; if we hit SOS without one, stop scanning rather than walk
-    // entropy data hunting for a 0xFF marker (which would be a false
-    // positive on improperly stuffed bytes).
     if (marker === 0xda) {
       break
     }
     const isStartOfFrame = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
     if (isStartOfFrame) {
-      // SOFn payload: [length:2][precision:1][height:2][width:2][...]
       return {
         format: 'jpeg',
         height: buffer.readUInt16BE(i + 5),
         width: buffer.readUInt16BE(i + 7)
       }
     }
-    // Loop invariant `i < buffer.length - 8` guarantees i+3 is in bounds,
-    // so the segment-length read below is always safe.
     const segmentLength = buffer.readUInt16BE(i + 2)
     if (segmentLength < 2) break
     i += 2 + segmentLength
@@ -280,23 +235,15 @@ function readJpegMetadata(buffer: Buffer): ImageMetadata {
 }
 
 function isWebp(buffer: Buffer): boolean {
-  // RIFF[4 bytes file size]WEBP[4 bytes variant identifier]
   return buffer.length >= 16 && bufferEqualsAt(buffer, 0, WEBP_RIFF_BYTES) && bufferEqualsAt(buffer, 8, WEBP_WEBP_BYTES)
 }
 
 function readWebpMetadata(buffer: Buffer): ImageMetadata {
-  // The RIFF chunk size at bytes 4-7 covers everything after the size field
-  // itself, i.e. exactly `buffer.length - 8` for a well-formed file. A
-  // mismatch indicates truncation or trailing data injection.
   const declaredRiffSize = buffer.readUInt32LE(4)
   if (declaredRiffSize !== buffer.length - 8) {
     throw new Error('Malformed WebP: RIFF chunk size does not match buffer length')
   }
-  // After "WEBP" comes a sub-chunk identifier ("VP8 ", "VP8L", or "VP8X")
-  // and dimensions are encoded slightly differently per variant.
   if (bufferEqualsAt(buffer, 12, WEBP_VP8_BYTES)) {
-    // Lossy: width/height are at bytes 26-29 as 14-bit little-endian values,
-    // preceded by the mandatory 3-byte VP8 keyframe sync code at bytes 23-25.
     if (buffer.length < 30) {
       throw new Error('Malformed WebP: VP8 chunk truncated')
     }
@@ -311,13 +258,10 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
     }
   }
   if (bufferEqualsAt(buffer, 12, WEBP_VP8L_BYTES)) {
-    // Lossless: width-1 and height-1 are packed into bytes 21-24.
     if (buffer.length < 25) {
       throw new Error('Malformed WebP: VP8L chunk truncated')
     }
     assertWebpSimpleSubChunkSize(buffer, 'VP8L')
-    // VP8L spec mandates a 1-byte signature (0x2F) immediately after the
-    // 8-byte chunk header, before the packed dimensions.
     if (buffer[20] !== 0x2f) {
       throw new Error('Malformed WebP: invalid VP8L signature byte')
     }
@@ -332,12 +276,9 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
     }
   }
   if (bufferEqualsAt(buffer, 12, WEBP_VP8X_BYTES)) {
-    // Extended: width-1 and height-1 as 24-bit little-endian at bytes 24-29.
     if (buffer.length < 30) {
       throw new Error('Malformed WebP: VP8X chunk truncated')
     }
-    // VP8X canvas info is always exactly 10 bytes; trailing chunks (ICCP,
-    // ANIM, …) are accounted for by the outer RIFF size only.
     if (buffer.readUInt32LE(16) !== 10) {
       throw new Error('Malformed WebP: VP8X chunk size must be 10')
     }
@@ -347,9 +288,6 @@ function readWebpMetadata(buffer: Buffer): ImageMetadata {
       height: 1 + buffer.readUIntLE(27, 3)
     }
   }
-  // Read the variant bytes for the error message via latin1 (preserves all
-  // byte values 0x00-0xFF) and then sanitise non-printable characters so we
-  // can't smuggle log lines through high-bit or control bytes.
   throw new Error(`Malformed WebP: unknown variant '${sanitiseForLog(buffer.toString('latin1', 12, 16))}'`)
 }
 
@@ -382,18 +320,13 @@ function sanitiseForLog(value: string): string {
 }
 
 function isGif(buffer: Buffer): boolean {
-  // Minimum legal GIF89a is signature(6) + LSD(7) + trailer(1) = 14 bytes.
   return buffer.length >= 14 && (bufferEqualsAt(buffer, 0, GIF87A_BYTES) || bufferEqualsAt(buffer, 0, GIF89A_BYTES))
 }
 
 function readGifMetadata(buffer: Buffer): ImageMetadata {
-  // Per the GIF89a spec the file must end with a 0x3B trailer byte. Rejecting
-  // missing trailers brings GIF in line with the PNG (IEND) and JPEG (EOI)
-  // termination checks and catches truncated / trailing-data polyglots.
   if (buffer[buffer.length - 1] !== 0x3b) {
     throw new Error('Malformed GIF: missing trailer byte')
   }
-  // Logical screen descriptor: width at bytes 6-7, height at 8-9, little-endian.
   return {
     format: 'gif',
     width: buffer.readUInt16LE(6),
@@ -404,34 +337,22 @@ function readGifMetadata(buffer: Buffer): ImageMetadata {
 const BMP_BITMAPCOREHEADER_SIZE = 12
 
 function isBmp(buffer: Buffer): boolean {
-  // 14-byte BITMAPFILEHEADER + at least the 4-byte DIB header size field, plus
-  // enough room to read the smallest DIB header's width/height (BITMAPCOREHEADER
-  // ends at byte 21; everything else extends to 25).
   return buffer.length >= 22 && buffer[0] === 0x42 && buffer[1] === 0x4d
 }
 
 function readBmpMetadata(buffer: Buffer): ImageMetadata {
-  // BITMAPFILEHEADER bytes 2-5 store the total file size in bytes, including
-  // the headers. A mismatch indicates truncation or trailing data injection.
   const declaredFileSize = buffer.readUInt32LE(2)
   if (declaredFileSize !== buffer.length) {
     throw new Error('Malformed BMP: file size header does not match buffer length')
   }
   const dibHeaderSize = buffer.readUInt32LE(14)
   if (dibHeaderSize === BMP_BITMAPCOREHEADER_SIZE) {
-    // BITMAPCOREHEADER (OS/2 v1): 16-bit width and height at offsets 18-19 and
-    // 20-21. Negative heights are not defined for this header.
     return {
       format: 'bmp',
       width: buffer.readUInt16LE(18),
       height: buffer.readUInt16LE(20)
     }
   }
-  // BITMAPINFOHEADER and its extended variants (40, 52, 56, 108, 124 bytes).
-  // Width is signed int32 LE at 18-21, height is signed int32 LE at 22-25.
-  // A negative height encodes a top-down DIB; absolute value is the pixel
-  // height. A negative width is illegal per spec — assertPositiveDimensions
-  // enforces that on the way out.
   if (buffer.length < 26) {
     throw new Error('Malformed BMP: BITMAPINFOHEADER truncated')
   }

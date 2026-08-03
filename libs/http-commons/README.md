@@ -10,7 +10,7 @@ pnpm add @dcl/http-commons
 
 ### Prerequisites
 
-- **Node.js**: `>=22.0.0`
+- **Node.js**: `>=24.0.0`
 - Peer-style usage with `@well-known-components/interfaces` (already a dependency)
 
 ## Errors

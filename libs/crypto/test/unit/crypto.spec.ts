@@ -1,8 +1,8 @@
-import { hexToBytes } from 'eth-connect'
-import { keccak256 } from 'ethereum-cryptography/keccak'
-import { bytesToHex, utf8ToBytes } from 'ethereum-cryptography/utils'
+import { keccak_256 } from '@noble/hashes/sha3.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { AuthLinkType, Authenticator } from '../../src'
 import { createUnsafeIdentity, ethSign, recoverAddressFromEthSignature, recoverPublicKey, sign } from '../../src/crypto'
+import { hexToBytes } from '../../src/eth/hex'
 import type { AuthChain } from '../../src'
 import type { AuthIdentity, IdentityType } from '../../src/types'
 
@@ -22,7 +22,7 @@ describe('Crypto utils', () => {
 
     beforeEach(() => {
       identity = createUnsafeIdentity()
-      hash = keccak256(utf8ToBytes('test'))
+      hash = keccak_256(utf8ToBytes('test'))
       signature = sign(hexToBytes(identity.privateKey), hash)
       recoveredPub = recoverPublicKey(hexToBytes(signature), hash)
     })
@@ -77,8 +77,6 @@ describe('Crypto utils', () => {
   })
 
   describe('when signing and recovering addresses with static test vectors', () => {
-    // Static vectors produced by the original implementation. They lock in
-    // signature output and address recovery against future changes.
     const testVectors: readonly TestVector[] = [
       {
         address: '0xEB014f8c8B418Db6b45774c326A0E64C78914dC0',

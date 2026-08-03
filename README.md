@@ -1,188 +1,56 @@
 # Core Libraries
 
-A monorepo containing reusable core libraries for the DCL ecosystem.
+A monorepo of reusable core libraries for the DCL ecosystem, managed with pnpm workspaces.
 
-## 📦 Project Structure
+## Libraries
 
-This repository is organized as a monorepo using pnpm workspaces with the following structure:
+All packages live in `libs/` and are published to npm.
 
-```
-core-libs/
-├── libs/
-│   ├── http-commons/        # Common middlewares and utils for HTTP Servers
-│   ├── crypto/              # Crypto auth primitives for Decentraland
-│   ├── crypto-middleware/   # Multi-framework authentication middleware for Decentraland signed requests
-│   ├── crypto-fetch/        # fetch wrapper that signs requests with a Decentraland Identity
-│   ├── hashing/             # Hashing functions for Decentraland Content Identifiers
-│   ├── content-validator/   # Catalyst content validations
-│   ├── urn-resolver/        # URN resolver for Decentraland assets
-│   ├── single-sign-on-client/ # localStorage-backed Decentraland identity store
-```
+| Package | Directory | Description |
+| --- | --- | --- |
+| `@dcl/http-commons` | `http-commons` | Middlewares and utilities for HTTP servers |
+| `@dcl/crypto` | `crypto` | Crypto auth primitives: `Authenticator`, signature validation, auth-chain helpers |
+| `@dcl/crypto-middleware` | `crypto-middleware` | Auth middleware for signed requests, with Express, Koa and Well-Known Components adapters |
+| `decentraland-crypto-fetch` | `crypto-fetch` | `fetch` wrapper that signs requests with a Decentraland Identity |
+| `@dcl/hashing` | `hashing` | Hashing functions for Decentraland Content Identifiers |
+| `@dcl/content-validator` | `content-validator` | Catalyst content validations for deployments |
+| `@dcl/urn-resolver` | `urn-resolver` | URN resolver for Decentraland assets |
+| `@dcl/single-sign-on-client` | `single-sign-on-client` | `localStorage`-backed identity store, scoped to the current origin |
 
-## 🚀 Libraries
+Each package has its own README with usage details.
 
-### HTTP Server Commons
+## Development
 
-- **HTTP Commons** (`@dcl/http-commons`) - Middlewares and utilities for HTTP Servers
-
-### Crypto
-
-- **Crypto** (`@dcl/crypto`) - Crypto auth primitives for Decentraland: `Authenticator`, signature validation, and auth-chain helpers
-
-### Crypto Middleware
-
-- **Crypto Middleware** (`@dcl/crypto-middleware`) - Authentication middleware for Decentraland signed requests with Express, Koa, and Well-Known Components adapters
-
-### Crypto Fetch
-
-- **Crypto Fetch** (`decentraland-crypto-fetch`) - `fetch` wrapper that signs requests with a Decentraland Identity
-
-### Hashing
-
-- **Hashing** (`@dcl/hashing`) - Hashing functions to calculate Decentraland Content Identifiers
-
-### Content Validator
-
-- **Content Validator** (`@dcl/content-validator`) - Catalyst content validations for Decentraland deployments
-
-### URN Resolver
-
-- **URN Resolver** (`@dcl/urn-resolver`) - URN resolver for Decentraland assets
-
-### Single Sign On Client
-
-- **Single Sign On Client** (`@dcl/single-sign-on-client`) - `localStorage`-backed store for a Decentraland identity, scoped to the current origin
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Node.js >= 22.0.0
-- pnpm >= 10.0.0
-
-### Installation
+Requires Node.js >= 24 and pnpm >= 11.
 
 ```bash
-# Install dependencies
 pnpm install
+pnpm build     # build all packages
+pnpm test      # test all packages
+pnpm lint      # lint all packages
+pnpm dev       # watch mode
+pnpm clean     # remove build artifacts
 ```
 
-### Available Scripts
+To work on one package: `cd libs/<name> && pnpm test`.
 
-```bash
-# Build all packages
-pnpm build
+Packages build to dual ESM (`.mjs`) and CommonJS (`.js`) output behind an `exports` map.
 
-# Run tests for all packages
-pnpm test
+## Configuration
 
-# Start development mode (watch mode)
-pnpm dev
+Shared configuration lives at the repo root and is extended per package:
 
-# Clean build artifacts
-pnpm clean
+- `tsconfig.base.json` — TypeScript settings (strict, ES2024)
+- `jest.preset.js` — Jest + ts-jest setup
+- `eslint.config.js` — ESLint flat config for the whole workspace
 
-# Lint all packages
-pnpm lint
-```
+## Publishing
 
-### Package Management
+Version management and npm publishing use [Changesets](https://github.com/changesets/changesets).
+Every PR that changes a package **must** include a changeset — CI enforces this.
 
-This project uses [Changesets](https://github.com/changesets/changesets) for version management:
-
-```bash
-# Create a new changeset
-pnpm changeset
-
-# Version packages based on changesets
-pnpm version-packages
-
-# Build and publish packages
-pnpm release
-```
-
-## 📚 Testing
-
-Each library includes comprehensive test suites using Jest. Run tests with:
-
-```bash
-# Run all tests
-pnpm test
-
-# Run tests for a specific library
-cd libs/http-commons && pnpm test
-```
-
-## 🔧 Configuration
-
-### TypeScript
-
-All packages use TypeScript with strict configuration. TypeScript configuration is inherited from the root `tsconfig.json` and can be extended in individual packages.
-
-### Jest
-
-Testing is configured with Jest and `ts-jest` for TypeScript support. The configuration is centralized in the root `jest.config.js`.
-
-## 📦 Publishing
-
-This project uses [Changesets](https://github.com/changesets/changesets) for automated version management and publishing to npm:
-
-- `@dcl/http-commons`
-- `@dcl/crypto`
-- `@dcl/crypto-middleware`
-- `decentraland-crypto-fetch`
-- `@dcl/hashing`
-- `@dcl/content-validator`
-- `@dcl/urn-resolver`
-- `@dcl/single-sign-on-client`
-
-### Publishing Workflow
-
-Every pull request that introduces changes to any package **must** include a changeset file that describes the changes and their semantic versioning impact.
-
-#### Step 1: Create a Changeset
-
-When making changes to any package, run the changeset command to create a changeset file:
-
-```bash
-pnpm changeset
-```
-
-This interactive command will:
-
-- Ask you to select which packages have changed
-- Prompt you to choose the version bump type (major, minor, or patch)
-- Request a summary of the changes for the changelog
-
-The command creates a new file in the `.changeset/` directory with your change description.
-
-#### Step 2: Commit and Submit PR
-
-Include the generated changeset file in your PR:
-
-```bash
-git add .changeset/
-git commit -m "chore: Add changeset for [your changes]"
-```
-
-#### Step 3: Merge PR
-
-After peer review and approval, merge your PR. The changeset CI will automatically:
-
-- Detect the merged changeset
-- Create a new "Version Packages" PR with:
-  - Updated version numbers in `package.json` files
-  - Generated changelogs for each affected package
-  - Consumed changeset files (they'll be deleted)
-
-#### Step 4: Release
-
-Merge the "Version Packages" PR to trigger the automated publishing process:
-
-- Packages are built and published to npm
-- Git tags are created for the new versions
-- GitHub releases are generated
-
-## 🔗 Related
-
-- [Changesets](https://github.com/changesets/changesets) - Version management tool
+1. Run `pnpm changeset`, select the changed packages, pick the bump type (major/minor/patch),
+   and write a summary. This writes a file to `.changeset/`.
+2. Commit that file with your PR.
+3. On merge, CI opens a "Version Packages" PR with updated versions and generated changelogs.
+4. Merging that PR builds and publishes to npm, creates git tags, and generates GitHub releases.

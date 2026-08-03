@@ -27,7 +27,6 @@ Decentraland entity deployment validation library for Catalyst servers. Contains
   - [Project Structure](#project-structure)
   - [External Dependencies](#external-dependencies)
   - [Versioning and Publishing](#versioning-and-publishing)
-  - [AI Agent Context](#ai-agent-context)
 
 ## Features
 
@@ -132,8 +131,7 @@ The library supports two access validation strategies:
 Direct blockchain queries for ownership verification:
 
 ```typescript
-import { createOnChainAccessCheckValidateFns } from '@dcl/content-validator/dist/validations/access/on-chain'
-import { createOnChainClient } from '@dcl/content-validator/dist/validations/access/on-chain/client'
+import { createOnChainAccessCheckValidateFns, createOnChainClient } from '@dcl/content-validator'
 
 const validateFns = createOnChainAccessCheckValidateFns({
   logs,
@@ -149,8 +147,7 @@ const validateFns = createOnChainAccessCheckValidateFns({
 Uses The Graph for ownership queries (more efficient for bulk queries):
 
 ```typescript
-import { createSubgraphAccessCheckValidateFns } from '@dcl/content-validator/dist/validations/access/subgraph'
-import { createTheGraphClient } from '@dcl/content-validator/dist/validations/access/subgraph/the-graph-client'
+import { createSubgraphAccessCheckValidateFns, createTheGraphClient } from '@dcl/content-validator'
 
 const validateFns = createSubgraphAccessCheckValidateFns({
   logs,
@@ -232,7 +229,3 @@ src/
 Versions are handled manually using GitHub releases and semver.
 
 Main branch is automatically published to the `@next` dist tag to test integrations before final releases happen.
-
-## AI Agent Context
-
-For detailed AI Agent context including service purpose, key capabilities, technology stack, and validation details, see [docs/ai-agent-context.md](./docs/ai-agent-context.md).

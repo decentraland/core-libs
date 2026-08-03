@@ -121,7 +121,6 @@ export const createTheGraphClient = (
 
     const urnsToQuery = urnsToCheck.map((urn) => {
       if (urn.type === 'blockchain-collection-v1-item' || urn.type === 'blockchain-collection-v2-item') {
-        // Urns that need to be split into urn and tokenId
         const { assetUrn } = getTokenIdAndAssetUrn(urn.urn)
         return assetUrn
       } else {
@@ -184,7 +183,7 @@ export const createTheGraphClient = (
         }
 
         return notOwned.length > 0 ? permissionError(notOwned) : permissionOk()
-      } catch (error) {
+      } catch {
         logger.error(`Error retrieving items owned by address ${ethAddress} at block ${blocks.blockNumberAtDeployment}`)
         return permissionError()
       }
@@ -233,10 +232,6 @@ export const createTheGraphClient = (
       }
     }
 
-    /*
-     * This mimics original behavior of looking up to 8 seconds after the entity timestamp
-     * and up to 5 minutes and 7 seconds before
-     */
     const timestampSec = Math.ceil(timestamp / 1000) + 8
     const timestamp5MinAgo = timestampSec - 60 * 5 - 7
 

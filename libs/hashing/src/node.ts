@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha256'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { CID } from 'multiformats/cid'
 import { create } from 'multiformats/hashes/digest'
 import { CHUNK_SIZE_BYTES, MAX_CHILDREN_PER_NODE, hashV1WithLayout } from './_layout'

@@ -1,17 +1,12 @@
 import { encode, prepare } from '@ipld/dag-pb'
-import { sha256 } from '@noble/hashes/sha256'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { UnixFS } from 'ipfs-unixfs'
 import { CID } from 'multiformats/cid'
 import { create } from 'multiformats/hashes/digest'
 import type { PBLink } from '@ipld/dag-pb'
 
-// Local alias kept structurally identical to `LayoutInput` in ./node so the
-// public type lives only in node.ts and this file's emitted .d.ts has no
-// cross-file references (it's only generated for the test-helper bundle).
 type LayoutInput = AsyncGenerator<Uint8Array> | AsyncIterable<Uint8Array> | Uint8Array
 
-// Matches the defaults of ipfs-unixfs-importer's balanced layout so hashes are
-// bit-compatible: fixed-size 262144-byte chunks, up to 174 children per node.
 export const CHUNK_SIZE_BYTES = 262_144
 export const MAX_CHILDREN_PER_NODE = 174
 
@@ -114,10 +109,6 @@ async function* chunksFromStream(content: AsyncIterable<Uint8Array>, chunkSize: 
   }
 }
 
-// Streaming balanced-tree builder. Mirrors the recursive batched algorithm used
-// by ipfs-unixfs-importer's balanced layout, but folds completed levels into
-// parents on the fly so memory stays bounded by tree depth × maxChildrenPerNode
-// instead of the total number of leaves.
 class BalancedTreeBuilder {
   private readonly levels: DagNode[][] = [[]]
   private leafCount = 0
@@ -147,13 +138,6 @@ class BalancedTreeBuilder {
         continue
       }
 
-      // The topmost level with a single node is already a complete root
-      // (e.g. all leaves fit under one balanced subtree, or stragglers were
-      // promoted up to it). Mirrors ipfs-unixfs-importer's "return roots[0]
-      // when roots.length === 1" guard, which avoids wrapping a single node
-      // in a redundant unary parent. Lower levels with a single node still
-      // get wrapped so the importer's "promote lone straggler up the tree"
-      // shape is preserved.
       const isTopmost = i === this.levels.length - 1
       carry = isTopmost && level.length === 1 ? level[0] : buildParent(level)
     }

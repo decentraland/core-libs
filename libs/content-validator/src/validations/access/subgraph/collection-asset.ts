@@ -100,7 +100,6 @@ async function hasPermission(
         logger.debug(`The eth address ${ethAddressLowercase} is not part of committee.`)
       }
       const calculateHashes = () => {
-        // Compare both by key and hash
         const compare = (a: { key: string; hash: string }, b: { key: string; hash: string }) => {
           if (a.hash > b.hash) return 1
           else if (a.hash < b.hash) return -1
@@ -122,11 +121,9 @@ async function hasPermission(
     } else {
       const addressHasAccess =
         (permissions.collectionCreator && permissions.collectionCreator === ethAddressLowercase) ||
-        (permissions.collectionManagers && permissions.collectionManagers.includes(ethAddressLowercase)) ||
-        (permissions.itemManagers && permissions.itemManagers.includes(ethAddressLowercase))
+        permissions.collectionManagers?.includes(ethAddressLowercase) ||
+        permissions.itemManagers?.includes(ethAddressLowercase)
 
-      // Deployments to the content server are made after the collection is completed, so that the committee can then approve it.
-      // That's why isCompleted must be true, but isApproved must be false. After the committee approves the wearable, there can't be any more changes
       const isCollectionValid = !permissions.isApproved && permissions.isCompleted
 
       return addressHasAccess && isCollectionValid
@@ -150,9 +147,6 @@ async function checkCollectionAccess(
   try {
     const { blockNumberAtDeployment, blockNumberFiveMinBeforeDeployment } =
       await components.theGraphClient.findBlocksForTimestamp(blocksSubgraph, timestamp)
-    // It could happen that the subgraph hasn't synced yet, so someone who just lost access still managed to make a deployment. The problem would be that when other catalysts perform
-    // the same check, the subgraph might have synced and the deployment is no longer valid. So, in order to prevent inconsistencies between catalysts, we will allow all deployments that
-    // have access now, or had access 5 minutes ago.
 
     const hasPermissionOnBlock = async (blockNumber: number | undefined) =>
       !!blockNumber && (await hasPermission(collectionsSubgraph, collection, itemId, blockNumber, entity, logger))
@@ -178,7 +172,6 @@ export function createV1andV2collectionAssetValidateFn(
     const { externalCalls, subGraphs, logs } = components
     const ethAddress = externalCalls.ownerAddress(deployment.auditInfo)
     const logger = logs.getLogger('collection asset access validation')
-    // L1 or L2 so contractAddress is present
     const collection = asset.contractAddress
     if (!collection) {
       return validationFailed(`Asset is missing a contract address`)
@@ -212,7 +205,6 @@ export function createV1andV2collectionAssetValidateFn(
           `The provided Eth Address '${ethAddress}' does not have access to the following item: (${asset.contractAddress}, ${asset.id})`
         )
 
-      // L1 collections are deployed by Decentraland Address
       const isAllowlistedCollection = asset.uri.toString().startsWith('urn:decentraland:ethereum:collections-v1')
       if (!externalCalls.isAddressOwnedByDecentraland(ethAddress) || !isAllowlistedCollection) {
         return validationFailed(

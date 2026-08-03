@@ -1,5 +1,5 @@
-import { keccak256 } from 'ethereum-cryptography/keccak.js'
-import { toHex } from 'ethereum-cryptography/utils.js'
+import { keccak_256 } from '@noble/hashes/sha3.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 
 /**
  * Calculates the metadata hash. Uses the keys to determine which fields of the metadata object will be used for the result.
@@ -8,8 +8,7 @@ import { toHex } from 'ethereum-cryptography/utils.js'
 export function keccak256Hash(metadata: Record<string, unknown>, keys: string[]): string {
   const partialMetadata = JSON.stringify(pick(metadata, keys))
   const data = new TextEncoder().encode(partialMetadata)
-  const hash = keccak256(data)
-  return toHex(hash)
+  return bytesToHex(keccak_256(data))
 }
 
 const pick = (obj: Record<string, unknown>, keys: string[]) =>

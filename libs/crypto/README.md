@@ -8,6 +8,22 @@ Crypto auth for Decentraland. Provides `Authenticator` utilities, signature vali
 pnpm add @dcl/crypto
 ```
 
+Requires Node.js >= 24.
+
+## Entry points
+
+```typescript
+// Authenticator, auth-chain helpers, signature validation, types
+import { Authenticator } from '@dcl/crypto'
+
+// Lower-level primitives: sign, ethSign, recoverPublicKey,
+// recoverAddressFromEthSignature, computeAddress, createUnsafeIdentity
+import { ethSign, recoverAddressFromEthSignature } from '@dcl/crypto/crypto'
+```
+
+`@dcl/crypto/crypto` replaces the previously reachable deep path
+`@dcl/crypto/dist/crypto`, which the package's `exports` map no longer resolves.
+
 ## Create a new Identity using Ethers
 
 ```typescript

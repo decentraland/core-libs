@@ -1,7 +1,5 @@
-import { toBigNumber } from 'eth-connect'
-import type { BlockIdentifier } from 'eth-connect'
-// eslint-disable-next-line import/no-named-as-default
-import type RequestManager from 'eth-connect'
+import { toNumber } from '../eth/hex'
+import type { BlockIdentifier, EthClient } from '../eth/rpc'
 
 export interface SavedBlock {
   number: number
@@ -22,7 +20,7 @@ export default class Blocks {
   firstTimestamp?: number
 
   constructor(
-    private requestManager: RequestManager,
+    private requestManager: EthClient,
     save = true
   ) {
     this.checkedBlocks = {}
@@ -60,7 +58,7 @@ export default class Blocks {
     const latestCached = this.savedBlocks['latest']
     if (dateInSeconds >= now || (latestCached && dateInSeconds > latestCached.timestamp)) {
       return {
-        block: toBigNumber(await this.requestManager.eth_blockNumber()).toNumber(),
+        block: toNumber(await this.requestManager.eth_blockNumber()),
         timestamp: dateInSeconds
       }
     }
@@ -144,8 +142,8 @@ export default class Blocks {
     if (!this.saveBlocks) {
       const fetchedBlock = await this.requestManager.eth_getBlockByNumber(block, false)
       return {
-        number: toBigNumber(fetchedBlock.number).toNumber(),
-        timestamp: toBigNumber(fetchedBlock.timestamp).toNumber()
+        number: toNumber(fetchedBlock.number),
+        timestamp: toNumber(fetchedBlock.timestamp)
       }
     }
 
@@ -162,8 +160,8 @@ export default class Blocks {
     const { timestamp } = await this.requestManager.eth_getBlockByNumber(block, false)
 
     this.savedBlocks[key] = {
-      number: toBigNumber(block === 'latest' ? await this.requestManager.eth_blockNumber() : block).toNumber(),
-      timestamp: toBigNumber(timestamp).toNumber()
+      number: toNumber(block === 'latest' ? await this.requestManager.eth_blockNumber() : block),
+      timestamp: toNumber(timestamp)
     }
 
     this.requests++

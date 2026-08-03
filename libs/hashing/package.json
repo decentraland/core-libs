@@ -9,35 +9,56 @@
   "typings": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     },
     "./node": {
-      "types": "./dist/node.d.ts",
-      "import": "./dist/node.mjs",
-      "require": "./dist/node.js"
+      "import": {
+        "types": "./dist/node.d.mts",
+        "default": "./dist/node.mjs"
+      },
+      "require": {
+        "types": "./dist/node.d.ts",
+        "default": "./dist/node.js"
+      }
     },
     "./ADR32": {
-      "types": "./dist/ADR32.d.ts",
-      "import": "./dist/ADR32.mjs",
-      "require": "./dist/ADR32.js"
+      "import": {
+        "types": "./dist/ADR32.d.mts",
+        "default": "./dist/ADR32.mjs"
+      },
+      "require": {
+        "types": "./dist/ADR32.d.ts",
+        "default": "./dist/ADR32.js"
+      }
     },
     "./ADR62": {
-      "types": "./dist/ADR62.d.ts",
-      "import": "./dist/ADR62.mjs",
-      "require": "./dist/ADR62.js"
+      "import": {
+        "types": "./dist/ADR62.d.mts",
+        "default": "./dist/ADR62.mjs"
+      },
+      "require": {
+        "types": "./dist/ADR62.d.ts",
+        "default": "./dist/ADR62.js"
+      }
     }
   },
   "files": [
     "dist/index.*",
     "dist/node.*",
     "dist/ADR32.*",
-    "dist/ADR62.*"
+    "dist/ADR62.*",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --emitDeclarationOnly && rm -f dist/_layout.d.ts dist/_layout.d.ts.map && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=node --format=cjs --outdir=dist --external:node:* --sourcemap && esbuild src/index.ts src/node.ts src/ADR32.ts src/ADR62.ts --bundle --platform=neutral --format=esm --outdir=dist --out-extension:.js=.mjs --packages=external --sourcemap",
-    "dev": "tsc --watch",
+    "build": "node ../../scripts/build-package.mjs",
+    "dev": "node ../../scripts/build-package.mjs --watch",
     "clean": "rm -rf dist",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
@@ -56,20 +77,35 @@
   ],
   "dependencies": {
     "@ipld/dag-pb": "^4.1.5",
-    "@noble/hashes": "^1.8.0",
-    "ethereum-cryptography": "^3.2.0",
+    "@noble/hashes": "^2.2.0",
     "ipfs-unixfs": "^12.0.2",
     "multiformats": "^13.4.2"
   },
   "devDependencies": {
-    "@dcl/eslint-config": "^2.4.3",
+    "@dcl/eslint-config": "^3.1.0",
     "blockstore-core": "^5.0.4",
     "esbuild": "^0.27.0",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.5",
     "ipfs-unixfs-importer": "^15.4.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
+  },
+  "buildConfig": {
+    "bundleCjsDependencies": true
+  },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "./dist/node.d.ts"
+      ],
+      "ADR32": [
+        "./dist/ADR32.d.ts"
+      ],
+      "ADR62": [
+        "./dist/ADR62.d.ts"
+      ]
+    }
   }
 }

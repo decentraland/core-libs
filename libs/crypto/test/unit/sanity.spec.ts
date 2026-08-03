@@ -1,7 +1,8 @@
-import { HTTPProvider, getAddress } from 'eth-connect'
+import { HTTPProvider } from 'eth-connect'
 import fetch from 'node-fetch'
 import { Authenticator } from '../../src/Authenticator'
 import { recoverAddressFromEthSignature } from '../../src/crypto'
+import { getAddress } from '../../src/eth/hex'
 import { AuthLinkType } from '../../src/types'
 import type { AuthChain, IdentityType } from '../../src/types'
 

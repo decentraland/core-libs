@@ -18,7 +18,7 @@ export default function signedFetchFactory(options: SignedFetchFactoryOptions = 
   const fetchImpl = getImplementation(options, 'fetch')
 
   return function signedFetch(input: SignedRequestInfo, init?: SignedRequestInit): Promise<Response> {
-    if (init && init.identity) {
+    if (init?.identity) {
       const { identity, metadata, ...originalInit } = init
 
       if (

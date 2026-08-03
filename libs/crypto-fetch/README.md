@@ -10,7 +10,7 @@ Migrated into the `core-libs` monorepo from the legacy [`decentraland-crypto-fet
 pnpm add decentraland-crypto-fetch
 ```
 
-Requires Node.js >= 22 (uses global `fetch`, `Headers`, `Request` and `URL`).
+Requires Node.js >= 24 (uses global `fetch`, `Headers`, `Request` and `URL`).
 
 ## Usage
 

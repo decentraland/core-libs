@@ -139,7 +139,7 @@ export function createSceneValidateFn({
 
       const variables = {
         estateId,
-        timestamp: Math.floor(timestamp / 1000) // UNIX
+        timestamp: Math.floor(timestamp / 1000)
       }
 
       try {
@@ -202,7 +202,7 @@ export function createSceneValidateFn({
       const variables = {
         x,
         y,
-        timestamp: Math.floor(timestamp / 1000) // UNIX
+        timestamp: Math.floor(timestamp / 1000)
       }
 
       try {
@@ -226,10 +226,6 @@ export function createSceneValidateFn({
       timestamp: Timestamp,
       tokenAddress: EthAddress
     ): Promise<boolean> => {
-      /* You also get access if you received:
-       *   - an authorization with isApproved and type Operator, ApprovalForAll or UpdateManager
-       * at that time
-       */
       const authorizations = await getAuthorizations(
         owner.toLowerCase(),
         ethAddress.toLowerCase(),
@@ -294,12 +290,6 @@ export function createSceneValidateFn({
       ethAddress: EthAddress,
       _externalCalls: ExternalCalls
     ): Promise<boolean> => {
-      /* You get direct access if you were the:
-       *   - owner
-       *   - operator
-       *   - update operator
-       * at that time
-       */
       const parcel = await getParcel(x, y, timestamp)
       if (parcel) {
         const belongsToEstate: boolean =
@@ -360,7 +350,6 @@ export function createSceneValidateFn({
           break
         }
 
-        // Check that the address has access (we check both the present and the 5 min into the past to avoid synchronization issues in the blockchain)
         queue
           .add(async () => {
             if (!controller.signal.aborted) {

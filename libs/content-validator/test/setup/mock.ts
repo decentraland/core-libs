@@ -75,12 +75,10 @@ function buildPngWithDimensions(width: number, height: number): Buffer {
   const ihdrData = Buffer.alloc(13)
   ihdrData.writeUInt32BE(width, 0)
   ihdrData.writeUInt32BE(height, 4)
-  ihdrData.writeUInt8(8, 8) // bit depth
-  ihdrData.writeUInt8(6, 9) // color type: RGBA
-  // bytes 10..12 are compression / filter / interlace methods (all 0)
+  ihdrData.writeUInt8(8, 8)
+  ihdrData.writeUInt8(6, 9)
   const ihdrCrc = Buffer.alloc(4)
   ihdrCrc.writeUInt32BE(crc32(Buffer.concat([ihdrType, ihdrData])), 0)
-  // Empty IEND chunk terminates the PNG: length=0, type="IEND", crc.
   const iendLength = Buffer.alloc(4)
   const iendType = Buffer.from('IEND', 'ascii')
   const iendCrc = Buffer.alloc(4)
@@ -109,15 +107,14 @@ function crc32(buffer: Buffer): number {
 }
 
 function buildJpegWithDimensions(width: number, height: number): Buffer {
-  // Minimal SOI + SOF0 + EOI with width/height encoded into the SOF0 segment.
-  const sof0Length = 17 // standard 3-component SOF0 segment length
+  const sof0Length = 17
   const sof0 = Buffer.alloc(2 + sof0Length)
   sof0.writeUInt8(0xff, 0)
   sof0.writeUInt8(0xc0, 1)
   sof0.writeUInt16BE(sof0Length, 2)
-  sof0.writeUInt8(8, 4) // bit precision
+  sof0.writeUInt8(8, 4)
   sof0.writeUInt16BE(height, 5)
   sof0.writeUInt16BE(width, 7)
-  sof0.writeUInt8(3, 9) // 3 components; remaining bytes left as zeros (placeholder component data)
+  sof0.writeUInt8(3, 9)
   return Buffer.concat([Buffer.from([0xff, 0xd8]), sof0, Buffer.from([0xff, 0xd9])])
 }

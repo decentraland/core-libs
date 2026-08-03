@@ -10,7 +10,7 @@ Consolidation of the legacy [`decentraland-crypto-middleware`](https://github.co
 pnpm add @dcl/crypto-middleware
 ```
 
-Requires Node.js >= 22 (uses global `fetch`).
+Requires Node.js >= 24 (uses global `fetch`).
 
 ## Usage
 

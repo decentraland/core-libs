@@ -3,7 +3,7 @@ import { Emote, Outfits, Profile, Scene, Store, Wearable } from '@dcl/schemas'
 
 interface Params {
   validate: ValidateFunction<Scene | Profile | Wearable | Store | Emote | Outfits>
-  maxSizeInMB: number // in MB
+  maxSizeInMB: number
 }
 
 export const skinMaxSizeInMb = 9

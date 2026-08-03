@@ -39,7 +39,6 @@ const buildPng = (width: number, height: number, options: BuildPngOptions = {}):
 const buildPngChunk = (type: string, data: Buffer): Buffer => {
   const length = Buffer.alloc(4)
   length.writeUInt32BE(data.length, 0)
-  // CRC isn't validated by the reader, so zeros are fine for the test fixture.
   return Buffer.concat([length, Buffer.from(type, 'ascii'), data, Buffer.alloc(4)])
 }
 
@@ -56,15 +55,12 @@ const buildJpeg = (width: number, height: number, marker = 0xc0): Buffer => {
 }
 
 const buildWebpVp8 = (width: number, height: number): Buffer => {
-  // RIFF[size]WEBPVP8 [chunk-size:4][frame-tag:3][sync:3][width:2 LE][height:2 LE]
   const buffer = Buffer.alloc(30)
   buffer.write('RIFF', 0, 'ascii')
   buffer.writeUInt32LE(22, 4)
   buffer.write('WEBP', 8, 'ascii')
   buffer.write('VP8 ', 12, 'ascii')
   buffer.writeUInt32LE(10, 16)
-  // bytes 20-22: frame-tag (left as zeros)
-  // bytes 23-25: VP8 keyframe sync code (mandatory per spec)
   buffer.writeUInt8(0x9d, 23)
   buffer.writeUInt8(0x01, 24)
   buffer.writeUInt8(0x2a, 25)
@@ -74,7 +70,6 @@ const buildWebpVp8 = (width: number, height: number): Buffer => {
 }
 
 const buildWebpVp8l = (width: number, height: number): Buffer => {
-  // RIFF[size]WEBPVP8L[chunk-size:4][signature:1][packed dimensions:4]
   const buffer = Buffer.alloc(25)
   buffer.write('RIFF', 0, 'ascii')
   buffer.writeUInt32LE(17, 4)
@@ -82,21 +77,18 @@ const buildWebpVp8l = (width: number, height: number): Buffer => {
   buffer.write('VP8L', 12, 'ascii')
   buffer.writeUInt32LE(5, 16)
   buffer.writeUInt8(0x2f, 20)
-  // Pack (width-1) into bits 0-13 and (height-1) into bits 14-27.
   const packed = ((width - 1) & 0x3fff) | (((height - 1) & 0x3fff) << 14)
   buffer.writeUInt32LE(packed >>> 0, 21)
   return buffer
 }
 
 const buildWebpVp8x = (width: number, height: number): Buffer => {
-  // RIFF[size]WEBPVP8X[chunk-size:4][flags:1][reserved:3][width-1:3 LE][height-1:3 LE]
   const buffer = Buffer.alloc(30)
   buffer.write('RIFF', 0, 'ascii')
   buffer.writeUInt32LE(22, 4)
   buffer.write('WEBP', 8, 'ascii')
   buffer.write('VP8X', 12, 'ascii')
   buffer.writeUInt32LE(10, 16)
-  // bytes 20..23 are flags + reserved (zeros are fine for the reader)
   buffer.writeUIntLE(width - 1, 24, 3)
   buffer.writeUIntLE(height - 1, 27, 3)
   return buffer
@@ -112,7 +104,6 @@ const buildWebpUnknownVariant = (variant: string): Buffer => {
 }
 
 const buildGif = (width: number, height: number): Buffer => {
-  // 6-byte signature + 7-byte logical screen descriptor + 1-byte trailer.
   const buffer = Buffer.alloc(14)
   buffer.write('GIF89a', 0, 'ascii')
   buffer.writeUInt16LE(width, 6)
@@ -122,18 +113,16 @@ const buildGif = (width: number, height: number): Buffer => {
 }
 
 const buildBmp = (width: number, height: number): Buffer => {
-  // BITMAPFILEHEADER (14 bytes) + BITMAPINFOHEADER (40 bytes).
   const buffer = Buffer.alloc(54)
   buffer.write('BM', 0, 'ascii')
-  buffer.writeUInt32LE(buffer.length, 2) // file size header
-  buffer.writeUInt32LE(40, 14) // DIB header size = BITMAPINFOHEADER
+  buffer.writeUInt32LE(buffer.length, 2)
+  buffer.writeUInt32LE(40, 14)
   buffer.writeInt32LE(width, 18)
   buffer.writeInt32LE(height, 22)
   return buffer
 }
 
 const buildBmpCoreHeader = (width: number, height: number): Buffer => {
-  // BITMAPFILEHEADER (14 bytes) + BITMAPCOREHEADER (12 bytes).
   const buffer = Buffer.alloc(26)
   buffer.write('BM', 0, 'ascii')
   buffer.writeUInt32LE(buffer.length, 2)
@@ -215,7 +204,6 @@ describe('when reading image metadata', () => {
 
   describe('and the PNG IHDR declares a bit depth that is not legal for its color type', () => {
     it('should throw with an invalid-bit-depth message', () => {
-      // Color type 2 (RGB) only allows bit depths 8 and 16; 1 is illegal.
       expect(() => readImageMetadata(buildPng(64, 64, { colorType: 2, bitDepth: 1 }))).toThrow(
         'Malformed PNG: invalid bit depth 1 for color type 2'
       )
@@ -224,9 +212,6 @@ describe('when reading image metadata', () => {
 
   describe('and the PNG buffer contains a chunk whose declared length overflows the buffer', () => {
     it('should reach the end of the chunk chain without finding IEND and throw', () => {
-      // Insert a non-IEND chunk that claims a 2-billion-byte payload (just
-      // under the 2^31-1 spec cap, so the length check passes and the chunk
-      // walker advances past the buffer end).
       const oversize = Buffer.alloc(12)
       oversize.writeUInt32BE(0x7fffffff, 0)
       oversize.write('iTXt', 4, 'ascii')
@@ -262,7 +247,6 @@ describe('when reading image metadata', () => {
 
   describe('and the JPEG buffer has no SOFn marker', () => {
     it('should throw with a malformed-JPEG message', () => {
-      // SOI + APP0 (length 16) + 12 bytes of zero payload + EOI.
       const onlyHeader = Buffer.from([
         0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xd9
       ])
@@ -321,8 +305,6 @@ describe('when reading image metadata', () => {
 
   describe('and the WebP variant identifier contains control bytes', () => {
     it('should sanitise the variant in the error message to avoid log injection', () => {
-      // \n in the variant string would otherwise inject a newline into log
-      // pipelines that interpolate Error messages directly.
       expect(() => readImageMetadata(buildWebpUnknownVariant('A\nB\r'))).toThrow(
         "Malformed WebP: unknown variant 'A?B?'"
       )
@@ -332,7 +314,7 @@ describe('when reading image metadata', () => {
   describe('and the WebP VP8 sub-chunk size does not match the payload length', () => {
     it('should throw with a sub-chunk size mismatch message', () => {
       const tampered = buildWebpVp8(320, 240)
-      tampered.writeUInt32LE(0, 16) // declare a 0-byte VP8 chunk while file claims to hold one
+      tampered.writeUInt32LE(0, 16)
       expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: VP8 chunk size does not match buffer length')
     })
   })
@@ -348,7 +330,7 @@ describe('when reading image metadata', () => {
   describe('and the WebP VP8X sub-chunk size is not 10', () => {
     it('should throw because VP8X canvas info must be exactly 10 bytes', () => {
       const tampered = buildWebpVp8x(1920, 1080)
-      tampered.writeUInt32LE(7, 16) // VP8X spec requires 10 here
+      tampered.writeUInt32LE(7, 16)
       expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: VP8X chunk size must be 10')
     })
   })
@@ -364,9 +346,6 @@ describe('when reading image metadata', () => {
 
   describe('and the buffer is exactly the PNG signature size (24 bytes)', () => {
     it('should reject as unsupported rather than throw a bounds-check RangeError', () => {
-      // A 24-byte buffer with the PNG signature does not contain enough room
-      // to read the bit-depth / color-type fields at offsets 24 and 25. The
-      // reader must reject before attempting those reads.
       const truncated = Buffer.alloc(24)
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(truncated, 0)
       expect(() => readImageMetadata(truncated)).toThrow('Unsupported image format')
@@ -393,8 +372,6 @@ describe('when reading image metadata', () => {
     it('should throw with a truncated-chunk message', () => {
       const truncated = Buffer.alloc(24)
       buildWebpVp8l(64, 48).copy(truncated, 0, 0, 24)
-      // Re-write the RIFF size so the new RIFF-chunk-size check passes and
-      // the per-variant truncation check is the one that fires.
       truncated.writeUInt32LE(truncated.length - 8, 4)
       expect(() => readImageMetadata(truncated)).toThrow('Malformed WebP: VP8L chunk truncated')
     })
@@ -412,7 +389,7 @@ describe('when reading image metadata', () => {
   describe('and the WebP RIFF chunk size does not match the buffer length', () => {
     it('should throw with a RIFF size mismatch message', () => {
       const tampered = buildWebpVp8(320, 240)
-      tampered.writeUInt32LE(999, 4) // wrong declared size
+      tampered.writeUInt32LE(999, 4)
       expect(() => readImageMetadata(tampered)).toThrow('Malformed WebP: RIFF chunk size does not match buffer length')
     })
   })
@@ -492,7 +469,6 @@ describe('when reading image metadata', () => {
 
   describe('and the BMP buffer is a BITMAPINFOHEADER variant truncated below 26 bytes', () => {
     it('should throw with a truncated-header message', () => {
-      // Looks like a BIH (DIB size 40) but the buffer is only 25 bytes.
       const truncated = Buffer.alloc(25)
       truncated.write('BM', 0, 'ascii')
       truncated.writeUInt32LE(truncated.length, 2)
@@ -505,9 +481,6 @@ describe('when reading image metadata', () => {
     let metadata: ReturnType<typeof readImageMetadata>
 
     beforeEach(() => {
-      // SOI + RST0 (standalone, no length field) + SOFn(640x480) + EOI.
-      // If the parser tried to interpret the two bytes after RST0 as a
-      // segment length, it would skip into the SOFn segment and fail.
       const sof = Buffer.alloc(19)
       sof.writeUInt8(0xff, 0)
       sof.writeUInt8(0xc0, 1)
@@ -576,7 +549,7 @@ describe('when reading image metadata', () => {
       const buffer = Buffer.alloc(54)
       buffer.write('BM', 0, 'ascii')
       buffer.writeUInt32LE(buffer.length, 2)
-      buffer.writeUInt32LE(108, 14) // BITMAPV4HEADER size
+      buffer.writeUInt32LE(108, 14)
       buffer.writeInt32LE(640, 18)
       buffer.writeInt32LE(480, 22)
       expect(readImageMetadata(buffer)).toEqual({ format: 'bmp', width: 640, height: 480 })
@@ -670,8 +643,6 @@ describe('when reading image metadata', () => {
     let metadata: ReturnType<typeof readImageMetadata>
 
     beforeEach(() => {
-      // APP0 segment with length 0xFFFF (the maximum) — 2 marker bytes
-      // + 65535 bytes of segment payload (incl. the 2 length bytes themselves).
       const app0 = Buffer.alloc(2 + 65535)
       app0.writeUInt8(0xff, 0)
       app0.writeUInt8(0xe0, 1)
@@ -696,8 +667,6 @@ describe('when reading image metadata', () => {
     let metadata: ReturnType<typeof readImageMetadata>
 
     beforeEach(() => {
-      // 100 APP0 segments, each with the minimum legal length of 2 (just the
-      // length field, no payload).
       const segments: Buffer[] = [Buffer.from([0xff, 0xd8])]
       for (let i = 0; i < 100; i++) {
         const seg = Buffer.alloc(4)
@@ -737,9 +706,6 @@ describe('when reading image metadata', () => {
 
   describe('and a PNG has high-bit bytes that would mask to IHDR via toString(ascii)', () => {
     it('should reject byte-for-byte: 0xC9 0xC8 0xC4 0xD2 is not the same as IHDR', () => {
-      // Buffer.toString('ascii') strips the high bit of each byte, so
-      // [0xC9, 0xC8, 0xC4, 0xD2] would decode as "IHDR" — a parser
-      // differential vs. real PNG readers that compare bytes literally.
       const png = buildPng(64, 64)
       png[12] = 0xc9
       png[13] = 0xc8
@@ -750,8 +716,6 @@ describe('when reading image metadata', () => {
   })
 
   describe('and a PNG chunk type uses high-bit bytes that would mask to IEND', () => {
-    // Build a 12-byte chunk (length + type + crc) whose type bytes
-    // [0xC9, 0xC5, 0xCE, 0xC4] mask to "IEND" via toString('ascii').
     const buildMasqueradeIendChunk = (): Buffer => {
       const chunk = Buffer.alloc(12)
       chunk.writeUInt32BE(0, 0)
@@ -764,7 +728,6 @@ describe('when reading image metadata', () => {
 
     it('should not treat the masqueraded chunk as IEND and should continue walking', () => {
       const png = buildPng(64, 64, { extraChunks: buildMasqueradeIendChunk() })
-      // Real IEND is still present at the end, so the walker should reach it.
       expect(readImageMetadata(png)).toEqual({ format: 'png', width: 64, height: 64 })
     })
 
@@ -776,8 +739,6 @@ describe('when reading image metadata', () => {
 
   describe('and a WebP variant uses high-bit bytes that would mask to VP8/VP8L/VP8X', () => {
     it('should treat 0xD6 0xD0 0xB8 0xA0 as an unknown variant, not as VP8 ', () => {
-      // 'V' = 0x56, 'P' = 0x50, '8' = 0x38, ' ' = 0x20 — adding 0x80 to each
-      // produces bytes that toString('ascii') would decode as "VP8 ".
       const buffer = Buffer.alloc(30)
       buffer.write('RIFF', 0, 'ascii')
       buffer.writeUInt32LE(22, 4)
@@ -786,8 +747,6 @@ describe('when reading image metadata', () => {
       buffer.writeUInt8(0xd0, 13)
       buffer.writeUInt8(0xb8, 14)
       buffer.writeUInt8(0xa0, 15)
-      // Sanitiser replaces non-printable bytes with '?', so the error message
-      // contains '????' rather than the raw bytes.
       expect(() => readImageMetadata(buffer)).toThrow("Malformed WebP: unknown variant '????'")
     })
   })
@@ -795,7 +754,6 @@ describe('when reading image metadata', () => {
   describe('and a buffer has high-bit bytes that would mask to the RIFF/WEBP magic', () => {
     it('should not be detected as WebP', () => {
       const buffer = Buffer.alloc(30)
-      // 0xD2 0xC9 0xC6 0xC6 -> "RIFF" via toString('ascii'); 0xD7 0xC5 0xC2 0xD0 -> "WEBP".
       buffer.writeUInt8(0xd2, 0)
       buffer.writeUInt8(0xc9, 1)
       buffer.writeUInt8(0xc6, 2)
@@ -812,8 +770,6 @@ describe('when reading image metadata', () => {
 
   describe('and a buffer has high-bit bytes that would mask to the GIF89a signature', () => {
     it('should not be detected as a GIF', () => {
-      // 'G' 0x47 + 0x80 = 0xC7; 'I' 0x49 + 0x80 = 0xC9; 'F' 0x46 + 0x80 = 0xC6;
-      // '8' 0x38 + 0x80 = 0xB8; '9' 0x39 + 0x80 = 0xB9; 'a' 0x61 + 0x80 = 0xE1.
       const buffer = Buffer.alloc(14)
       buffer.writeUInt8(0xc7, 0)
       buffer.writeUInt8(0xc9, 1)
@@ -892,8 +848,6 @@ describe('when reading image metadata', () => {
 
   describe('and a JPEG hits SOS without a SOFn marker', () => {
     it('should throw because SOFn must precede SOS in any valid JPEG', () => {
-      // SOI + APP0 + SOS + (entropy stub) + EOI. The parser must not walk
-      // entropy data hunting for SOFn — break out at SOS.
       const buffer = Buffer.from([
         0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xda, 0x00, 0x08, 0, 0, 0, 0, 0,
         0, 0, 0, 0xff, 0xd9
@@ -904,10 +858,6 @@ describe('when reading image metadata', () => {
 
   describe('and a PNG IEND chunk declares a non-zero length', () => {
     it('should reject IEND with declared length 5 even when the chunk footprint is correct', () => {
-      // Construct a PNG with IEND header that declares 5 bytes of data, but
-      // whose total chunk footprint is still 12 bytes (length + type + crc).
-      // A laxer reader that only checks the footprint would silently accept
-      // this; strict readers fail when reading the missing 5+4 bytes.
       const fakeIend = Buffer.alloc(12)
       fakeIend.writeUInt32BE(5, 0)
       fakeIend.write('IEND', 4, 'ascii')

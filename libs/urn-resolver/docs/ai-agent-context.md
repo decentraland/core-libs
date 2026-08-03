@@ -22,9 +22,9 @@ Library/package consumed by other projects (synchronous and asynchronous functio
 **Technology Stack:**
 
 - Language: TypeScript
-- Runtime: Node.js 18+
+- Runtime: Node.js 24+
 - Parsing: Custom URN parsing logic with URL API support
-- Build: TypeScript compiler (tsc)
+- Build: esbuild (dual ESM/CJS), tsc for declarations
 - Testing: Jest
 
 **External Dependencies:**

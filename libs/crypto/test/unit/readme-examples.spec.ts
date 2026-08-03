@@ -1,9 +1,9 @@
-import { hexToBytes } from 'eth-connect'
+import { keccak_256 } from '@noble/hashes/sha3.js'
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js'
 import { createIdentity } from 'eth-crypto'
-import { keccak256 } from 'ethereum-cryptography/keccak'
-import { bytesToHex, utf8ToBytes } from 'ethereum-cryptography/utils'
 import { Authenticator } from '../../src/Authenticator'
 import { ethSign, recoverAddressFromEthSignature, recoverPublicKey, sign } from '../../src/crypto'
+import { hexToBytes } from '../../src/eth/hex'
 import type { AuthChain, AuthIdentity, IdentityType } from '../../src/types'
 
 describe('README examples', () => {
@@ -15,7 +15,7 @@ describe('README examples', () => {
 
     beforeEach(() => {
       identity = createIdentity()
-      hash = keccak256(utf8ToBytes('test'))
+      hash = keccak_256(utf8ToBytes('test'))
       signature = sign(hexToBytes(identity.privateKey), hash)
       recoveredPub = recoverPublicKey(hexToBytes(signature), hash)
     })

@@ -42,8 +42,6 @@ export async function splitItemsURNsByTypeAndNetwork(urnsToSplit: string[]): Pro
       continue
     }
 
-    // check if it is a L1 or L2 asset
-    // 'ethereum' is included since L1 Mainnet assets include it instead of 'mainnet'
     if (![...L1_NETWORKS, 'ethereum'].includes(asset.network) && !L2_NETWORKS.includes(asset.network)) {
       continue
     }
@@ -79,7 +77,7 @@ export function getThirdPartyId(asset: BlockchainCollectionThirdParty): string {
 
 export function toHexBuffer(value: string): Buffer {
   if (value.startsWith('0x')) {
-    return Buffer.from(value.substring(2), 'hex') // removing first 2 characters (0x)
+    return Buffer.from(value.substring(2), 'hex')
   }
   return Buffer.from(value, 'hex')
 }
