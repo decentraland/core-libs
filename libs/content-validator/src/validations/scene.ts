@@ -73,8 +73,6 @@ export const embeddedThumbnail = validateAfterADR236(async function validateFn(
   return OK
 })
 
-const PARCEL_COORDINATE_PATTERN = /^(?:0|-?[1-9]\d*),(?:0|-?[1-9]\d*)$/
-
 /**
  * Validate that every representation of a scene's parcel identity agrees before an access
  * validator authorizes the deployment. Schemas 27 validates the metadata's canonical, unique
@@ -92,20 +90,16 @@ export const sceneParcelsMatchPointersValidateFn = async function validateFn(
 
   const pointers = deployment.entity.pointers
   if (
-    pointers.some((pointer) => !PARCEL_COORDINATE_PATTERN.test(pointer)) ||
-    new Set(pointers).size !== pointers.length
+    pointers.length === 0 ||
+    !SceneParcels.validate({
+      base: pointers[0],
+      parcels: pointers
+    })
   ) {
     return validationFailed('Scene pointers must be unique canonical parcel coordinates.')
   }
 
   const sceneParcels = scene.parcels
-  if (
-    sceneParcels.some((parcel) => !PARCEL_COORDINATE_PATTERN.test(parcel)) ||
-    new Set(sceneParcels).size !== sceneParcels.length
-  ) {
-    return validationFailed('Scene parcels must be unique canonical parcel coordinates.')
-  }
-
   const pointerSet = new Set(pointers)
   if (pointerSet.size !== sceneParcels.length || sceneParcels.some((parcel) => !pointerSet.has(parcel))) {
     return validationFailed('The scene parcels must match the entity pointers.')
