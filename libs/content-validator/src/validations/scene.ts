@@ -73,22 +73,13 @@ export const embeddedThumbnail = validateAfterADR236(async function validateFn(
   return OK
 })
 
-/**
- * Validate the semantic scene-parcel invariant that is not expressible in the nested JSON schema:
- * the declared base must be one of the parcels occupied by the scene.
- *
- * `Scene.validate` embeds `SceneParcels.schema`, but it does not invoke `SceneParcels.validate`,
- * where this membership check lives. Keeping the check in the deployment validator prevents the
- * base parcel from becoming an unauthorized downstream identity while access checks authorize only
- * the entity pointers.
- * @public
- */
 const PARCEL_COORDINATE_PATTERN = /^(?:0|-?[1-9]\d*),(?:0|-?[1-9]\d*)$/
 
 /**
  * Validate that every representation of a scene's parcel identity agrees before an access
- * validator authorizes the deployment. Exact canonical strings are required so aliases such as
- * `00,1` cannot pass distinctness checks and later collapse to the same database coordinate.
+ * validator authorizes the deployment. Schemas 27 validates the metadata's canonical, unique
+ * parcels and base membership; this deployment-level check additionally compares those parcels
+ * with the entity pointers, which the metadata schema cannot inspect.
  * @public
  */
 export const sceneParcelsMatchPointersValidateFn = async function validateFn(
