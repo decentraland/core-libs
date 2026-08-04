@@ -1,5 +1,5 @@
 import type { ContentMapping } from '@dcl/schemas'
-import { EntityType } from '@dcl/schemas'
+import { EntityType, SceneParcels } from '@dcl/schemas'
 import { validateAfterADR173, validateAfterADR236, validateAll, validateIfTypeMatches } from './validations'
 import { OK, validationFailed } from '../types'
 import type { DeploymentToValidate, ValidationResponse } from '../types'
@@ -74,10 +74,48 @@ export const embeddedThumbnail = validateAfterADR236(async function validateFn(
 })
 
 /**
+ * Validate that every representation of a scene's parcel identity agrees before an access
+ * validator authorizes the deployment. Schemas 27 validates the metadata's canonical, unique
+ * parcels and base membership; this deployment-level check additionally compares those parcels
+ * with the entity pointers, which the metadata schema cannot inspect.
+ * @public
+ */
+export const sceneParcelsMatchPointersValidateFn = async function validateFn(
+  deployment: DeploymentToValidate
+): Promise<ValidationResponse> {
+  const scene = deployment.entity.metadata?.scene
+  if (!scene || !SceneParcels.validate(scene)) {
+    return validationFailed('Scene parcels metadata must be valid, canonical, unique, and include the base parcel.')
+  }
+
+  const pointers = deployment.entity.pointers
+  if (
+    pointers.length === 0 ||
+    !SceneParcels.validate({
+      base: pointers[0],
+      parcels: pointers
+    })
+  ) {
+    return validationFailed('Scene pointers must be unique canonical parcel coordinates.')
+  }
+
+  const sceneParcels = scene.parcels
+  const pointerSet = new Set(pointers)
+  if (pointerSet.size !== sceneParcels.length || sceneParcels.some((parcel) => !pointerSet.has(parcel))) {
+    return validationFailed('The scene parcels must match the entity pointers.')
+  }
+
+  return OK
+}
+
+/** @deprecated Use sceneParcelsMatchPointersValidateFn. */
+export const sceneBaseIsIncludedInParcelsValidateFn = sceneParcelsMatchPointersValidateFn
+
+/**
  * Validate that given scene deployment is valid
  * @public
  */
 export const sceneValidateFn = validateIfTypeMatches(
   EntityType.SCENE,
-  validateAll(noWorldsConfigurationValidateFn, embeddedThumbnail)
+  validateAll(sceneParcelsMatchPointersValidateFn, noWorldsConfigurationValidateFn, embeddedThumbnail)
 )

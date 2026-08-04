@@ -1,12 +1,147 @@
 import type { ContentMapping } from '@dcl/schemas'
 import { EntityType } from '@dcl/schemas'
-import { embeddedThumbnail, noWorldsConfigurationValidateFn } from '../../../src/validations/scene'
-import { ADR_173_TIMESTAMP, ADR_236_TIMESTAMP } from '../../../src/validations/timestamps'
+import {
+  embeddedThumbnail,
+  noWorldsConfigurationValidateFn,
+  sceneParcelsMatchPointersValidateFn,
+  sceneValidateFn
+} from '../../../src/validations/scene'
+import { ADR_173_TIMESTAMP, ADR_236_TIMESTAMP, ADR_45_TIMESTAMP } from '../../../src/validations/timestamps'
 import { buildDeployment } from '../../setup/deployments'
 import { buildEntity } from '../../setup/entity'
 import { createImage } from '../../setup/mock'
 import { VALID_SCENE_METADATA } from '../../setup/scenes'
 import type { ValidationResponse } from '../../../src'
+
+describe('when validating the scene base parcel', () => {
+  let result: ValidationResponse
+
+  describe('and the base is included in the scene parcels', () => {
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '1,1', parcels: ['0,0', '1,1'] }
+        }
+      })
+      entity.pointers = ['0,0', '1,1']
+      result = await sceneParcelsMatchPointersValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should return ok', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
+
+  describe('and the base is not included in the scene parcels', () => {
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '2,2', parcels: ['0,0', '1,1'] }
+        }
+      })
+      entity.pointers = ['0,0', '1,1']
+      result = await sceneParcelsMatchPointersValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should reject the deployment', () => {
+      expect(result.ok).toBe(false)
+    })
+
+    it('should explain every scene parcel metadata requirement', () => {
+      expect(result.errors).toContain(
+        'Scene parcels metadata must be valid, canonical, unique, and include the base parcel.'
+      )
+    })
+  })
+
+  describe('and the scene parcels differ from the entity pointers', () => {
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        pointers: ['0,0'],
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '0,0', parcels: ['0,0', '1,1'] }
+        }
+      })
+      result = await sceneParcelsMatchPointersValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should reject the deployment', () => {
+      expect(result.ok).toBe(false)
+    })
+
+    it('should explain that both parcel sets must match', () => {
+      expect(result.errors).toContain('The scene parcels must match the entity pointers.')
+    })
+  })
+
+  describe('and a pointer uses a non-canonical coordinate alias', () => {
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        pointers: ['00,0'],
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '0,0', parcels: ['0,0'] }
+        }
+      })
+      result = await sceneParcelsMatchPointersValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should reject the deployment', () => {
+      expect(result.ok).toBe(false)
+    })
+  })
+
+  describe('and more than one thousand unique canonical parcels match the pointers', () => {
+    beforeEach(async () => {
+      const parcels = Array.from({ length: 1001 }, (_, index) => `${index},0`)
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        pointers: parcels,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '0,0', parcels }
+        }
+      })
+      result = await sceneParcelsMatchPointersValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should leave parcel count enforcement to the target platform', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
+
+  describe('and an invalid scene identity predates ADR-45', () => {
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        timestamp: ADR_45_TIMESTAMP - 1,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '2,2', parcels: ['0,0', '1,1'] }
+        }
+      })
+      entity.pointers = ['0,0', '1,1']
+      result = await sceneValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should reject the historical deployment', () => {
+      expect(result.ok).toBe(false)
+    })
+
+    it('should report the scene parcel metadata requirements', () => {
+      expect(result.errors).toContain(
+        'Scene parcels metadata must be valid, canonical, unique, and include the base parcel.'
+      )
+    })
+  })
+})
 
 describe('when validating the scene has no worldConfiguration', () => {
   const timestamp = ADR_173_TIMESTAMP + 1

@@ -22,3 +22,4 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@dcl/core-commons@0.10.0'
+  - '@dcl/schemas@27.0.0'

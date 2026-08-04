@@ -39,7 +39,7 @@ Decentraland entity deployment validation library for Catalyst servers. Contains
 - **Signature Authentication** - Verifies AuthChain signatures for entity authenticity
 - **Multi-Entity Support** - Validates scenes, profiles, wearables, emotes, stores, and outfits
 - **Dual Access Strategies** - Supports both on-chain and subgraph-based ownership verification
-- **Legacy Compatibility** - Maintains backwards compatibility with legacy content migrations
+- **Legacy Compatibility** - Supports legacy content migrations except scenes whose pointers and scene identity metadata disagree; those deployments are rejected even during historical replay or backfill
 
 ## Installation
 
@@ -52,7 +52,7 @@ npm i @dcl/content-validator
 - Validate as early as possible to prevent invalid content from being stored
 - Provide clear, actionable error messages for deployment failures
 - Support both on-chain and subgraph-based access verification
-- Maintain backwards compatibility with legacy content migrations
+- Maintain backwards compatibility with legacy content migrations while rejecting scenes whose pointers, declared base, and parcel metadata do not describe the same authorized scene identity, including during historical replay or backfill
 - Ensure all validation functions are stateless where possible
 
 Implementation decisions:
