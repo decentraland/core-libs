@@ -3,9 +3,10 @@ import { EntityType } from '@dcl/schemas'
 import {
   embeddedThumbnail,
   noWorldsConfigurationValidateFn,
-  sceneParcelsMatchPointersValidateFn
+  sceneParcelsMatchPointersValidateFn,
+  sceneValidateFn
 } from '../../../src/validations/scene'
-import { ADR_173_TIMESTAMP, ADR_236_TIMESTAMP } from '../../../src/validations/timestamps'
+import { ADR_173_TIMESTAMP, ADR_236_TIMESTAMP, ADR_45_TIMESTAMP } from '../../../src/validations/timestamps'
 import { buildDeployment } from '../../setup/deployments'
 import { buildEntity } from '../../setup/entity'
 import { createImage } from '../../setup/mock'
@@ -50,8 +51,10 @@ describe('when validating the scene base parcel', () => {
       expect(result.ok).toBe(false)
     })
 
-    it('should explain the base parcel requirement', () => {
-      expect(result.errors).toContain('The scene base parcel must be included in the scene parcels.')
+    it('should explain every scene parcel metadata requirement', () => {
+      expect(result.errors).toContain(
+        'Scene parcels metadata must be valid, canonical, unique, and include the base parcel.'
+      )
     })
   })
 
@@ -111,6 +114,31 @@ describe('when validating the scene base parcel', () => {
 
     it('should leave parcel count enforcement to the target platform', () => {
       expect(result.ok).toBe(true)
+    })
+  })
+
+  describe('and an invalid scene identity predates ADR-45', () => {
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.SCENE,
+        timestamp: ADR_45_TIMESTAMP - 1,
+        metadata: {
+          ...VALID_SCENE_METADATA,
+          scene: { base: '2,2', parcels: ['0,0', '1,1'] }
+        }
+      })
+      entity.pointers = ['0,0', '1,1']
+      result = await sceneValidateFn(buildDeployment({ entity }))
+    })
+
+    it('should reject the historical deployment', () => {
+      expect(result.ok).toBe(false)
+    })
+
+    it('should report the scene parcel metadata requirements', () => {
+      expect(result.errors).toContain(
+        'Scene parcels metadata must be valid, canonical, unique, and include the base parcel.'
+      )
     })
   })
 })

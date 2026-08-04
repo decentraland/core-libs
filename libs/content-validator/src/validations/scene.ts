@@ -85,7 +85,7 @@ export const sceneParcelsMatchPointersValidateFn = async function validateFn(
 ): Promise<ValidationResponse> {
   const scene = deployment.entity.metadata?.scene
   if (!scene || !SceneParcels.validate(scene)) {
-    return validationFailed('The scene base parcel must be included in the scene parcels.')
+    return validationFailed('Scene parcels metadata must be valid, canonical, unique, and include the base parcel.')
   }
 
   const pointers = deployment.entity.pointers
