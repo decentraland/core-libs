@@ -185,9 +185,6 @@ describe('when validating the wearable thumbnail size', () => {
   })
 
   describe('and the thumbnail file size exceeds 1 MB', () => {
-    // Validation reads `Buffer.byteLength` directly, not the decoded image, so
-    // we use a fixed-size opaque buffer to keep this test deterministic across
-    // platforms (sharp's PNG encoder produces different sizes on macOS vs Linux).
     const oversizedThumbnailBytes = 1.5 * 1024 * 1024
     let result: ValidationResponse
 
@@ -699,8 +696,6 @@ describe('when validating the third party wearable merkle proof', () => {
 })
 
 describe('when validating spring bones metadata', () => {
-  // VALID_WEARABLE_METADATA's representation has mainFile: 'file1', so the active
-  // hash for the representation is whatever 'file1' maps to in entity.content.
   const fileHash = 'bafkreialsvt77jvpy673cnugp5ggnxfaalfncufweayuk3jbxskh3pelkm'
   const file2Hash = 'bafkreigreflbn4w3a36rgg2ywlhf2asebqlsd4skg5q5djpklcdcjkbjvi'
   const baseContent = [

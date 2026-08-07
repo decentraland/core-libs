@@ -90,7 +90,6 @@ export function createItemValidateFn(
     const { pointers } = deployment.entity
 
     const resolvedPointers: SupportedAsset[] = []
-    // deduplicate pointer resolution
     for (const pointer of pointers) {
       const parsed = await parseUrnNoFail(pointer)
       if (!parsed) {

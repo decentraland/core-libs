@@ -10,8 +10,6 @@ module.exports = {
       'ts-jest',
       {
         useESM: true,
-        // Override the package-level `module: commonjs` so ts-jest emits ESM
-        // for the test runner (jest is launched with --experimental-vm-modules).
         tsconfig: { module: 'esnext', target: 'es2024', moduleResolution: 'bundler' }
       }
     ]

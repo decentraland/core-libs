@@ -44,11 +44,9 @@ export async function emoteADR287ValidateFn(deployment: DeploymentToValidate): P
     return validationFailed('No emote data found')
   }
 
-  // Check for social emote properties
   const requiredProperties = ['startAnimation', 'randomizeOutcomes', 'outcomes'] as const
   const presentProperties = requiredProperties.filter((prop) => data[prop] !== undefined)
 
-  // Not a social emote if no properties are present
   if (presentProperties.length === 0) {
     return OK
   }
@@ -62,12 +60,10 @@ export async function emoteADR287ValidateFn(deployment: DeploymentToValidate): P
 
   const { startAnimation, outcomes } = data
 
-  // Validate startAnimation
   if (!StartAnimation.validate(startAnimation)) {
     return validationFailed('Some properties of StartAnimation are not valid')
   }
 
-  // Validate outcomes length
   if (!outcomes || outcomes.length === 0) {
     return validationFailed('Outcomes array cannot be empty')
   }
@@ -76,7 +72,6 @@ export async function emoteADR287ValidateFn(deployment: DeploymentToValidate): P
     return validationFailed(`Outcomes array can contain up to ${MAX_SOCIAL_EMOTE_OUTCOMES} items`)
   }
 
-  // Validate each outcome
   for (const outcome of outcomes) {
     if (!OutcomeGroup.validate(outcome)) {
       return validationFailed('Some properties of Outcome are not valid')

@@ -4,8 +4,6 @@ import { buildOutfitsDeployment } from '../../setup/deployments'
 import { buildExternalCalls } from '../../setup/mock'
 import type { ValidationResponse } from '../../../src/types'
 
-// The outfits access layer must authorize the pointer against the signer, not only wearable/name
-// ownership, mirroring profile/store.
 describe('when validating outfits subgraph access', () => {
   const signer = '0x2222222222222222222222222222222222222222'
 

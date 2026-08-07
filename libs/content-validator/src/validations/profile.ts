@@ -42,7 +42,6 @@ export function createFaceThumbnailValidateFn(components: ContentValidatorCompon
       if (isAlreadyStored) {
         continue
       }
-      // check size
       const thumbnailBuffer = deployment.files.get(hash)
       if (!thumbnailBuffer) return validationFailed(`Couldn't find thumbnail file with hash: ${hash}`)
       try {
@@ -177,7 +176,6 @@ export function createProfileImagesValidateFn(components: ContentValidatorCompon
 
     const calculatedHashes = await components.externalCalls.calculateFilesHashes(deployment.files)
 
-    // Per-avatar requirement: every avatar must declare a face and body thumbnail hash.
     for (const avatar of allAvatars) {
       const faceHash = avatar.avatar?.snapshots?.face256
       const bodyHash = avatar.avatar?.snapshots?.body
@@ -186,10 +184,6 @@ export function createProfileImagesValidateFn(components: ContentValidatorCompon
         return validationFailed(`Couldn't find hash for face or body thumbnails on profile metadata`)
     }
 
-    // The uploaded files' hashes don't depend on the avatar, so validate them once
-    // instead of re-scanning (and re-reporting every mismatch) once per avatar — that
-    // was O(avatars × files). Guarded by avatar count to preserve the previous
-    // behavior, where this ran inside the avatar loop and so not at all without avatars.
     if (allAvatars.length > 0) {
       for (const [key, entry] of calculatedHashes.entries()) {
         if (key !== entry.calculatedHash) {
@@ -233,7 +227,6 @@ export async function allContentFilesCorrespondToAtLeastOneAvatarSnapshotAfterAD
     const { entity } = deployment
     const errors: string[] = []
     for (const { file, hash } of entity.content ?? []) {
-      // Validate all content files correspond to at least one avatar snapshot
       if (!entity.metadata?.avatars || entity.metadata.avatars?.length === 0) {
         errors.push(`Entity is missing metadata or avatars`)
       } else if (!correspondsToASnapshot(file, hash, entity.metadata)) {

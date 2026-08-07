@@ -36,8 +36,6 @@ export async function resolveContentUrl(
   return null
 }
 
-// ---------------------------------------------------------------------
-
 resolvers.push(function resolvePortableExperiencesUrl(asset, _options) {
   return asset.type === 'off-chain' && asset.registry === 'static-portable-experiences'
     ? `https://static-pe.decentraland.io/${asset.id}/mappings`

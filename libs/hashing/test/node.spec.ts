@@ -2,10 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { jest } from '@jest/globals'
-// hashV1WithLayout lives in src/_layout.ts (excluded from the published bundle
-// — see tsconfig.json `exclude` and the `files` allowlist) so its layout knobs
-// stay out of the public API. ts-jest in ESM mode loads it directly from
-// source; no separate build is required.
 import { hashV1WithLayout } from '../src/_layout'
 import { hashV0, hashV1 } from '../src/node'
 
@@ -156,9 +152,6 @@ describe('hashing', () => {
   })
 
   describe('when hashing content that requires a balanced tree', () => {
-    // Reference CIDs produced by ipfs-unixfs-importer's balanced layout for the
-    // same deterministic stream. Regenerate with:
-    //   node scripts/compute-reference-hashes.mjs
     async function* deterministicStream(chunkCount: number, chunkSize: number): AsyncIterable<Uint8Array> {
       for (let i = 0; i < chunkCount; i++) {
         const chunk = new Uint8Array(chunkSize)
@@ -193,9 +186,6 @@ describe('hashing', () => {
       })
     })
 
-    // Multi-level cascade with the production layout (174^2+ chunks ≈ 7.4 GB) is
-    // impractical to test, so we exercise the same cascade paths with a small
-    // chunkSize / maxChildrenPerNode and the test-only entry point.
     describe('and a small fan-out layout (chunkSize=16, maxChildrenPerNode=3) is used', () => {
       const SMALL_CHUNK_SIZE = 16
       const SMALL_MAX_CHILDREN = 3

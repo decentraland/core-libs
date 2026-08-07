@@ -8,8 +8,6 @@ import { buildEmoteEntity } from '../../setup/entity'
 import { VALID_THIRD_PARTY_WEARABLE } from '../../setup/wearable'
 import type { DeploymentToValidate, ValidationResponse } from '../../../src/types'
 
-// The shared on-chain access check only proves merkle-root membership, so it accepts a wearable leaf
-// reused as an emote; the emote item validation is what rejects it (its proof omits `emoteDataADR74`).
 describe('when an approved third-party wearable leaf is reused to deploy an emote', () => {
   const approvedWearableMetadata = VALID_THIRD_PARTY_WEARABLE.entity
 

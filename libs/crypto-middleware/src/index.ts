@@ -47,8 +47,6 @@ function pickSignatureHeaders(headers: Headers, maxChainLength: number): Record<
     picked[AUTH_METADATA_HEADER] = metadata
   }
 
-  // Read up to and including `maxChainLength` so `extractAuthChain` can still detect
-  // an over-length chain (it inspects the index at `maxChainLength`).
   for (let index = 0; index <= maxChainLength; index++) {
     const link = headers.get(AUTH_CHAIN_HEADER_PREFIX + index)
     if (link !== null) {
@@ -76,10 +74,6 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
 > {
   return async (ctx, next) => {
     try {
-      // Pass `verify()` only the auth-related headers (chain links, timestamp, metadata)
-      // read straight from the native `Headers`, rather than materializing the whole
-      // header set per request. `Headers.get` is case-insensitive, so this also works
-      // regardless of header casing.
       const headers = pickSignatureHeaders(ctx.request.headers, options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH)
       ctx.verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
     } catch (err) {

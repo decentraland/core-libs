@@ -140,7 +140,6 @@ export const VALID_THIRD_PARTY_WEARABLE_WITH_MAPPINGS = buildEntityMetadataWithM
   ['someOtherHash1', 'someOtherHash2']
 )
 
-// Using the entity, the keys to be hashed and the other node hashes, build the merkle proof for the entity and return a new proofed entity.
 function buildEntityMetadataWithMerkleProof(
   baseEntity: Omit<Wearable & ThirdPartyProps, 'merkleProof'>,
   otherNodeHashes: string[]

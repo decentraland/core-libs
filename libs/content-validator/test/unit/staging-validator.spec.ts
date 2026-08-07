@@ -17,9 +17,6 @@ const buildValidSceneDeployment = () =>
     })
   })
 
-// A scene that references a content file which was NOT uploaded and is not stored: the full validator
-// rejects it (its size can't be computed), but a staging deployment is expected to be accepted because
-// completeness/size are only checked once all content is present.
 const buildIncompleteSceneDeployment = () =>
   buildDeployment({
     entity: buildEntity({
@@ -57,7 +54,6 @@ describe('when calling createStagingValidator', () => {
     let accessValidateFn: jest.MockedFunction<ValidateFn>
 
     beforeEach(async () => {
-      // Access would fail, but it must not run when includeAccessCheck is not set.
       accessValidateFn = jest
         .fn()
         .mockResolvedValue(validationFailed('access denied')) as jest.MockedFunction<ValidateFn>
@@ -124,7 +120,6 @@ describe('when calling createStagingValidator', () => {
 
     beforeEach(async () => {
       const deployment = buildValidSceneDeployment()
-      // Upload a file whose hash is neither referenced in entity.content nor the entity id.
       deployment.files.set('QmUnreferencedUploadedFile', new Uint8Array([1, 2, 3]))
       const validateFn = createStagingValidator(
         buildComponents({ accessValidateFn: jest.fn().mockResolvedValue(OK) as jest.MockedFunction<ValidateFn> })
@@ -142,9 +137,6 @@ describe('when calling createStagingValidator', () => {
     let result: ValidationResponse
 
     beforeEach(async () => {
-      // Past ADR-45 the IPFS-hashing validation is active; a non-IPFSv2 hash must be rejected. This
-      // confirms the ADR-gated validations are actually run by the staging validator (a pre-ADR-45
-      // fixture would skip them).
       const deployment = buildDeployment({
         entity: buildEntity({
           type: EntityType.SCENE,

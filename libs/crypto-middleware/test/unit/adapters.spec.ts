@@ -26,7 +26,6 @@ describe('wellKnownComponents adapter', () => {
   let next: jest.Mock
 
   beforeEach(() => {
-    // Native (undici) Headers — as @dcl/http-server v2 provides — rather than a node-fetch `.raw()` stub.
     ctx = {
       request: { method: 'GET', headers: new Headers({ 'x-identity-auth-chain-0': 'link-0' }) },
       url: { pathname: '/bar' }

@@ -111,8 +111,6 @@ describe('when validating that all content files correspond to at least one avat
 
   describe('and there is a content file with a multi-dot filename like snapshot.face256.png', () => {
     beforeEach(() => {
-      // The regex /\.[^/.]+$/ should only strip the last extension (.png),
-      // leaving "snapshot.face256" as the key to match against snapshot names.
       const hash = 'bafybeiasb5vpmaounyilfuxbd3lryvosl4yefqrfahsb2esg46q6tu6y5s'
       deployment.entity.metadata = {
         avatars: [

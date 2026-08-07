@@ -5,9 +5,7 @@ import { randomBytes } from 'crypto'
  * @returns A random address starting with '0x' followed by 40 hex characters
  */
 export function generateRandomWalletAddress(): string {
-  // Generate 20 bytes (40 hex characters) of random data
   const randomBytesBuffer = randomBytes(20)
-  // Convert to hex string and ensure it starts with '0x'
   return '0x' + randomBytesBuffer.toString('hex')
 }
 

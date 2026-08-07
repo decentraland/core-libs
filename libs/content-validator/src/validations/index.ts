@@ -22,7 +22,6 @@ export async function calculateDeploymentSize(
   externalCalls: ExternalCalls
 ): Promise<number | string> {
   let totalSize = 0
-  // Files not already uploaded need their size fetched from storage; collect them and fetch below.
   const hashesToFetch: string[] = []
   for (const hash of new Set(deployment.entity.content?.map((item) => item.hash) ?? [])) {
     const uploadedFile = deployment.files.get(hash)
@@ -32,11 +31,6 @@ export async function calculateDeploymentSize(
       hashesToFetch.push(hash)
     }
   }
-  // Fetch in batches of `fetchContentFileSizeConcurrency` (default 1 = sequential, the previous
-  // behavior). A caller can raise it to parallelize, and the batching keeps a large content list from
-  // fanning out into an unbounded number of concurrent storage operations.
-  // `|| 1` (not `?? 1`) so a 0, negative, or NaN value falls back to 1 rather than degenerating the
-  // loop (a NaN batch size would slice to an empty batch and silently skip every unfetched hash).
   const concurrency = Math.max(1, externalCalls.fetchContentFileSizeConcurrency || 1)
   for (let i = 0; i < hashesToFetch.length; i += concurrency) {
     const batch = hashesToFetch.slice(i, i + concurrency)
@@ -54,16 +48,12 @@ export async function calculateDeploymentSize(
  * @public
  */
 export function createValidateFns(components: ContentValidatorComponents): ValidateFn[] {
-  // NOTE: when adding a cross-cutting validation here, consider whether it also belongs in
-  // createStagingValidateFns (the partial-deployment staging subset) below.
   return [
-    // Stateless validations that are run on a deployment.
     entityStructureValidationFn,
     ipfsHashingValidateFn,
     metadataValidateFn,
     adr45ValidateFn,
 
-    // Stateful validations that are run on a deployment.
     createSignatureValidateFn(components),
     createSizeValidateFn(components),
     wearableValidateFn,
@@ -75,8 +65,6 @@ export function createValidateFns(components: ContentValidatorComponents): Valid
   ]
 }
 
-// Rejects any non-scene entity. Staging is a scene-only subset (see createStagingValidateFns); the full
-// createValidateFns runs the type-specific validations for every type at finalize.
 const onlyScenesValidateFn: ValidateFn = async (deployment) =>
   deployment.entity.type === EntityType.SCENE
     ? OK

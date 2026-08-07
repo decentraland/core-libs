@@ -19,7 +19,6 @@ export function createAllHashesWereUploadedOrStoredValidateFn({
       )
 
       for (const { hash } of entity.content) {
-        // Validate that all hashes in entity were uploaded, or were already stored on the service
         if (!(files.has(hash) || alreadyStoredHashes.get(hash))) {
           errors.push(`This hash is referenced in the entity but was not uploaded or previously available: ${hash}`)
         }
@@ -39,7 +38,6 @@ export async function allHashesInUploadedFilesAreReportedInTheEntityValidateFn(
 ): Promise<ValidationResponse> {
   const { entity, files } = deployment
   const errors: string[] = []
-  // Validate that all hashes that belong to uploaded files are actually reported on the entity
   const entityHashes = new Set(entity.content?.map(({ hash }) => hash) ?? [])
   for (const [hash] of files) {
     if (!entityHashes.has(hash) && hash !== entity.id) {
