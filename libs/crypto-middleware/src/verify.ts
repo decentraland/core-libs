@@ -11,6 +11,15 @@ import {
 } from './types'
 import type { DecentralandSignatureData, VerifyAuthChainHeadersOptions } from './types'
 
+// Mirrors EthAddress.schema.pattern from @dcl/schemas. Inlined rather than depending on that
+// package: it is not a dependency here, pnpm's strict layout will not resolve it transitively
+// through @dcl/crypto, and an auth middleware is the wrong place to grow the dependency surface
+// for one stable 40-char pattern.
+const HEX_ADDRESS = /^0x[a-fA-F0-9]{40}$/
+
+// Metadata fields services authorize on. Any other field may legitimately be mixed case.
+const CANONICAL_LOWERCASE_FIELDS = ['signer', 'intent'] as const
+
 function firstOf(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
@@ -196,6 +205,25 @@ export function verifyMetadata(value?: string | string[]): Record<string, unknow
 
   if (typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
+  }
+
+  // Services authorize these fields using exact matches, so require them to arrive in canonical
+  // form: trimmed and lowercase.
+  //
+  // Casing and whitespace are handled differently by the signing format:
+  // - `createPayload` lowercases the payload, so casing is not preserved by the signature.
+  // - `createPayload` does not trim values, so whitespace is preserved by the signature.
+  //
+  // Rejecting non-canonical values here keeps signature verification and downstream authorization
+  // checks consistent and avoids ambiguous interpretations of the same metadata.
+  //
+  // Hex addresses are exempt from the lowercase requirement because EIP-55 checksum casing is
+  // meaningful. Whitespace is still rejected; the anchored HEX_ADDRESS pattern enforces that.
+  for (const field of CANONICAL_LOWERCASE_FIELDS) {
+    const value = (parsed as Record<string, unknown>)[field]
+    if (typeof value === 'string' && value !== value.trim().toLowerCase() && !HEX_ADDRESS.test(value)) {
+      throw new RequestError(`Invalid chain metadata: "${safe(raw)}"`, 400)
+    }
   }
 
   return parsed as Record<string, unknown>

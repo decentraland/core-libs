@@ -241,6 +241,89 @@ describe('verifyMetadata', () => {
       }
     })
   })
+
+  // Every value below differs from its own lowercase form, so it shares a valid signature with
+  // that lowercase form (createPayload lowercases the whole payload). Signature verification can
+  // never reject them - only this guard can.
+  describe.each(['signer', 'intent'])('when the %s is not in canonical lowercase form', (field) => {
+    describe.each([
+      ['a capitalised kernel scene signer', 'Decentraland-Kernel-Scene'],
+      ['an upper-case kernel scene signer', 'DECENTRALAND-KERNEL-SCENE'],
+      ['a single flipped character', 'decentraland-Kernel-scene'],
+      ['a Kelvin-sign homoglyph', 'decentraland-\u212Aernel-scene'],
+      ['a capitalised namespaced identifier', 'DCL:Explorer'],
+      ['a namespaced identifier with one capital', 'dcl:Explorer:Comms-Handshake'],
+      // Mixed case but too short to be an address - proves the exemption is anchored on the
+      // whole value rather than matching an address-looking prefix.
+      ['a truncated address', '0xAbC'],
+      // Upper-case `0X` prefix. Deliberately rejected: HEX_ADDRESS anchors a lowercase `0x`,
+      // matching EthAddress.schema.pattern in @dcl/schemas.
+      ['an address with an upper-case hex prefix', '0XAbC0000000000000000000000000000000000123'],
+      // Whitespace is signature-bound (createPayload never trims), so these are not bypasses a
+      // third party can mount. They are rejected so a stray space cannot silently downgrade a
+      // scene request into an unrecognised — and therefore more trusted — one downstream.
+      ['padded with a leading space', ' decentraland-kernel-scene'],
+      ['padded with a trailing space', 'decentraland-kernel-scene '],
+      ['padded with a tab', '\tdcl:explorer'],
+      ['padded with a newline', 'dcl:explorer\n'],
+      ['a padded address', ' 0xabc0000000000000000000000000000000000123']
+    ])('and it is %s', (_case, value) => {
+      it('should throw an Invalid chain metadata error with status 400', () => {
+        const raw = JSON.stringify({ [field]: value })
+        let thrown: unknown
+        try {
+          verifyMetadata(raw)
+        } catch (err) {
+          thrown = err
+        }
+
+        expect(thrown).toBeInstanceOf(RequestError)
+        expect((thrown as RequestError).message).toBe(`Invalid chain metadata: "${raw}"`)
+        expect((thrown as RequestError).statusCode).toBe(400)
+      })
+    })
+  })
+
+  describe.each(['signer', 'intent'])('when the %s is acceptable', (field) => {
+    describe.each([
+      ['the canonical kernel scene signer', 'decentraland-kernel-scene'],
+      ['a canonical namespaced identifier', 'dcl:explorer'],
+      ['a canonical namespaced intent', 'dcl:explorer:comms-handshake'],
+      ['an unrelated lowercase string', 'a signer'],
+      // Exempt: EIP-55 checksum casing is meaningful, and re-casing hex cannot change which
+      // address the value denotes, so there is no escalation to prevent.
+      ['a checksummed address', '0xAbC0000000000000000000000000000000000123'],
+      ['a lowercase address', '0xabc0000000000000000000000000000000000123']
+    ])('and it is %s', (_case, value) => {
+      it('should return the parsed object untouched', () => {
+        expect(verifyMetadata(JSON.stringify({ [field]: value }))).toEqual({ [field]: value })
+      })
+    })
+
+    describe('and it is not a string', () => {
+      it('should return the parsed object untouched', () => {
+        expect(verifyMetadata(JSON.stringify({ [field]: 123 }))).toEqual({ [field]: 123 })
+        expect(verifyMetadata(JSON.stringify({ [field]: null }))).toEqual({ [field]: null })
+        expect(verifyMetadata(JSON.stringify({ [field]: { a: 1 } }))).toEqual({ [field]: { a: 1 } })
+      })
+    })
+  })
+
+  describe('when an unguarded field is mixed case', () => {
+    it('should return the parsed object untouched', () => {
+      // Only signer and intent are guarded. These can legitimately be mixed case (CIDs, URNs,
+      // server names, URLs), and the rule does not recurse into nested objects.
+      const metadata = {
+        signer: 'dcl:explorer',
+        sceneId: 'BafkREIabc123',
+        realmName: 'MyRealm',
+        origin: 'dcl-scene-bots://',
+        realm: { serverName: 'MyRealm' }
+      }
+
+      expect(verifyMetadata(JSON.stringify(metadata))).toEqual(metadata)
+    })
+  })
 })
 
 describe('verifyExpiration', () => {
