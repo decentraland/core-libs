@@ -105,7 +105,9 @@ export = (
     "RentalsProxy": "0x3a1469499d0be105d4f77045ca403a5f6dc2f3f5",
     "RentalsImplementation": "0xe90636e24d8faf02aa0e01c26d72dab9629865cb",
     "MarketplaceV3": "0x2d6b3508f9aca32d2550f92b2addba932e73c1ff",
-    "MarketplaceV4": "0x1b67d0e31eeb6b52d8eeed71d3616c2f5b33b8e7"
+    "MarketplaceV4": "0x1b67d0e31eeb6b52d8eeed71d3616c2f5b33b8e7",
+    "ManaEthAggregator": "0x82A44D92D6c329826dc557c5E1Be6ebeC5D5FeB9",
+    "ETHUSDAggregator": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
   },
   "sepolia": {
     "MANAToken": "0xfa04d2e2ba9aec166c93dfeeba7427b2303befa9",
@@ -172,7 +174,9 @@ export = (
     "CouponManager_DEPRECATED": "0x90cb68d170275da51d2a645bdf70be29d215bda7",
     "CollectionDiscountCoupon": "0xc914507fe297b2dddd1232ac3a8903f1c125e794",
     "CreditsManager_DEPRECATED": "0xe9f961e6ded4e1476bbee4faab886d63a2493eb9",
-    "CreditsManager": "0x8b3a40ca1b6f5cafc99d112a4d02e897d1fd8cc5"
+    "CreditsManager": "0x8b3a40ca1b6f5cafc99d112a4d02e897d1fd8cc5",
+    "FeeCollector": "0x184e4D9A26Add0aF1eAfC145550E890a421f16d7",
+    "ManaUsdAggregator": "0xA1CbF3Fe43BC3501e3Fc4b573e822c70e76A7512"
   },
   "amoy": {
     "MetaTxForwarder": "0x3dd1fef020741386bf9c8d905b7e2b02a668ccda",
