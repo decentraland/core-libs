@@ -1,5 +1,5 @@
 import type { IFetchComponent } from '@dcl/core-commons'
-import type { AuthChain, AuthIdentity } from '@dcl/crypto'
+import type { AuthChain } from '@dcl/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import RequestError from '../../src/errors'
@@ -10,29 +10,7 @@ import {
   DEFAULT_EXPIRATION
 } from '../../src/types'
 import verifyAuthChainHeaders, { isEIP1654AuthChain, verifyEIP1654Sign, verifyPersonalSign } from '../../src/verify'
-
-const identity: AuthIdentity = {
-  ephemeralIdentity: {
-    address: '0x84452bbFA4ca14B7828e2F3BBd106A2bD495CD34',
-    publicKey:
-      '0x0420c548d960b06dac035d1daf826472eded46b8b9d123294f1199c56fa235c89f2515158b1e3be0874bfb15b42d1551db8c276787a654d0b8d7b4d4356e70fe42',
-    privateKey: '0xbc453a92d9baeb3d10294cbc1d48ef6738f718fd31b4eb8085efe7b311299399'
-  },
-  expiration: new Date('3021-10-16T22:32:29.626Z'),
-  authChain: [
-    {
-      type: AuthLinkType.SIGNER,
-      payload: '0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5',
-      signature: ''
-    },
-    {
-      type: AuthLinkType.ECDSA_PERSONAL_EPHEMERAL,
-      payload: `Decentraland Login\nEphemeral address: 0x84452bbFA4ca14B7828e2F3BBd106A2bD495CD34\nExpiration: 3021-10-16T22:32:29.626Z`,
-      signature:
-        '0x39dd4ddf131ad2435d56c81c994c4417daef5cf5998258027ef8a1401470876a1365a6b79810dc0c4a2e9352befb63a9e4701d67b38007d83ffc4cd2b7a38ad51b'
-    }
-  ]
-}
+import { identity } from '../fixtures/identity'
 
 const authChainEIP1654: AuthChain = [
   { type: AuthLinkType.SIGNER, payload: '', signature: '' },
@@ -423,6 +401,69 @@ describe('verifyAuthChainHeaders', () => {
       const headers = createAuthChainHeaders(chain, timestamp, { extra: 'data' })
 
       await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).rejects.toThrow('Invalid signature:')
+    })
+  })
+
+  describe.each([
+    ['signer', 'decentraland-kernel-scene', 'Decentraland-Kernel-Scene'],
+    ['intent', 'dcl:explorer:comms-handshake', 'DCL:Explorer:Comms-Handshake']
+  ])('when the metadata %s is not in canonical lowercase form', (field, canonicalValue, spoofedValue) => {
+    const method = 'get'
+    const path = '/path/to/resource'
+    const canonical = JSON.stringify({ [field]: canonicalValue })
+    const spoofed = JSON.stringify({ [field]: spoofedValue })
+
+    // Signing the canonical metadata and then delivering the mixed-case bytes is the attack: the
+    // caller signs what it is entitled to sign, and the consumer receives a value its strict
+    // equality check will miss, promoting the request onto the more trusted path.
+    function spoofedHeaders(timestamp: number): Record<string, string> {
+      const payload = [method, path, timestamp, canonical].join(':').toLowerCase()
+      const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, {
+        [field]: canonicalValue
+      })
+      headers[AUTH_METADATA_HEADER] = spoofed
+      return headers
+    }
+
+    it('should share a signing payload with the canonical form', () => {
+      // Without this, a rejection could just mean the signature broke. It proves the guard is
+      // what rejects the request, not signature verification.
+      expect([method, path, 1, spoofed].join(':').toLowerCase()).toBe(
+        [method, path, 1, canonical].join(':').toLowerCase()
+      )
+    })
+
+    it('should reject with an Invalid chain metadata error and status 400', async () => {
+      const thrown = await verifyAuthChainHeaders(method, path, spoofedHeaders(Date.now()), { fetcher }).catch(
+        (err: unknown) => err
+      )
+
+      expect(thrown).toBeInstanceOf(RequestError)
+      expect((thrown as RequestError).message).toBe(`Invalid chain metadata: "${spoofed}"`)
+      expect((thrown as RequestError).statusCode).toBe(400)
+    })
+
+    it('should reject before invoking the metadataValidator', async () => {
+      const metadataValidator = jest.fn().mockReturnValue(true)
+
+      await expect(
+        verifyAuthChainHeaders(method, path, spoofedHeaders(Date.now()), { fetcher, metadataValidator })
+      ).rejects.toThrow('Invalid chain metadata')
+
+      expect(metadataValidator).not.toHaveBeenCalled()
+    })
+
+    it('should resolve when the canonical form is delivered', async () => {
+      const timestamp = Date.now()
+      const payload = [method, path, timestamp, canonical].join(':').toLowerCase()
+      const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, {
+        [field]: canonicalValue
+      })
+
+      await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).resolves.toEqual({
+        auth: identity.authChain[0].payload.toLowerCase(),
+        authMetadata: { [field]: canonicalValue }
+      })
     })
   })
 
