@@ -15,6 +15,14 @@ function isAsyncIterable(content: unknown): content is AsyncIterable<Uint8Array>
   )
 }
 
+// Realm-safe replacement for `content instanceof Uint8Array`, which fails for
+// typed arrays created in another realm (e.g. a different iframe/worker/vm).
+// Accepts any ArrayBuffer view (Uint8Array, Buffer, other TypedArrays) while
+// still rejecting DataView and non-view values.
+function isUint8ArrayLike(content: unknown): content is Uint8Array {
+  return ArrayBuffer.isView(content) && !(content instanceof DataView)
+}
+
 /**
  * Calculates a Qm prefixed hash for Decentraland (NOT CIDv0) from a readable stream
  *
@@ -24,7 +32,7 @@ function isAsyncIterable(content: unknown): content is AsyncIterable<Uint8Array>
 export async function hashV0(stream: HashableContent): Promise<string> {
   const hash = sha256.create()
 
-  if (stream instanceof Uint8Array) {
+  if (isUint8ArrayLike(stream)) {
     hash.update(stream)
   } else if (isAsyncIterable(stream)) {
     for await (const chunk of stream) {

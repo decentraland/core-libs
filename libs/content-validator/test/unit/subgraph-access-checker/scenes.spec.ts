@@ -96,6 +96,27 @@ describe('when validating scene subgraph access', () => {
     })
   })
 
+  describe('and a pointer mixes digits with non-numeric characters', () => {
+    let response: ValidationResponse
+
+    beforeEach(async () => {
+      const deployment = buildSceneDeployment(['10abc,20'])
+      const externalCalls = buildExternalCalls({
+        isAddressOwnedByDecentraland: () => false,
+        ownerAddress: () => '0xAddress'
+      })
+      const validateFn = createSceneValidateFn(buildSubgraphAccessCheckerComponents({ externalCalls }))
+      response = await validateFn(deployment)
+    })
+
+    it('should reject the malformed pointer instead of normalizing it to (10,20)', () => {
+      expect(response.ok).toBe(false)
+      expect(response.errors).toContain(
+        'Scene pointers should only contain two integers separated by a comma, for example (10,10) or (120,-45). Invalid pointer: 10abc,20'
+      )
+    })
+  })
+
   describe('and the deployment has valid pointers and the signer owns the parcel', () => {
     let response: ValidationResponse
     let subgraphsMocks: ReturnType<typeof buildSubGraphs>

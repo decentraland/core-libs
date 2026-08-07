@@ -11,7 +11,13 @@ export { isExtendedUrn, getTokenIdAndAssetUrn } from './collection-items-utils'
  * @public
  */
 export async function parseUrn(urn: string): Promise<DecentralandAssetIdentifier | null> {
-  const url = new URL(urn)
+  let url: URL
+  try {
+    url = new URL(urn)
+  } catch {
+    // Malformed input (empty string, non-URL, invalid syntax) resolves to null instead of throwing.
+    return null
+  }
 
   if (url.protocol === 'urn:') return internalResolver(urn)
   if (url.protocol === 'dcl:') return (await resolveLegacyDclUrl(url)) || null

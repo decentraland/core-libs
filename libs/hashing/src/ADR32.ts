@@ -29,7 +29,7 @@ export function compareStrings(a: string, b: string): number {
 export function prepareADR32Data(contents: EntityContentItemReference[], metadata?: unknown): Uint8Array {
   return textEncoder.encode(
     JSON.stringify({
-      content: contents.toSorted(sortKeys).map((entry) => ({ key: entry.file, hash: entry.hash })),
+      content: [...contents].sort(sortKeys).map((entry) => ({ key: entry.file, hash: entry.hash })),
       metadata
     })
   )

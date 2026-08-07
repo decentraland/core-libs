@@ -345,13 +345,14 @@ export function createSceneValidateFn({
     const queue = new PQueue({ concurrency: SCENE_VALIDATIONS_CONCURRENCY })
     const controller = new AbortController()
 
+    // Each coordinate must be a plain integer (optionally negative). This rejects lenient
+    // parseInt matches such as "10abc" (which would otherwise be normalized to 10).
+    const isIntegerCoordinate = (coordinate: string): boolean => /^-?\d+$/.test(coordinate)
+
     for (const pointer of lowerCasePointers) {
       const pointerParts: string[] = pointer.split(',')
       if (pointerParts.length === 2) {
-        const x: number = parseInt(pointerParts[0], 10)
-        const y: number = parseInt(pointerParts[1], 10)
-
-        if (isNaN(x) || isNaN(y)) {
+        if (!isIntegerCoordinate(pointerParts[0]) || !isIntegerCoordinate(pointerParts[1])) {
           errors.push(
             `Scene pointers should only contain two integers separated by a comma, for example (10,10) or (120,-45). Invalid pointer: ${pointer}`
           )
@@ -359,6 +360,9 @@ export function createSceneValidateFn({
           queue.clear()
           break
         }
+
+        const x: number = parseInt(pointerParts[0], 10)
+        const y: number = parseInt(pointerParts[1], 10)
 
         // Check that the address has access (we check both the present and the 5 min into the past to avoid synchronization issues in the blockchain)
         queue

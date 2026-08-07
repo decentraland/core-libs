@@ -88,7 +88,13 @@ export function createParser<T>(handlers: RouteMap<T>): (urn: string) => Promise
   }
 
   return async (urn: string) => {
-    const url = new URL(urn)
+    let url: URL
+    try {
+      url = new URL(urn)
+    } catch {
+      // Malformed input resolves to null instead of throwing.
+      return null
+    }
 
     if (url.protocol !== 'urn:') return null
 
@@ -98,9 +104,17 @@ export function createParser<T>(handlers: RouteMap<T>): (urn: string) => Promise
 
       const groups: Record<string, string> = Object.create(null)
       if (res.groups) {
+        let decodeFailed = false
         for (const key in res.groups) {
-          groups[key] = decodeURIComponent(res.groups[key])
+          try {
+            groups[key] = decodeURIComponent(res.groups[key])
+          } catch {
+            // A malformed percent-escape (e.g. '%GG') makes this route not match rather than throw.
+            decodeFailed = true
+            break
+          }
         }
+        if (decodeFailed) continue
       }
       const match = await handler(url, groups)
       if (match) return match as T

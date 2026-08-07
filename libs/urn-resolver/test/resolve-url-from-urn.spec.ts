@@ -152,6 +152,46 @@ describe('when calling resolveUrlFromUrn', () => {
         )
       })
     })
+
+    describe('and the baseUrl uses the javascript: scheme', () => {
+      it('should return null instead of emitting the attacker-controlled URL', async () => {
+        const result = await resolveUrlFromUrn(
+          'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?baseUrl=javascript:alert(1)//'
+        )
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the baseUrl is not a well-formed URL', () => {
+      it('should return null instead of honoring the invalid baseUrl', async () => {
+        const result = await resolveUrlFromUrn(
+          'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?baseUrl=not a url'
+        )
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the cid contains a percent-encoded path traversal', () => {
+      it('should return null instead of escaping the content path', async () => {
+        const result = await resolveUrlFromUrn('urn:decentraland:entity:..%2f..%2fetc%2fpasswd')
+        expect(result).toBeNull()
+      })
+    })
+
+    describe('and the baseUrl points to an arbitrary well-formed https host', () => {
+      // baseUrl is a user-controlled feature (see the ipfs.com cases above); the fix only
+      // rejects non-http(s) schemes and malformed URLs, so any well-formed https URL is still
+      // honored by design. Blocking specific hosts would require an allowlist not in scope and
+      // would break the legitimate https://ipfs.com/ipfs cases.
+      it('should resolve to that baseUrl joined with the CID', async () => {
+        const result = await resolveUrlFromUrn(
+          'urn:decentraland:entity:bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki?baseUrl=https://evil.example.com/steal'
+        )
+        expect(result).toEqual(
+          'https://evil.example.com/steal/bafkreickvfk6aungjshpuuwyhkopd4hlzsyqewhx4jru3gpp46whek7dki'
+        )
+      })
+    })
   })
 
   describe('and the URN is a LAND URN', () => {

@@ -145,6 +145,25 @@ describe('when validating entity metadata schema', () => {
       })
     })
   })
+
+  describe('and the entity type is unknown', () => {
+    let result: ValidationResponse
+
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: 'unknown-type' as EntityType,
+        metadata: invalidMetadata,
+        timestamp: POST_ADR_45_TIMESTAMP
+      })
+      const deployment = buildDeployment({ entity })
+      result = await metadataValidateFn(deployment)
+    })
+
+    it('should return a validation failure for the unknown entity type without throwing', () => {
+      expect(result.ok).toBe(false)
+      expect(result.errors).toContain('The entity type (unknown-type) is not a known entity type.')
+    })
+  })
 })
 
 describe('when validating emote metadata version', () => {
@@ -162,6 +181,24 @@ describe('when validating emote metadata version', () => {
     })
 
     it('should return ok', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
+
+  describe('and the emote is deployed exactly at the ADR-74 timestamp', () => {
+    let result: ValidationResponse
+
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.EMOTE,
+        metadata: VALID_STANDARD_EMOTE_METADATA,
+        timestamp: ADR_74_TIMESTAMP
+      })
+      const deployment = buildDeployment({ entity })
+      result = await metadataVersionIsCorrectForTimestampValidateFn(deployment)
+    })
+
+    it('should be governed by ADR-74 and return ok', () => {
       expect(result.ok).toBe(true)
     })
   })

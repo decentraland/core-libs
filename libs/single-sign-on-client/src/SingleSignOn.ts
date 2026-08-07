@@ -9,6 +9,33 @@ function getKey(user: string): string {
   return `single-sign-on-${user.toLowerCase()}`
 }
 
+// Checks that a parsed value has the shape of an AuthIdentity: a non-null
+// object with an `ephemeralIdentity` object, an `authChain` array, and an
+// `expiration` that parses to a valid Date. Guards against valid JSON that is
+// not a proper identity (e.g. `null`, primitives, or `{}`).
+function isValidIdentity(value: unknown): value is AuthIdentity {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  if (typeof candidate.ephemeralIdentity !== 'object' || candidate.ephemeralIdentity === null) {
+    return false
+  }
+
+  if (!Array.isArray(candidate.authChain)) {
+    return false
+  }
+
+  const expiration = new Date(candidate.expiration as string | number | Date)
+  if (isNaN(expiration.getTime())) {
+    return false
+  }
+
+  return true
+}
+
 // Gets the identity of the given user from local storage.
 // Does some extra operations on the obtained value to make it more reliable.
 export function getIdentity(user: string): AuthIdentity | null {
@@ -17,14 +44,23 @@ export function getIdentity(user: string): AuthIdentity | null {
     return null
   }
 
-  let identity: AuthIdentity
+  let parsed: unknown
   try {
     // If the item is not a valid JSON, we remove it.
-    identity = JSON.parse(item)
+    parsed = JSON.parse(item)
   } catch (e) {
     clearIdentity(user)
     return null
   }
+
+  // If the parsed value is valid JSON but not a well-formed identity (e.g.
+  // `null`, a primitive, or an object missing required fields), we remove it.
+  if (!isValidIdentity(parsed)) {
+    clearIdentity(user)
+    return null
+  }
+
+  const identity = parsed
 
   // The expiration is parsed as a string, so we need to convert it to a Date.
   identity.expiration = new Date(identity.expiration)

@@ -54,6 +54,51 @@ describe('Bearer Token Middleware', () => {
     expect(next).toHaveBeenCalled()
   })
 
+  it('should handle request with a lowercase bearer scheme and correct token', async () => {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
+      request: new Request('http://localhost', {
+        headers: {
+          Authorization: 'bearer some-token'
+        }
+      }),
+      url: new URL('http://localhost'),
+      components: {}
+    }
+
+    await expect(bearerTokenMiddleware('some-token')(ctx, next)).resolves.toBeUndefined()
+    expect(next).toHaveBeenCalled()
+  })
+
+  it('should handle request with a mixed-case bearer scheme and correct token', async () => {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
+      request: new Request('http://localhost', {
+        headers: {
+          Authorization: 'BeArEr some-token'
+        }
+      }),
+      url: new URL('http://localhost'),
+      components: {}
+    }
+
+    await expect(bearerTokenMiddleware('some-token')(ctx, next)).resolves.toBeUndefined()
+    expect(next).toHaveBeenCalled()
+  })
+
+  it('should reject a request with a bearer scheme and a token of a different length', async () => {
+    const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
+      request: new Request('http://localhost', {
+        headers: {
+          Authorization: 'Bearer a-much-longer-wrong-token'
+        }
+      }),
+      url: new URL('http://localhost'),
+      components: {}
+    }
+
+    await expect(bearerTokenMiddleware('some-token')(ctx, next)).rejects.toThrow('Invalid authorization header')
+    expect(next).not.toHaveBeenCalled()
+  })
+
   it('should handle request with invalid authentication header', async () => {
     const ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>> = {
       request: new Request('http://localhost', {

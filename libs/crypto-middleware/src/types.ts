@@ -29,6 +29,17 @@ export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string }
 
 export interface DecentralandSignatureData<P extends Record<string, unknown> = Record<string, unknown>> {
   auth: string
+  /**
+   * The parsed `x-identity-metadata` header, as delivered by the client.
+   *
+   * WARNING: this is authenticated case-insensitively only. The canonical Decentraland
+   * signed-fetch payload is lowercased before signing (`(method:path:timestamp:metadata).toLowerCase()`),
+   * so the signature covers only the lowercased form. The bytes returned here are the
+   * header as received — an intermediary can alter their case without invalidating the
+   * signature. Do not make case-sensitive security decisions on these values; normalize
+   * case (or reject non-canonical metadata) inside `metadataValidator` or downstream.
+   * See the "Case-insensitive payload normalization" note in the README.
+   */
   authMetadata: P
 }
 

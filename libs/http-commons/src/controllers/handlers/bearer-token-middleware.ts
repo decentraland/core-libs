@@ -1,6 +1,10 @@
-import { timingSafeEqual } from 'crypto'
+import { createHash, timingSafeEqual } from 'crypto'
 import type { IHttpServerComponent } from '@dcl/core-commons'
 import { NotAuthorizedError } from '../../errors'
+
+function sha256(value: string): Buffer {
+  return createHash('sha256').update(value).digest()
+}
 
 export function bearerTokenMiddleware(
   authSecret: string
@@ -9,7 +13,9 @@ export function bearerTokenMiddleware(
     throw new Error('Bearer token middleware requires a secret')
   }
 
-  const secretBuffer = Buffer.from(authSecret)
+  // Hashing the secret to a fixed-length digest means timingSafeEqual always compares
+  // equal-length buffers, so the comparison never leaks the secret's length via timing.
+  const secretHash = sha256(authSecret)
 
   return async function (
     ctx: IHttpServerComponent.DefaultContext<Record<string, unknown>>,
@@ -21,12 +27,9 @@ export function bearerTokenMiddleware(
     }
 
     const [type, value] = header.split(' ')
-    const valueBuffer = Buffer.from(value ?? '')
-    if (
-      type !== 'Bearer' ||
-      valueBuffer.length !== secretBuffer.length ||
-      !timingSafeEqual(valueBuffer, secretBuffer)
-    ) {
+    // Auth schemes are case-insensitive per RFC 7235.
+    const valueHash = sha256(value ?? '')
+    if (type?.toLowerCase() !== 'bearer' || !timingSafeEqual(valueHash, secretHash)) {
       throw new NotAuthorizedError('Invalid authorization header')
     }
 

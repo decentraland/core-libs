@@ -125,6 +125,29 @@ describe('when validating profile item ownership', () => {
       )
     })
   })
+
+  describe('and the profile references a malformed dcl:// wearable URN', () => {
+    let result: ValidationResponse
+    const malformedUrn = 'dcl://collections/%'
+
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.PROFILE,
+        metadata: validProfileMetadataWithEmotes([], [malformedUrn]),
+        timestamp: POST_ADR_75_TIMESTAMP,
+        pointers: [SIGNER_ADDRESS]
+      })
+      const deployment = buildDeployment({ entity })
+      const externalCalls = buildExternalCalls({ ownerAddress: () => SIGNER_ADDRESS })
+      const itemsOwnership = createItemsOwnershipWith(SIGNER_ADDRESS, [])
+      const validateFn = createItemOwnershipValidateFn({ externalCalls }, itemsOwnership)
+      result = await validateFn(deployment)
+    })
+
+    it('should complete validation without throwing and skip the malformed urn', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
 })
 
 describe('when validating profile names ownership', () => {

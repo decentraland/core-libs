@@ -560,6 +560,62 @@ describe('Authenticator', () => {
           expect(Authenticator.isValidAuthChain(chain)).toEqual(false)
         })
       })
+
+      describe('and the chain is empty', () => {
+        let chain: AuthChain
+
+        beforeEach(() => {
+          chain = []
+        })
+
+        it('should return a validation result with ok false reporting a Malformed authChain', async () => {
+          const result = await Authenticator.validateSignature('message', chain, mainnetProvider)
+
+          expect(result).toEqual({ ok: false, message: 'ERROR: Malformed authChain' })
+        })
+
+        it('should be rejected by isValidAuthChain', () => {
+          expect(Authenticator.isValidAuthChain(chain)).toEqual(false)
+        })
+      })
+    })
+
+    describe('and a link in the chain has an unrecognized type', () => {
+      let chain: AuthChain
+      let unknownType: string
+
+      beforeEach(() => {
+        unknownType = 'NOT_A_REAL_LINK_TYPE'
+        chain = [
+          {
+            type: AuthLinkType.SIGNER,
+            payload: '0x3b21028719a4aca7ebee35b0157a6f1b0cf0d0c5',
+            signature: ''
+          },
+          {
+            type: unknownType as unknown as AuthLinkType,
+            payload: 'QmUsqJaHc5HQaBrojhBdjF4fr5MQc6CqhwZjqwhVRftNAo',
+            signature:
+              '0xd73b0315dd39080d9b6d1a613a56732a75d68d2cef2a38f3b7be12bdab3c59830c92c6bdf394dcb47ba1aa736e0338cf9112c9eee59dbe4109b8af6a993b12d71b'
+          }
+        ]
+      })
+
+      it('should return a validation result with ok false', async () => {
+        const result = await Authenticator.validateSignature('message', chain, mainnetProvider)
+
+        expect(result.ok).toEqual(false)
+      })
+
+      it('should return a validation result whose message reports the unknown link type', async () => {
+        const result = await Authenticator.validateSignature('message', chain, mainnetProvider)
+
+        expect(result.message).toMatch(`ERROR. Link type: ${unknownType}. Unknown auth link type.`)
+      })
+
+      it('should resolve instead of throwing to its caller', async () => {
+        await expect(Authenticator.validateSignature('message', chain, mainnetProvider)).resolves.toBeDefined()
+      })
     })
 
     describe('and the chain is well-formed', () => {

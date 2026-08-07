@@ -33,6 +33,14 @@ function isAsyncIterable(content: unknown): content is AsyncIterable<Uint8Array>
   )
 }
 
+// Realm-safe replacement for `content instanceof Uint8Array`, which fails for
+// typed arrays created in another realm (e.g. a different iframe/worker/vm).
+// Accepts any ArrayBuffer view (Uint8Array, Buffer, other TypedArrays) while
+// still rejecting DataView and non-view values.
+function isUint8ArrayLike(content: unknown): content is Uint8Array {
+  return ArrayBuffer.isView(content) && !(content instanceof DataView)
+}
+
 function sha256Digest(data: Uint8Array) {
   return create(SHA2_256_CODE, sha256(data))
 }
@@ -201,11 +209,21 @@ export async function hashV1WithLayout(
 ): Promise<string> {
   const { chunkSize, maxChildrenPerNode } = options
 
-  if (content instanceof Uint8Array && content.length <= chunkSize) {
+  if (!Number.isInteger(chunkSize) || chunkSize < 1) {
+    throw new Error(`Invalid chunkSize provided to hashV1. Expected an integer >= 1, received ${chunkSize}`)
+  }
+
+  if (!Number.isInteger(maxChildrenPerNode) || maxChildrenPerNode < 2) {
+    throw new Error(
+      `Invalid maxChildrenPerNode provided to hashV1. Expected an integer >= 2, received ${maxChildrenPerNode}`
+    )
+  }
+
+  if (isUint8ArrayLike(content) && content.length <= chunkSize) {
     return CID.createV1(RAW_CODEC, sha256Digest(content)).toString()
   }
 
-  if (content instanceof Uint8Array) {
+  if (isUint8ArrayLike(content)) {
     return hashChunks(chunksFromBuffer(content, chunkSize), maxChildrenPerNode)
   }
 

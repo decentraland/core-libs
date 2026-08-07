@@ -28,3 +28,17 @@ describe('when encoding and decoding LAND token ids', () => {
     })
   })
 })
+
+describe('when parsing a parcel position', () => {
+  describe('and the position is a valid pair of integer coordinates', () => {
+    it('should return the parsed x and y coordinates', () => {
+      expect(LandUtils.parseParcelPosition('-1,5')).toEqual({ x: -1, y: 5 })
+    })
+  })
+
+  describe('and a coordinate has trailing non-numeric characters', () => {
+    it('should return NaN for the invalid coordinate instead of coercing it to a number', () => {
+      expect(LandUtils.parseParcelPosition('13abc,5')).toEqual({ x: NaN, y: 5 })
+    })
+  })
+})

@@ -66,7 +66,10 @@ export namespace LandUtils {
     const [x, y] = position
       .trim()
       .split(/\s*,\s*/)
-      .map(($) => parseInt($, 10))
+      // Reject non-integer coordinate strings (e.g. '13abc') instead of letting parseInt
+      // silently coerce them ('13abc' -> 13). Invalid coordinates yield NaN, matching the
+      // existing failure path for malformed positions.
+      .map(($) => (/^[-+]?\d+$/.test($) ? parseInt($, 10) : NaN))
     return { x, y }
   }
 }
