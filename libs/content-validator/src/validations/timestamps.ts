@@ -66,6 +66,14 @@ export const ADR_290_REJECTED_TIMESTAMP = parseTimestamp(
 )
 
 /**
+ * Profile avatar identity fields must match the entity pointer from this timestamp on.
+ * Historical profiles predate the check, so they keep validating.
+ * 1790812800000 = 2026-10-01T00:00:00Z
+ * @public
+ */
+export const PROFILE_IDENTITY_TIMESTAMP = parseTimestamp(process.env.PROFILE_IDENTITY_TIMESTAMP, 1790812800000)
+
+/**
  * DCL Launch Day
  * @public
  */

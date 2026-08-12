@@ -3,7 +3,7 @@ import { EthAddress } from '@dcl/schemas'
 import { parseUrn } from '@dcl/urn-resolver'
 import { OK, validationFailed } from '../../../types'
 import { isOldEmote } from '../../profile'
-import { ADR_74_TIMESTAMP, ADR_75_TIMESTAMP } from '../../timestamps'
+import { ADR_74_TIMESTAMP, ADR_75_TIMESTAMP, PROFILE_IDENTITY_TIMESTAMP } from '../../timestamps'
 import { validateAfterADR75, validateAll } from '../../validations'
 import type {
   ContentValidatorComponents,
@@ -123,6 +123,7 @@ export function createPointerValidateFn(components: Pick<ContentValidatorCompone
     if (pointer.startsWith('default')) {
       if (!components.externalCalls.isAddressOwnedByDecentraland(ethAddress))
         return validationFailed(`Only Decentraland can add or modify default profiles`)
+      return OK
     } else if (!EthAddress.validate(pointer)) {
       return validationFailed(`The given pointer is not a valid ethereum address.`)
     } else if (pointer !== ethAddress.toLowerCase()) {
@@ -130,6 +131,24 @@ export function createPointerValidateFn(components: Pick<ContentValidatorCompone
         `You can only alter your own profile. The pointer address and the signer address are different (pointer:${pointer} signer: ${ethAddress.toLowerCase()}).`
       )
     }
+
+    // Consumers key identity off these fields, so they must agree with the pointer
+    if (deployment.entity.timestamp >= PROFILE_IDENTITY_TIMESTAMP) {
+      const avatars: Avatar[] = deployment.entity.metadata?.avatars ?? []
+      for (const avatar of avatars) {
+        for (const [field, value] of [
+          ['ethAddress', avatar.ethAddress],
+          ['userId', avatar.userId]
+        ] as const) {
+          if (value && value.toLowerCase() !== pointer) {
+            return validationFailed(
+              `The avatar ${field} must match the profile pointer (pointer:${pointer} ${field}:${value.toLowerCase()}).`
+            )
+          }
+        }
+      }
+    }
+
     return OK
   }
 }
