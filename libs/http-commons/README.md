@@ -71,7 +71,14 @@ router.use(ethAddressNormalizerMiddleware())
 
 ### `getPaginationParams`
 
-Parses `limit` and `offset` from a `URLSearchParams`. `limit` must be a positive integer ≤ `100`; missing, zero, negative, or out-of-range values fall back to `100`. `offset` defaults to `0` if missing or negative.
+Parses `limit` and `offset` from a `URLSearchParams`. Both are bounded, because both reach the database verbatim.
+
+- `limit` must be a positive integer ≤ `100`; missing, zero, negative, or out-of-range values fall back to `100`.
+- `offset` must be a non-negative integer ≤ `100_000`; missing, negative, or unparseable values fall back to `0`, and a larger one is **reduced to `100_000` rather than rejected**.
+
+Note what the offset cap means for a caller that pages past it: it receives an earlier page rather than an error, so a client walking deeper than 100,000 rows will loop. That threshold is page one thousand at the maximum page size; anything genuinely needing to go further wants keyset pagination instead of a deeper offset.
+
+The cap is not only about load. `parseInt` returns values beyond the range of a `bigint`, so an unbounded offset let `?offset=9223372036854775808` reach Postgres and answer `bigint out of range` — a `500` on a request the helper had accepted.
 
 ```typescript
 import { getPaginationParams } from '@dcl/http-commons'
