@@ -5,7 +5,7 @@ import {
   createNamesOwnershipValidateFn,
   createPointerValidateFn
 } from '../../../src/validations/access/common/profile'
-import { ADR_74_TIMESTAMP, ADR_75_TIMESTAMP } from '../../../src/validations/timestamps'
+import { ADR_74_TIMESTAMP, ADR_75_TIMESTAMP, PROFILE_IDENTITY_TIMESTAMP } from '../../../src/validations/timestamps'
 import { buildDeployment, buildProfileDeployment } from '../../setup/deployments'
 import { buildEntity } from '../../setup/entity'
 import { buildExternalCalls } from '../../setup/mock'
@@ -16,6 +16,8 @@ const SIGNER_ADDRESS = '0x862f109696d7121438642a78b3caa38f476db08b'
 const POST_ADR_74_TIMESTAMP = ADR_74_TIMESTAMP + 1
 const POST_ADR_75_TIMESTAMP = ADR_75_TIMESTAMP + 1
 const PRE_ADR_75_TIMESTAMP = ADR_75_TIMESTAMP - 1
+const POST_PROFILE_IDENTITY_TIMESTAMP = PROFILE_IDENTITY_TIMESTAMP + 1
+const PRE_PROFILE_IDENTITY_TIMESTAMP = PROFILE_IDENTITY_TIMESTAMP - 1
 const UNOWNED_WEARABLE_URN =
   'urn:decentraland:matic:collections-v2:0xf6f601efee04e74cecac02c8c5bdc8cc0fc1c721:0:1295628'
 
@@ -334,6 +336,95 @@ describe('when validating the profile pointer', () => {
     it('should return an error reporting an invalid ethereum address', () => {
       expect(result.ok).toBe(false)
       expect(result.errors).toContain('The given pointer is not a valid ethereum address.')
+    })
+  })
+
+  describe('and an avatar has a different address than the pointer', () => {
+    const otherAddress = '0x2222222222222222222222222222222222222222'
+
+    describe('and the deployment is after the identity check took effect', () => {
+      let ethAddressResult: ValidationResponse
+      let userIdResult: ValidationResponse
+
+      beforeEach(async () => {
+        const externalCalls = buildExternalCalls({ ownerAddress: () => SIGNER_ADDRESS })
+        const validateFn = createPointerValidateFn({ externalCalls })
+
+        ethAddressResult = await validateFn(
+          buildDeployment({
+            entity: buildEntity({
+              type: EntityType.PROFILE,
+              metadata: { avatars: [{ ethAddress: otherAddress, userId: SIGNER_ADDRESS }] },
+              timestamp: POST_PROFILE_IDENTITY_TIMESTAMP,
+              pointers: [SIGNER_ADDRESS]
+            })
+          })
+        )
+        userIdResult = await validateFn(
+          buildDeployment({
+            entity: buildEntity({
+              type: EntityType.PROFILE,
+              metadata: { avatars: [{ ethAddress: SIGNER_ADDRESS, userId: otherAddress }] },
+              timestamp: POST_PROFILE_IDENTITY_TIMESTAMP,
+              pointers: [SIGNER_ADDRESS]
+            })
+          })
+        )
+      })
+
+      it('should reject a mismatching ethAddress', () => {
+        expect(ethAddressResult.ok).toBe(false)
+        expect(ethAddressResult.errors).toContain(
+          `The avatar ethAddress must match the profile pointer (pointer:${SIGNER_ADDRESS} ethAddress:${otherAddress}).`
+        )
+      })
+
+      it('should reject a mismatching userId', () => {
+        expect(userIdResult.ok).toBe(false)
+        expect(userIdResult.errors).toContain(
+          `The avatar userId must match the profile pointer (pointer:${SIGNER_ADDRESS} userId:${otherAddress}).`
+        )
+      })
+    })
+
+    describe('and the deployment predates the identity check', () => {
+      let result: ValidationResponse
+
+      beforeEach(async () => {
+        const entity = buildEntity({
+          type: EntityType.PROFILE,
+          metadata: { avatars: [{ ethAddress: otherAddress, userId: otherAddress }] },
+          timestamp: PRE_PROFILE_IDENTITY_TIMESTAMP,
+          pointers: [SIGNER_ADDRESS]
+        })
+        const externalCalls = buildExternalCalls({ ownerAddress: () => SIGNER_ADDRESS })
+        const validateFn = createPointerValidateFn({ externalCalls })
+        result = await validateFn(buildDeployment({ entity }))
+      })
+
+      it('should return ok so historical profiles keep validating', () => {
+        expect(result.ok).toBe(true)
+      })
+    })
+  })
+
+  describe('and the avatar identity matches the pointer in a different casing', () => {
+    let result: ValidationResponse
+
+    beforeEach(async () => {
+      const entity = buildEntity({
+        type: EntityType.PROFILE,
+        metadata: { avatars: [{ ethAddress: SIGNER_ADDRESS.toUpperCase(), userId: SIGNER_ADDRESS.toUpperCase() }] },
+        timestamp: POST_PROFILE_IDENTITY_TIMESTAMP,
+        pointers: [SIGNER_ADDRESS]
+      })
+      const externalCalls = buildExternalCalls({ ownerAddress: () => SIGNER_ADDRESS })
+      const validateFn = createPointerValidateFn({ externalCalls })
+      result = await validateFn(buildDeployment({ entity }))
+    })
+
+    it('should return ok', () => {
+      expect(result.ok).toBe(true)
     })
   })
 })
