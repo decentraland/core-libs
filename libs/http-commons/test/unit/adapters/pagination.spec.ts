@@ -2,6 +2,42 @@ import { URLSearchParams } from 'url'
 import { getPaginationParams } from '../../../src/adapters'
 
 describe('when getting the pagination params', () => {
+  describe('and the offset is greater than the max offset', () => {
+    it('should cap it, since the value reaches the database verbatim', () => {
+      expect(getPaginationParams(new URLSearchParams({ offset: '1000000' }))).toEqual({
+        limit: 100,
+        offset: 100000
+      })
+    })
+  })
+
+  describe('and the offset is beyond the range of a bigint', () => {
+    it('should cap it rather than let the query fail with 22003', () => {
+      expect(getPaginationParams(new URLSearchParams({ offset: '9223372036854775808' }))).toEqual({
+        limit: 100,
+        offset: 100000
+      })
+    })
+  })
+
+  describe('and the offset is at the max offset', () => {
+    it('should return it unchanged', () => {
+      expect(getPaginationParams(new URLSearchParams({ offset: '100000' }))).toEqual({
+        limit: 100,
+        offset: 100000
+      })
+    })
+  })
+
+  describe('and the offset is a value a client would actually send', () => {
+    it('should return it unchanged', () => {
+      expect(getPaginationParams(new URLSearchParams({ offset: '250' }))).toEqual({
+        limit: 100,
+        offset: 250
+      })
+    })
+  })
+
   describe('and the limit is greater than the max limit', () => {
     it('should return the default limit', () => {
       expect(getPaginationParams(new URLSearchParams({ limit: '200' }))).toEqual({
