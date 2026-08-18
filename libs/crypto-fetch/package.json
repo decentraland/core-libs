@@ -32,6 +32,7 @@
     "@dcl/crypto": "workspace:*"
   },
   "devDependencies": {
+    "@dcl/crypto-middleware": "workspace:*",
     "@dcl/eslint-config": "^2.4.3",
     "eslint": "^8.57.1",
     "typescript": "^5.3.3"

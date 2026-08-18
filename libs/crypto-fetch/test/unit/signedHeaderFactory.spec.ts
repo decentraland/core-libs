@@ -1,5 +1,5 @@
 import type { AuthIdentity } from '@dcl/crypto'
-import { AuthLinkType, Authenticator } from '@dcl/crypto'
+import { AUTH_METADATA_HEADER, AuthLinkType, Authenticator } from '@dcl/crypto'
 import signedHeaderFactory from '../../src/signedHeaderFactory'
 
 const identity: AuthIdentity = {
@@ -89,13 +89,28 @@ describe('signedHeaderFactory', () => {
     })
 
     describe('when called with mixed-case method, path and metadata', () => {
-      it('should join them as method:path:timestamp:metadata and lowercase the result', () => {
+      it('should lowercase the method and path but keep the metadata verbatim', () => {
         const signedHeader = signedHeaderFactory()
         signedHeader(identity, 'POST', '/Users/Me', { Foo: 'Bar' })
 
         expect(signPayloadSpy).toHaveBeenCalledTimes(1)
         const [, payload] = signPayloadSpy.mock.calls[0]
-        expect(payload).toBe('post:/users/me:1700000000000:{"foo":"bar"}')
+        expect(payload).toBe('post:/users/me:1700000000000:{"Foo":"Bar"}')
+      })
+    })
+
+    describe('when the metadata contains camelCase property names', () => {
+      it('should sign the exact bytes it puts in the metadata header', () => {
+        const signedHeader = signedHeaderFactory()
+        const metadata = { sceneId: 'QmAbC', isGuest: false, realm: { serverName: 'MyRealm' } }
+        const headers = signedHeader(identity, 'GET', '/scene/resource', metadata)
+
+        // The verifier rebuilds the payload from the delivered header, so the signed metadata
+        // segment and the header must be the same string.
+        const [, payload] = signPayloadSpy.mock.calls[0]
+        const delivered = headers.get(AUTH_METADATA_HEADER) ?? ''
+        expect(delivered).toBe(JSON.stringify(metadata))
+        expect(payload).toBe(`get:/scene/resource:1700000000000:${delivered}`)
       })
     })
 
