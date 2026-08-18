@@ -86,7 +86,27 @@ The signed payload no longer lowercases the metadata:
 
 Paths are unaffected: they are still lowercased on both sides, so mixed-case path segments keep working.
 
-Also removed in 6.0: the canonical `signer` / `intent` value check from 5.1.0. It rejected values like `Decentraland-Kernel-Scene` with a `400`; those requests now fail signature verification with a `401` instead, together with every re-casing the guard could not see — property names, nested fields, and consumer-defined keys. If you relied on catching that `400`, expect a `401`.
+Also removed in 6.0: the canonical `signer` / `intent` value check from 5.1.0, which rejected values such as `Decentraland-Kernel-Scene` or `" decentraland-kernel-scene"` with a `400`.
+
+The signature does not replace it one-for-one, so be precise about what changed. Metadata altered **after** signing now fails with `401 Invalid signature`, and that covers everything the old check could not see — property names, nested fields and consumer-defined keys. A client that **signs a non-canonical value in the first place** verifies successfully and the handler receives the value untouched:
+
+| Signed | Delivered | Result |
+| --- | --- | --- |
+| `{"signer":"decentraland-kernel-scene"}` | unchanged | verifies; reads canonical |
+| `{"signer":"Decentraland-Kernel-Scene"}` | unchanged | **verifies**; reads `Decentraland-Kernel-Scene` |
+| `{"signer":" decentraland-kernel-scene"}` | unchanged | **verifies**; reads padded |
+| `{}` | unchanged | verifies; reads `undefined` |
+| `{"signer":"decentraland-kernel-scene"}` | `{"Signer":...}` | `401 Invalid signature` |
+
+Canonical form is therefore a client-side contract rather than something this library enforces. **If your service compares a reserved field by strict equality — `metadata.signer !== 'decentraland-kernel-scene'` — enforce the canonical form yourself in `metadataValidator`.** It runs before signature verification, so it costs nothing:
+
+```ts
+wellKnownComponents({
+  metadataValidator: (m) => typeof m.signer !== 'string' || m.signer === m.signer.trim().toLowerCase()
+})
+```
+
+The same applies to any other field your service authorizes on.
 
 ### From `decentraland-crypto-middleware`
 
