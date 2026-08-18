@@ -23,6 +23,29 @@ function safe(value: unknown, max = 64): string {
   return s.length > max ? s.slice(0, max) + '…' : s
 }
 
+/**
+ * Freezes the parsed metadata, nested objects included.
+ *
+ * `verify()` hands the same object to `metadataValidator` and to consumers, so the guarantee worth
+ * having is not just "same object" but "same contents": a middleware that mutated it between the
+ * two would leave the validation describing something the handler no longer sees. Services
+ * authorize on nested fields (`realm.serverName`), so a shallow freeze would be a false assurance.
+ *
+ * Safe to recurse: the input comes from `JSON.parse`, which produces no cycles, getters or proxies.
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) {
+    return value
+  }
+
+  Object.freeze(value)
+  for (const key of Object.getOwnPropertyNames(value)) {
+    deepFreeze((value as Record<string, unknown>)[key])
+  }
+
+  return value
+}
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -267,7 +290,9 @@ export default async function verify<P extends Record<string, unknown> = Record<
   // and the catalyst round-trip for replayed / stale requests.
   verifyExpiration(timestamp, options)
 
-  const metadata = verifyMetadata(rawMetadata) as P
+  // Frozen before the validator so neither it nor a downstream middleware can make the
+  // authorization decision describe metadata the handler no longer sees.
+  const metadata = deepFreeze(verifyMetadata(rawMetadata)) as P
 
   if (options.metadataValidator && !options.metadataValidator(metadata)) {
     throw new RequestError(`Invalid metadata content: ${safe(JSON.stringify(metadata))}`, 400)
