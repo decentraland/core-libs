@@ -21,6 +21,23 @@ function isCanonical(value: string): boolean {
   return value === value.trim().toLowerCase()
 }
 
+/**
+ * Reads a field only when the metadata object owns it.
+ *
+ * A plain property read walks the prototype chain, so a polluted `Object.prototype` would supply a
+ * `signer` that no client ever sent — enough for `requireSigner` to accept a request carrying no
+ * signer at all. `JSON.parse` cannot pollute the prototype on its own (it materializes `__proto__`
+ * as an own property), but consumer code that later spreads or `Object.assign`s metadata into
+ * another object can, so the gate must not depend on that never having happened.
+ */
+function ownField(metadata: Record<string, unknown> | undefined, field: string): unknown {
+  if (metadata === null || metadata === undefined || !Object.prototype.hasOwnProperty.call(metadata, field)) {
+    return undefined
+  }
+
+  return metadata[field]
+}
+
 function assertCanonicalArguments(fn: string, values: string[]): void {
   if (values.length === 0) {
     throw new Error(`${fn}() requires at least one signer`)
@@ -54,7 +71,7 @@ export function canonicalField<P extends Record<string, unknown> = Record<string
   field: string
 ): MetadataPredicate<P> {
   return (metadata: P): boolean => {
-    const value = metadata?.[field]
+    const value = ownField(metadata, field)
     if (value === undefined) {
       return true
     }
@@ -84,7 +101,7 @@ export function rejectIfSigner<P extends Record<string, unknown> = Record<string
   assertCanonicalArguments('rejectIfSigner', signers)
   const canonical = canonicalField<P>(SIGNER)
 
-  return (metadata: P): boolean => canonical(metadata) && !signers.includes(metadata?.[SIGNER] as string)
+  return (metadata: P): boolean => canonical(metadata) && !signers.includes(ownField(metadata, SIGNER) as string)
 }
 
 /**
@@ -107,7 +124,7 @@ export function requireSigner<P extends Record<string, unknown> = Record<string,
   const canonical = canonicalField<P>(SIGNER)
 
   return (metadata: P): boolean => {
-    const signer = metadata?.[SIGNER]
+    const signer = ownField(metadata, SIGNER)
     return canonical(metadata) && typeof signer === 'string' && signers.includes(signer)
   }
 }

@@ -136,3 +136,48 @@ describe('requireSigner', () => {
     })
   })
 })
+
+// A plain property read walks the prototype chain, so a polluted `Object.prototype` would supply a
+// `signer` no client sent. `JSON.parse` cannot pollute the prototype itself, but consumer code that
+// spreads or `Object.assign`s metadata into another object can, so these gates must not rely on it.
+describe('prototype-inherited fields', () => {
+  describe('when a field exists only on the metadata prototype', () => {
+    let inherited: Record<string, unknown>
+
+    beforeEach(() => {
+      inherited = Object.create({ signer: SCENE, intent: 'dcl:explorer:comms-handshake' }) as Record<string, unknown>
+    })
+
+    it('should be treated as absent by canonicalField', () => {
+      expect(canonicalField('intent')(inherited)).toBe(true)
+    })
+
+    it('should not satisfy requireSigner', () => {
+      expect(requireSigner(SCENE)(inherited)).toBe(false)
+    })
+
+    it('should not trip rejectIfSigner, since the request declared no signer', () => {
+      expect(rejectIfSigner(SCENE)(inherited)).toBe(true)
+    })
+  })
+
+  describe('and the pollution is on Object.prototype itself', () => {
+    beforeEach(() => {
+      ;(Object.prototype as Record<string, unknown>).signer = SCENE
+    })
+
+    afterEach(() => {
+      delete (Object.prototype as Record<string, unknown>).signer
+    })
+
+    it('should not let metadata without an own signer satisfy requireSigner', () => {
+      // Before the own-property lookup this returned true: a request carrying no signer at all was
+      // accepted as the scene signer.
+      expect(requireSigner(SCENE)({})).toBe(false)
+    })
+
+    it('should still reject an own signer that matches', () => {
+      expect(requireSigner(SCENE)({ signer: SCENE })).toBe(true)
+    })
+  })
+})
