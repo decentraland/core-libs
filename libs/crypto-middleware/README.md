@@ -53,6 +53,29 @@ This matters because services identify the caller by strict equality on metadata
 
 The library performs no canonicalization of its own: `verifyMetadata` parses the header and returns it untouched, so `authMetadata` holds exactly the object the client sent. Casing, whitespace and key order are all the client's to get right, and all of them are covered by the signature.
 
+### Composable metadata validators
+
+Because the library canonicalizes nothing, a field compared by equality needs the non-canonical case refused before the comparison, or a re-spelled value reads as something the request is not. Three predicates cover that:
+
+```ts
+import { rejectIfSigner, requireSigner, canonicalField } from '@dcl/crypto-middleware'
+
+// "not for scenes" — absent `signer` passes; a re-spelled one is refused, not compared
+wellKnownComponents({ metadataValidator: rejectIfSigner('decentraland-kernel-scene') })
+
+// "only for scenes" — fails closed on absent, non-canonical, or unlisted
+wellKnownComponents({ metadataValidator: requireSigner('decentraland-kernel-scene', 'dcl:authoritative-server') })
+
+// any other field
+wellKnownComponents({
+  metadataValidator: (m) => canonicalField('intent')(m) && m.intent === 'dcl:explorer:comms-handshake'
+})
+```
+
+`canonicalField(name)` passes when the field is absent and fails when it is present but not a trimmed-lowercase string. `rejectIfSigner` and `requireSigner` are built on it and additionally throw at construction if handed a non-canonical value, so a predicate that could never match is a startup error rather than a silent gap.
+
+None of this runs unless you compose it in — the library still has no opinion about which fields exist or what their values mean.
+
 ## Error format
 
 `DEFAULT_ERROR_FORMAT` emits `{ ok: false, message: 'Internal error' }` for status codes `>= 500` and `{ ok: false, message: err.message }` for client-side errors (`< 500`). The sanitization avoids echoing upstream catalyst hostnames, response bodies, or unexpected internal messages to the client. Consumers that prefer full-fidelity errors (for observability tooling, trusted internal APIs, etc.) should provide their own `onError`:

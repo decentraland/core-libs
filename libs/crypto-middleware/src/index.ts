@@ -1,6 +1,7 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
+import { canonicalField, rejectIfSigner, requireSigner } from './metadataValidators'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -14,9 +15,11 @@ import {
   VerifyAuthChainHeadersOptions
 } from './types'
 import verify from './verify'
+import type { MetadataPredicate } from './metadataValidators'
 
 export {
   Options,
+  MetadataPredicate,
   VerifyAuthChainHeadersOptions,
   DecentralandSignatureData,
   DecentralandSignatureContext,
@@ -26,6 +29,9 @@ export {
   AUTH_METADATA_HEADER,
   RequestError,
   createAuthChainHeaders,
+  canonicalField,
+  rejectIfSigner,
+  requireSigner,
   verify
 }
 
