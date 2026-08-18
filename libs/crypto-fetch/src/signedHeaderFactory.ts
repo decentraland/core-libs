@@ -27,7 +27,10 @@ export default function signedHeaderFactory(options: SignedHeaderFactoryOptions 
     const headers = new HeadersImpl(init)
     const timestamp = String(Date.now())
     const data = JSON.stringify(metadata)
-    const payload = [method, path, timestamp, data].join(':').toLowerCase()
+    // Method, path and timestamp are lowercased; the metadata is joined verbatim so its casing is
+    // covered by the signature. `data` is signed and sent as the same string — re-serializing it
+    // separately could reorder keys or change spacing and would break verification.
+    const payload = [method.toLowerCase(), path.toLowerCase(), timestamp, data].join(':')
 
     let i = 0
     const chain = Authenticator.signPayload(identity, payload)

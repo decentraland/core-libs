@@ -12,6 +12,15 @@ import {
 import verifyAuthChainHeaders, { isEIP1654AuthChain, verifyEIP1654Sign, verifyPersonalSign } from '../../src/verify'
 import { identity } from '../fixtures/identity'
 
+/**
+ * Mirrors what a signer produces under the current payload format: method, path and timestamp
+ * lowercased, metadata joined verbatim. Kept separate from `createPayload` so these tests fail if
+ * the library's own construction drifts, rather than agreeing with it by definition.
+ */
+function signedPayload(method: string, path: string, timestamp: number | string, metadata: string): string {
+  return [method.toLowerCase(), path.toLowerCase(), String(timestamp), metadata].join(':')
+}
+
 const authChainEIP1654: AuthChain = [
   { type: AuthLinkType.SIGNER, payload: '', signature: '' },
   { type: AuthLinkType.ECDSA_EIP_1654_EPHEMERAL, payload: '', signature: '' },
@@ -274,7 +283,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, metadata)
 
@@ -297,7 +306,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, metadata)
       headers[AUTH_CHAIN_HEADER_PREFIX + '1'] = '{'
@@ -312,7 +321,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, metadata)
       headers[AUTH_TIMESTAMP_HEADER] = 'abc'
@@ -330,7 +339,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, metadata)
       jest.spyOn(Date, 'now').mockReturnValue(now)
@@ -349,7 +358,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp + 1, metadata)
 
@@ -363,7 +372,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, metadata)
       headers[AUTH_METADATA_HEADER] = '{'
@@ -379,7 +388,7 @@ describe('verifyAuthChainHeaders', () => {
       const timestamp = Date.now()
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(null)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(null))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, null as unknown as Record<string, unknown>)
 
@@ -396,7 +405,7 @@ describe('verifyAuthChainHeaders', () => {
       const metadata = {}
       const method = 'get'
       const path = '/path/to/resource'
-      const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+      const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
       const chain = Authenticator.signPayload(identity, payload)
       const headers = createAuthChainHeaders(chain, timestamp, { extra: 'data' })
 
@@ -405,64 +414,51 @@ describe('verifyAuthChainHeaders', () => {
   })
 
   describe.each([
-    ['signer', 'decentraland-kernel-scene', 'Decentraland-Kernel-Scene'],
-    ['intent', 'dcl:explorer:comms-handshake', 'DCL:Explorer:Comms-Handshake']
-  ])('when the metadata %s is not in canonical lowercase form', (field, canonicalValue, spoofedValue) => {
+    ['a reserved property name', '{"signer":"decentraland-kernel-scene"}', '{"Signer":"decentraland-kernel-scene"}'],
+    ['a consumer-defined property name', '{"sceneId":"QmAbC"}', '{"sceneid":"QmAbC"}'],
+    ['a property value', '{"signer":"decentraland-kernel-scene"}', '{"signer":"Decentraland-Kernel-Scene"}']
+  ])('when the delivered metadata re-cases %s', (_case, signed, delivered) => {
     const method = 'get'
     const path = '/path/to/resource'
-    const canonical = JSON.stringify({ [field]: canonicalValue })
-    const spoofed = JSON.stringify({ [field]: spoofedValue })
 
-    // Signing the canonical metadata and then delivering the mixed-case bytes is the attack: the
-    // caller signs what it is entitled to sign, and the consumer receives a value its strict
-    // equality check will miss, promoting the request onto the more trusted path.
-    function spoofedHeaders(timestamp: number): Record<string, string> {
-      const payload = [method, path, timestamp, canonical].join(':').toLowerCase()
-      const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, {
-        [field]: canonicalValue
-      })
-      headers[AUTH_METADATA_HEADER] = spoofed
-      return headers
-    }
+    let tampered: Record<string, string>
+    let thrown: unknown
 
-    it('should share a signing payload with the canonical form', () => {
-      // Without this, a rejection could just mean the signature broke. It proves the guard is
-      // what rejects the request, not signature verification.
-      expect([method, path, 1, spoofed].join(':').toLowerCase()).toBe(
-        [method, path, 1, canonical].join(':').toLowerCase()
-      )
-    })
-
-    it('should reject with an Invalid chain metadata error and status 400', async () => {
-      const thrown = await verifyAuthChainHeaders(method, path, spoofedHeaders(Date.now()), { fetcher }).catch(
-        (err: unknown) => err
-      )
-
-      expect(thrown).toBeInstanceOf(RequestError)
-      expect((thrown as RequestError).message).toBe(`Invalid chain metadata: "${spoofed}"`)
-      expect((thrown as RequestError).statusCode).toBe(400)
-    })
-
-    it('should reject before invoking the metadataValidator', async () => {
-      const metadataValidator = jest.fn().mockReturnValue(true)
-
-      await expect(
-        verifyAuthChainHeaders(method, path, spoofedHeaders(Date.now()), { fetcher, metadataValidator })
-      ).rejects.toThrow('Invalid chain metadata')
-
-      expect(metadataValidator).not.toHaveBeenCalled()
-    })
-
-    it('should resolve when the canonical form is delivered', async () => {
+    // Signing one spelling and delivering another is what the previous payload format could not
+    // see: it lowercased the metadata, so both spellings shared a single valid signature.
+    beforeEach(async () => {
       const timestamp = Date.now()
-      const payload = [method, path, timestamp, canonical].join(':').toLowerCase()
-      const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, {
-        [field]: canonicalValue
+      const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, signed))
+      tampered = createAuthChainHeaders(chain, timestamp, JSON.parse(signed))
+      tampered[AUTH_METADATA_HEADER] = delivered
+      thrown = await verifyAuthChainHeaders(method, path, tampered, { fetcher }).catch((err: unknown) => err)
+    })
+
+    it('should no longer share a signing payload with the signed form', () => {
+      expect(signedPayload(method, path, 1, delivered)).not.toBe(signedPayload(method, path, 1, signed))
+    })
+
+    it('should reject with an Invalid signature RequestError carrying status 401', () => {
+      expect(thrown).toBeInstanceOf(RequestError)
+      expect((thrown as RequestError).message).toContain('Invalid signature')
+      expect((thrown as RequestError).statusCode).toBe(401)
+    })
+
+    describe('and the signed form is delivered instead', () => {
+      let untouched: Record<string, string>
+
+      beforeEach(() => {
+        const timestamp = Date.now()
+        const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, signed))
+        untouched = createAuthChainHeaders(chain, timestamp, JSON.parse(signed))
+        untouched[AUTH_METADATA_HEADER] = signed
       })
 
-      await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).resolves.toEqual({
-        auth: identity.authChain[0].payload.toLowerCase(),
-        authMetadata: { [field]: canonicalValue }
+      it('should resolve with the owner address and the metadata as signed', async () => {
+        await expect(verifyAuthChainHeaders(method, path, untouched, { fetcher })).resolves.toEqual({
+          auth: identity.authChain[0].payload.toLowerCase(),
+          authMetadata: JSON.parse(signed)
+        })
       })
     })
   })
@@ -474,7 +470,7 @@ describe('verifyAuthChainHeaders', () => {
         const metadata = { signer: 'a signer' }
         const method = 'get'
         const path = '/path/to/resource'
-        const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+        const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
         const chain = Authenticator.signPayload(identity, payload)
         const headers = createAuthChainHeaders(chain, timestamp, metadata)
 
@@ -493,7 +489,7 @@ describe('verifyAuthChainHeaders', () => {
         const metadata = { signer: 'a signer' }
         const method = 'get'
         const path = '/path/to/resource'
-        const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+        const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
         const chain = Authenticator.signPayload(identity, payload)
         const headers = createAuthChainHeaders(chain, timestamp, metadata)
 
@@ -509,7 +505,7 @@ describe('verifyAuthChainHeaders', () => {
         const metadata = { signer: 'a signer' }
         const method = 'get'
         const path = '/path/to/resource'
-        const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+        const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
         const chain = Authenticator.signPayload(identity, payload)
         const headers = createAuthChainHeaders(chain, timestamp, metadata)
         const thrown = new RequestError('a custom error', 400)
@@ -529,7 +525,7 @@ describe('verifyAuthChainHeaders', () => {
         const metadata = { signer: 'a signer' }
         const method = 'get'
         const path = '/path/to/resource'
-        const payload = [method, path, timestamp, JSON.stringify(metadata)].join(':').toLowerCase()
+        const payload = signedPayload(method, path, timestamp, JSON.stringify(metadata))
         const chain = Authenticator.signPayload(identity, payload)
         const headers = createAuthChainHeaders(chain, timestamp, metadata)
         const metadataValidator = jest.fn().mockReturnValue(true)
