@@ -1,6 +1,6 @@
 {
   "name": "decentraland-crypto-fetch",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Make requests signed using a Decentraland Identity",
   "author": "Decentraland",
   "license": "Apache-2.0",
