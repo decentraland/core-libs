@@ -1,7 +1,7 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
-import { canonicalField, rejectIfSigner, requireSigner } from './metadataValidators'
+import { canonicalField, rejectIfSigner, requireCanonicalField, requireSigner } from './metadataValidators'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -31,6 +31,7 @@ export {
   createAuthChainHeaders,
   canonicalField,
   rejectIfSigner,
+  requireCanonicalField,
   requireSigner,
   verify
 }

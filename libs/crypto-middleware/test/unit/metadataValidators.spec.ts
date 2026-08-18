@@ -1,4 +1,4 @@
-import { canonicalField, rejectIfSigner, requireSigner } from '../../src/metadataValidators'
+import { canonicalField, rejectIfSigner, requireCanonicalField, requireSigner } from '../../src/metadataValidators'
 
 const SCENE = 'decentraland-kernel-scene'
 
@@ -82,7 +82,7 @@ describe('rejectIfSigner', () => {
 
   describe('when constructed with no signers', () => {
     it('should throw at wiring time', () => {
-      expect(() => rejectIfSigner()).toThrow('requires at least one signer')
+      expect(() => rejectIfSigner()).toThrow('requires at least one value')
     })
   })
 
@@ -178,6 +178,77 @@ describe('prototype-inherited fields', () => {
 
     it('should still reject an own signer that matches', () => {
       expect(requireSigner(SCENE)({ signer: SCENE })).toBe(true)
+    })
+  })
+})
+
+describe('requireCanonicalField', () => {
+  let predicate: ReturnType<typeof requireCanonicalField>
+
+  beforeEach(() => {
+    predicate = requireCanonicalField('intent', 'dcl:explorer:comms-handshake')
+  })
+
+  describe('when the field is an own canonical listed value', () => {
+    it('should pass', () => {
+      expect(predicate({ intent: 'dcl:explorer:comms-handshake' })).toBe(true)
+    })
+  })
+
+  describe.each([
+    ['absent', {}],
+    ['a different value', { intent: 'dcl:builder' }],
+    ['re-spelled in mixed case', { intent: 'DCL:Explorer:Comms-Handshake' }],
+    ['padded', { intent: ' dcl:explorer:comms-handshake' }],
+    ['not a string', { intent: 42 }]
+  ])('when the field is %s', (_case, metadata) => {
+    it('should fail closed', () => {
+      expect(predicate(metadata as Record<string, unknown>)).toBe(false)
+    })
+  })
+
+  describe('when the field exists only on the prototype', () => {
+    let inherited: Record<string, unknown>
+
+    beforeEach(() => {
+      inherited = Object.create({ intent: 'dcl:explorer:comms-handshake' }) as Record<string, unknown>
+    })
+
+    it('should fail closed rather than compare an inherited value', () => {
+      // The hazard this helper exists to remove: composing canonicalField with a hand-written
+      // `m.intent === ...` passes here, because the form check sees the field as absent while the
+      // equality check reads straight through the prototype.
+      expect(predicate(inherited)).toBe(false)
+    })
+
+    it('should demonstrate the hand-written composition it replaces is unsafe', () => {
+      const handRolled = (m: Record<string, unknown>) =>
+        canonicalField('intent')(m) && m.intent === 'dcl:explorer:comms-handshake'
+
+      expect(handRolled(inherited)).toBe(true)
+    })
+  })
+
+  describe.each([
+    ['a non-string', 42],
+    ['an empty string', '']
+  ])('when constructed with %s', (_case, value) => {
+    it('should throw a configuration error rather than fail later', () => {
+      expect(() => requireCanonicalField('intent', value as string)).toThrow('expects non-empty string values')
+    })
+  })
+})
+
+describe.each([
+  ['rejectIfSigner', rejectIfSigner],
+  ['requireSigner', requireSigner]
+])('%s argument handling', (name, factory) => {
+  describe.each([
+    ['a non-string', 42],
+    ['an empty string', '']
+  ])('when constructed with %s', (_case, value) => {
+    it('should throw a configuration error naming the helper', () => {
+      expect(() => factory(value as string)).toThrow(new RegExp(`^${name}\\(\\) expects non-empty string values`))
     })
   })
 })

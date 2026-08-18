@@ -38,17 +38,25 @@ function ownField(metadata: Record<string, unknown> | undefined, field: string):
   return metadata[field]
 }
 
-function assertCanonicalArguments(fn: string, values: string[]): void {
+function assertCanonicalArguments(fn: string, values: unknown[]): asserts values is string[] {
   if (values.length === 0) {
-    throw new Error(`${fn}() requires at least one signer`)
+    throw new Error(`${fn}() requires at least one value`)
   }
 
-  // A non-canonical argument could never match a value that passed the canonical check, so the
-  // predicate would silently never fire. Failing at wiring time makes that a startup error rather
-  // than an authorization gap nobody notices.
-  const offending = values.filter((value) => !isCanonical(value))
-  if (offending.length > 0) {
-    throw new Error(`${fn}() expects canonical (trimmed, lowercase) values, got: ${offending.join(', ')}`)
+  for (const value of values) {
+    // Types protect TypeScript callers only; this ships as JavaScript. Without this a non-string
+    // fails deep inside with a TypeError from trim(), and an empty string wires successfully and
+    // then matches `signer: ""`.
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error(`${fn}() expects non-empty string values, got: ${JSON.stringify(value)}`)
+    }
+
+    // A non-canonical argument could never match a value that passed the canonical check, so the
+    // predicate would silently never fire. Failing at wiring time makes that a startup error rather
+    // than an authorization gap nobody notices.
+    if (!isCanonical(value)) {
+      throw new Error(`${fn}() expects canonical (trimmed, lowercase) values, got: ${value}`)
+    }
   }
 }
 
@@ -58,11 +66,10 @@ function assertCanonicalArguments(fn: string, values: string[]): void {
  * Absent passes — absence is a question for the predicate you combine this with, not for canonical
  * form. A present non-string fails: it is not "the form we need" either.
  *
- * Use it for fields this module has no dedicated helper for, e.g. `intent`:
- *
- * ```ts
- * metadataValidator: (m) => canonicalField('intent')(m) && m.intent === 'dcl:explorer:comms-handshake'
- * ```
+ * Only use this when you are checking *form* and nothing else. To compare the value, reach for
+ * {@link requireCanonicalField} instead: writing the comparison yourself means a plain `m.field`
+ * read, which walks the prototype chain and can satisfy an equality check with a value no client
+ * sent, even though this predicate correctly treated the field as absent.
  *
  * @param field - Metadata property name to check.
  * @returns A predicate that is true when the field is absent or canonical.
@@ -77,6 +84,36 @@ export function canonicalField<P extends Record<string, unknown> = Record<string
     }
 
     return typeof value === 'string' && isCanonical(value)
+  }
+}
+
+/**
+ * Requires `field` to be present as an own property, canonical, and one of `values`.
+ *
+ * The safe way to authorize on any metadata field: the read, the form check and the comparison all
+ * happen here, so no plain property access can reintroduce a prototype-chain value.
+ *
+ * ```ts
+ * metadataValidator: requireCanonicalField('intent', 'dcl:explorer:comms-handshake')
+ * ```
+ *
+ * Fails closed: absent, inherited-only, non-canonical, and unlisted are all refused.
+ *
+ * @param field - Metadata property name to authorize on.
+ * @param values - Canonical values to accept.
+ * @returns A predicate true only when the field is an own, canonical, listed value.
+ * @throws Error at construction when called with no values, or a non-string, empty or
+ * non-canonical one.
+ */
+export function requireCanonicalField<P extends Record<string, unknown> = Record<string, unknown>>(
+  field: string,
+  ...values: string[]
+): MetadataPredicate<P> {
+  assertCanonicalArguments('requireCanonicalField', values)
+
+  return (metadata: P): boolean => {
+    const value = ownField(metadata, field)
+    return typeof value === 'string' && isCanonical(value) && values.includes(value)
   }
 }
 
@@ -120,11 +157,8 @@ export function rejectIfSigner<P extends Record<string, unknown> = Record<string
 export function requireSigner<P extends Record<string, unknown> = Record<string, unknown>>(
   ...signers: string[]
 ): MetadataPredicate<P> {
+  // Asserted here as well as inside so the error names the helper the caller actually used.
   assertCanonicalArguments('requireSigner', signers)
-  const canonical = canonicalField<P>(SIGNER)
 
-  return (metadata: P): boolean => {
-    const signer = ownField(metadata, SIGNER)
-    return canonical(metadata) && typeof signer === 'string' && signers.includes(signer)
-  }
+  return requireCanonicalField<P>(SIGNER, ...signers)
 }

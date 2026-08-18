@@ -13,10 +13,14 @@ wellKnownComponents({ metadataValidator: requireSigner('decentraland-kernel-scen
 
 Both reject a non-canonical `signer` rather than folding it, so the comparison that follows is meaningful and no value is silently rewritten. `rejectIfSigner` passes when `signer` is absent; `requireSigner` fails closed on absent, non-canonical, or unlisted. Both throw at construction if given a non-canonical value, so a predicate that could never fire is a startup error rather than a quiet authorization gap.
 
-`canonicalField(name)` is the underlying primitive, for fields without a dedicated helper:
+`requireCanonicalField(field, ...values)` does the same for any other field — `intent` is gated in two services:
 
 ```ts
-metadataValidator: (m) => canonicalField('intent')(m) && m.intent === 'dcl:explorer:comms-handshake'
+metadataValidator: requireCanonicalField('intent', 'dcl:explorer:comms-handshake')
 ```
+
+`canonicalField(name)` is the form-only primitive underneath, for when you are not comparing the value.
+
+All four read fields as own properties. A plain `m.field` read walks the prototype chain, so a polluted `Object.prototype` could otherwise satisfy an equality check with a value no client sent.
 
 Additive: the library still holds no opinion about which fields exist or what they mean, and nothing runs unless a service composes it in.
