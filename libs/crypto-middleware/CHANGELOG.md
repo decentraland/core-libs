@@ -1,5 +1,40 @@
 # @dcl/crypto-middleware
 
+## 6.1.0
+
+### Minor Changes
+
+- d7b0465: Add composable `metadataValidator` predicates: `rejectIfSigner`, `requireSigner` and `canonicalField`.
+
+  Since 6.0.0 the library canonicalizes nothing — metadata reaches the validator exactly as the client signed it. Services identify the caller by comparing a field for equality, so a value differing only in case or padding fails that comparison and reads as something the request is not. Every service was about to hand-roll the same guard against that.
+
+  ```ts
+  wellKnownComponents({ metadataValidator: rejectIfSigner('decentraland-kernel-scene') })
+  wellKnownComponents({ metadataValidator: requireSigner('decentraland-kernel-scene', 'dcl:authoritative-server') })
+  ```
+
+  Both reject a non-canonical `signer` rather than folding it, so the comparison that follows is meaningful and no value is silently rewritten. `rejectIfSigner` passes when `signer` is absent; `requireSigner` fails closed on absent, non-canonical, or unlisted. Both throw at construction if given a non-canonical value, so a predicate that could never fire is a startup error rather than a quiet authorization gap.
+
+  `requireCanonicalField(field, ...values)` does the same for any other field — `intent` is gated in two services:
+
+  ```ts
+  metadataValidator: requireCanonicalField('intent', 'dcl:explorer:comms-handshake')
+  ```
+
+  `canonicalField(name)` is the form-only primitive underneath, for when you are not comparing the value.
+
+  All four read fields as own properties. A plain `m.field` read walks the prototype chain, so a polluted `Object.prototype` could otherwise satisfy an equality check with a value no client sent.
+
+  Additive: the library still holds no opinion about which fields exist or what they mean, and nothing runs unless a service composes it in.
+
+- d7b0465: Freeze `authMetadata` before handing it to `metadataValidator` and to consumers.
+
+  `verify()` already passed the validator the same object it returns, so what was checked is what the handler acts on. Freezing extends that from "same object" to "same contents": a middleware that mutated the metadata between the two would otherwise leave the authorization decision describing something the handler no longer sees — the same shape as the bugs 6.0.0 was written to close.
+
+  The freeze is deep. Services authorize on nested fields such as `realm.serverName`, so a shallow freeze would be a false assurance. Recursion is safe because the input comes from `JSON.parse` — no cycles, getters or proxies.
+
+  **Behaviour change worth checking before upgrading:** code that mutated `authMetadata` (augmenting it with derived values, deleting fields) now throws a `TypeError` in strict mode, silently no-ops otherwise. Copy before modifying: `const enriched = { ...verification.authMetadata, extra }`.
+
 ## 6.0.0
 
 ### Major Changes
