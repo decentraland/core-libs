@@ -53,6 +53,31 @@ This matters because services identify the caller by strict equality on metadata
 
 The library performs no canonicalization of its own: `verifyMetadata` parses the header and returns it untouched, so `authMetadata` holds exactly the object the client sent. Casing, whitespace and key order are all the client's to get right, and all of them are covered by the signature.
 
+### Composable metadata validators
+
+Because the library canonicalizes nothing, a field compared by equality needs the non-canonical case refused before the comparison, or a re-spelled value reads as something the request is not. Three predicates cover that:
+
+```ts
+import { rejectIfSigner, requireSigner, requireCanonicalField } from '@dcl/crypto-middleware'
+
+// "not for scenes" — absent `signer` passes; a re-spelled one is refused, not compared
+wellKnownComponents({ metadataValidator: rejectIfSigner('decentraland-kernel-scene') })
+
+// "only for scenes" — fails closed on absent, non-canonical, or unlisted
+wellKnownComponents({ metadataValidator: requireSigner('decentraland-kernel-scene', 'dcl:authoritative-server') })
+
+// any other field
+wellKnownComponents({ metadataValidator: requireCanonicalField('intent', 'dcl:explorer:comms-handshake') })
+```
+
+All four read fields as **own properties**. That matters: a plain `m.field` read walks the prototype chain, so a polluted `Object.prototype` can satisfy an equality check with a value no client ever sent. Compare through `requireCanonicalField` rather than writing `m.field === '...'` yourself.
+
+`canonicalField(name)` checks form only — it passes when the field is absent and fails when present but not a trimmed-lowercase string. Use it when you are not comparing the value; when you are, use `requireCanonicalField`.
+
+`rejectIfSigner`, `requireSigner` and `requireCanonicalField` throw at construction if handed a non-string, empty, or non-canonical value, so a predicate that could never match is a startup error rather than a silent gap.
+
+None of this runs unless you compose it in — the library still has no opinion about which fields exist or what their values mean.
+
 ## Error format
 
 `DEFAULT_ERROR_FORMAT` emits `{ ok: false, message: 'Internal error' }` for status codes `>= 500` and `{ ok: false, message: err.message }` for client-side errors (`< 500`). The sanitization avoids echoing upstream catalyst hostnames, response bodies, or unexpected internal messages to the client. Consumers that prefer full-fidelity errors (for observability tooling, trusted internal APIs, etc.) should provide their own `onError`:
@@ -101,10 +126,13 @@ The signature does not replace it one-for-one, so be precise about what changed.
 Canonical form is therefore a client-side contract rather than something this library enforces. **If your service compares a reserved field by strict equality — `metadata.signer !== 'decentraland-kernel-scene'` — enforce the canonical form yourself in `metadataValidator`.** It runs before signature verification, so it costs nothing:
 
 ```ts
-wellKnownComponents({
-  metadataValidator: (m) => typeof m.signer !== 'string' || m.signer === m.signer.trim().toLowerCase()
-})
+import { rejectIfSigner } from '@dcl/crypto-middleware'
+
+// refuses a non-canonical `signer` instead of comparing it, so the gate stays meaningful
+wellKnownComponents({ metadataValidator: rejectIfSigner('decentraland-kernel-scene') })
 ```
+
+See [Composable metadata validators](#composable-metadata-validators) for `requireSigner` and `requireCanonicalField`.
 
 The same applies to any other field your service authorizes on.
 

@@ -463,6 +463,55 @@ describe('verifyAuthChainHeaders', () => {
     })
   })
 
+  describe('the metadata handed to consumers', () => {
+    const method = 'get'
+    const path = '/path/to/resource'
+    const metadata = { signer: 'dcl:explorer', realm: { serverName: 'MyRealm' }, tags: ['a'] }
+
+    let result: Awaited<ReturnType<typeof verifyAuthChainHeaders>>
+    let validated: unknown
+
+    beforeEach(async () => {
+      const timestamp = Date.now()
+      const raw = JSON.stringify(metadata)
+      const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, raw))
+      const headers = createAuthChainHeaders(chain, timestamp, metadata)
+      headers[AUTH_METADATA_HEADER] = raw
+
+      result = await verifyAuthChainHeaders(method, path, headers, {
+        fetcher,
+        metadataValidator: (candidate) => {
+          validated = candidate
+          return true
+        }
+      })
+    })
+
+    it('should hand the validator the same object it returns', () => {
+      // The bug class this guards: validating one view of the metadata and authorizing on another.
+      expect(validated).toBe(result.authMetadata)
+    })
+
+    it('should be frozen', () => {
+      expect(Object.isFrozen(result.authMetadata)).toBe(true)
+    })
+
+    it('should freeze nested objects, which services also authorize on', () => {
+      expect(Object.isFrozen((result.authMetadata as { realm: unknown }).realm)).toBe(true)
+    })
+
+    it('should freeze nested arrays', () => {
+      expect(Object.isFrozen((result.authMetadata as { tags: unknown }).tags)).toBe(true)
+    })
+
+    it('should leave a nested value unchanged when a caller attempts to mutate it', () => {
+      const realm = (result.authMetadata as { realm: { serverName: string } }).realm
+      expect(() => {
+        realm.serverName = 'other'
+      }).toThrow(TypeError)
+    })
+  })
+
   describe('when a metadataValidator is provided', () => {
     describe('and it returns true', () => {
       it('should resolve with the auth and metadata', async () => {
