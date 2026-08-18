@@ -242,13 +242,14 @@ describe('verifyMetadata', () => {
     })
   })
 
+  // No field is canonicalized any more, signer and intent included. Casing is bound by the
+  // signature instead: createPayload joins the metadata bytes verbatim, so a value or a property
+  // name that differs from what was signed fails verification rather than being rewritten here.
   describe('when fields are mixed case', () => {
-    it('should return the parsed object untouched', () => {
-      // No field is canonicalized any more, signer and intent included. Casing is bound by the
-      // signature instead: createPayload joins the metadata bytes verbatim, so a value or a
-      // property name that differs from what was signed fails verification rather than being
-      // rewritten or rejected here.
-      const metadata = {
+    let metadata: Record<string, unknown>
+
+    beforeEach(() => {
+      metadata = {
         signer: 'DCL:Explorer',
         intent: 'DCL:Explorer:Comms-Handshake',
         sceneId: 'BafkREIabc123',
@@ -256,18 +257,24 @@ describe('verifyMetadata', () => {
         origin: 'dcl-scene-bots://',
         realm: { serverName: 'MyRealm' }
       }
+    })
 
+    it('should return the parsed object untouched', () => {
       expect(verifyMetadata(JSON.stringify(metadata))).toEqual(metadata)
     })
   })
 
+  // Rejecting this was the old guard's job. It now fails signature verification upstream, so
+  // verifyMetadata has no opinion on it.
   describe('when a reserved property name arrives in a non-canonical casing', () => {
+    let raw: string
+
+    beforeEach(() => {
+      raw = '{"Signer":"decentraland-kernel-scene"}'
+    })
+
     it('should return it untouched rather than rejecting it', () => {
-      // Rejecting this was the old guard's job. It now fails signature verification upstream,
-      // so verifyMetadata has no opinion on it.
-      expect(verifyMetadata('{"Signer":"decentraland-kernel-scene"}')).toEqual({
-        Signer: 'decentraland-kernel-scene'
-      })
+      expect(verifyMetadata(raw)).toEqual({ Signer: 'decentraland-kernel-scene' })
     })
   })
 })

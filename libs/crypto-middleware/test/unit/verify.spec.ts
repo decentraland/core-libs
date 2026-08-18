@@ -421,38 +421,44 @@ describe('verifyAuthChainHeaders', () => {
     const method = 'get'
     const path = '/path/to/resource'
 
-    // Signing one spelling and delivering another is the attack the previous payload format could
-    // not see: it lowercased the metadata, so both spellings shared a single valid signature.
-    function tamperedHeaders(timestamp: number): Record<string, string> {
+    let tampered: Record<string, string>
+    let thrown: unknown
+
+    // Signing one spelling and delivering another is what the previous payload format could not
+    // see: it lowercased the metadata, so both spellings shared a single valid signature.
+    beforeEach(async () => {
+      const timestamp = Date.now()
       const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, signed))
-      const headers = createAuthChainHeaders(chain, timestamp, JSON.parse(signed))
-      headers[AUTH_METADATA_HEADER] = delivered
-      return headers
-    }
+      tampered = createAuthChainHeaders(chain, timestamp, JSON.parse(signed))
+      tampered[AUTH_METADATA_HEADER] = delivered
+      thrown = await verifyAuthChainHeaders(method, path, tampered, { fetcher }).catch((err: unknown) => err)
+    })
 
     it('should no longer share a signing payload with the signed form', () => {
       expect(signedPayload(method, path, 1, delivered)).not.toBe(signedPayload(method, path, 1, signed))
     })
 
-    it('should reject with an Invalid signature error and status 401', async () => {
-      const thrown = await verifyAuthChainHeaders(method, path, tamperedHeaders(Date.now()), { fetcher }).catch(
-        (err: unknown) => err
-      )
-
+    it('should reject with an Invalid signature RequestError carrying status 401', () => {
       expect(thrown).toBeInstanceOf(RequestError)
       expect((thrown as RequestError).message).toContain('Invalid signature')
       expect((thrown as RequestError).statusCode).toBe(401)
     })
 
-    it('should resolve when the signed form is delivered', async () => {
-      const timestamp = Date.now()
-      const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, signed))
-      const headers = createAuthChainHeaders(chain, timestamp, JSON.parse(signed))
-      headers[AUTH_METADATA_HEADER] = signed
+    describe('and the signed form is delivered instead', () => {
+      let untouched: Record<string, string>
 
-      await expect(verifyAuthChainHeaders(method, path, headers, { fetcher })).resolves.toEqual({
-        auth: identity.authChain[0].payload.toLowerCase(),
-        authMetadata: JSON.parse(signed)
+      beforeEach(() => {
+        const timestamp = Date.now()
+        const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, signed))
+        untouched = createAuthChainHeaders(chain, timestamp, JSON.parse(signed))
+        untouched[AUTH_METADATA_HEADER] = signed
+      })
+
+      it('should resolve with the owner address and the metadata as signed', async () => {
+        await expect(verifyAuthChainHeaders(method, path, untouched, { fetcher })).resolves.toEqual({
+          auth: identity.authChain[0].payload.toLowerCase(),
+          authMetadata: JSON.parse(signed)
+        })
       })
     })
   })

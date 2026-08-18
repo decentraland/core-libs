@@ -43,52 +43,77 @@ async function run(ctx: Ctx, options: Options = {}) {
   return { next, result, verification: (ctx as unknown as DecentralandSignatureContext).verification }
 }
 
+type Outcome = Awaited<ReturnType<typeof run>>
+
 describe('wellKnownComponents metadata binding', () => {
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
   describe.each([
-    // Defeats `metadata.signer !== 'decentraland-kernel-scene'`: the key is gone, so the check
-    // reads undefined and admits a scene-originated request.
+    // The key is gone, so a consumer gating on `metadata.signer` reads undefined.
     ['a reserved property name', '{"Signer":"decentraland-kernel-scene","sceneId":"QmAbC","isGuest":false}'],
-    // Defeats a consumer authorizing on sceneId.
     ['a consumer-defined property name', '{"signer":"decentraland-kernel-scene","sceneid":"QmAbC","isGuest":false}'],
-    // Defeats a boolean gate: absent reads falsy.
+    // A boolean read under another spelling is undefined, which is falsy.
     ['a boolean property name', '{"signer":"decentraland-kernel-scene","sceneId":"QmAbC","IsGuest":false}'],
     // The value-casing variant the removed guard used to catch, now covered by the signature.
     ['a property value', '{"signer":"Decentraland-Kernel-Scene","sceneId":"QmAbC","isGuest":false}']
   ])('when the delivered metadata re-cases %s', (_case, delivered) => {
-    it('should respond 401 and not call next', async () => {
-      const { next, result, verification } = await run(requestWith(delivered))
+    let outcome: Outcome
 
-      expect(result).toMatchObject({ status: 401, body: { ok: false } })
-      expect((result as { body: { message: string } }).body.message).toContain('Invalid signature')
-      expect(next).not.toHaveBeenCalled()
-      expect(verification).toBeUndefined()
+    beforeEach(async () => {
+      outcome = await run(requestWith(delivered))
     })
-  })
 
-  describe('when the delivered metadata is exactly what was signed', () => {
-    it('should call next and expose the metadata with its original casing', async () => {
-      const { next, result, verification } = await run(requestWith(SIGNED))
+    it('should respond 401 with an Invalid signature message', () => {
+      expect(outcome.result).toMatchObject({
+        status: 401,
+        body: { ok: false, message: expect.stringContaining('Invalid signature') }
+      })
+    })
 
-      expect(result).toEqual({ status: 200, body: 'ok' })
-      expect(next).toHaveBeenCalled()
-      // Delivered verbatim: the middleware neither lowercases nor otherwise canonicalizes it.
-      expect(verification).toEqual({
-        auth: ownerAddress,
-        authMetadata: { signer: 'decentraland-kernel-scene', sceneId: 'QmAbC', isGuest: false }
+    it('should not call next', () => {
+      expect(outcome.next).not.toHaveBeenCalled()
+    })
+
+    it('should leave the verification off the context', () => {
+      expect(outcome.verification).toBeUndefined()
+    })
+
+    describe('and the middleware is optional', () => {
+      beforeEach(async () => {
+        outcome = await run(requestWith(delivered), { optional: true })
+      })
+
+      // Documented behavior for every verify() failure under `optional`: the request proceeds
+      // anonymously. It cannot impersonate a user, but it is not rejected either.
+      it('should call next and respond 200', () => {
+        expect(outcome.result).toEqual({ status: 200, body: 'ok' })
+      })
+
+      it('should still leave the verification off the context', () => {
+        expect(outcome.verification).toBeUndefined()
       })
     })
   })
 
-  describe('when the metadata is re-cased and the middleware is optional', () => {
-    it('should fall through unauthenticated rather than reject', async () => {
-      const rewritten = '{"Signer":"decentraland-kernel-scene","sceneId":"QmAbC","isGuest":false}'
-      const { next, result, verification } = await run(requestWith(rewritten), { optional: true })
+  describe('when the delivered metadata is exactly what was signed', () => {
+    let outcome: Outcome
 
-      // Documented behavior for every verify() failure under `optional`: the request proceeds
-      // anonymously. It cannot impersonate a user, but it is not rejected either.
-      expect(result).toEqual({ status: 200, body: 'ok' })
-      expect(next).toHaveBeenCalled()
-      expect(verification).toBeUndefined()
+    beforeEach(async () => {
+      outcome = await run(requestWith(SIGNED))
+    })
+
+    it('should call next and respond 200', () => {
+      expect(outcome.result).toEqual({ status: 200, body: 'ok' })
+    })
+
+    it('should expose the metadata with its original casing', () => {
+      // Delivered verbatim: the middleware neither lowercases nor otherwise canonicalizes it.
+      expect(outcome.verification).toEqual({
+        auth: ownerAddress,
+        authMetadata: { signer: 'decentraland-kernel-scene', sceneId: 'QmAbC', isGuest: false }
+      })
     })
   })
 })

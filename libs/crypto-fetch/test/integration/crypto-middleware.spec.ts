@@ -1,6 +1,7 @@
 import type { AuthIdentity } from '@dcl/crypto'
 import { AuthLinkType } from '@dcl/crypto'
 import { AUTH_METADATA_HEADER, verify } from '@dcl/crypto-middleware'
+import type { DecentralandSignatureData } from '@dcl/crypto-middleware'
 import signedHeaderFactory from '../../src/signedHeaderFactory'
 
 // Protocol conformance: what this package signs must verify under the official verifier. Both
@@ -48,23 +49,44 @@ function sign(): Record<string, string> {
 }
 
 describe('signedHeaderFactory verified through @dcl/crypto-middleware', () => {
-  describe('when signing mixed-case metadata', () => {
-    it('should verify and expose the metadata with keys and values case-intact', async () => {
-      const result = await verify(method, path, sign())
+  let signedHeaders: Record<string, string>
 
+  beforeEach(() => {
+    signedHeaders = sign()
+  })
+
+  describe('when the signed metadata is delivered unchanged', () => {
+    let result: DecentralandSignatureData
+
+    beforeEach(async () => {
+      result = await verify(method, path, signedHeaders)
+    })
+
+    it('should resolve the auth chain to the signing address', () => {
       expect(result.auth).toBe(ownerAddress)
-      // Delivered verbatim: no key or value is lowercased, trimmed or otherwise canonicalized.
+    })
+
+    it('should expose the metadata exactly as it was signed', () => {
       expect(result.authMetadata).toEqual(metadata)
+    })
+
+    it('should keep the camelCase property names rather than folding them', () => {
       expect(Object.keys(result.authMetadata)).toEqual(['signer', 'sceneId', 'isGuest', 'realm'])
-      expect(result.authMetadata.sceneId).toBe('QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG')
+    })
+
+    it('should keep the casing of nested property values', () => {
       expect((result.authMetadata.realm as { serverName: string }).serverName).toBe('MyRealm')
     })
 
-    it('should verify regardless of the case the method and path are given in', async () => {
-      const headers = sign()
+    describe('and the verifier is given the method and path already lowercased', () => {
+      let lowercased: DecentralandSignatureData
 
-      await expect(verify(method.toLowerCase(), path.toLowerCase(), headers)).resolves.toMatchObject({
-        auth: ownerAddress
+      beforeEach(async () => {
+        lowercased = await verify(method.toLowerCase(), path.toLowerCase(), signedHeaders)
+      })
+
+      it('should resolve to the same signing address', () => {
+        expect(lowercased.auth).toBe(ownerAddress)
       })
     })
   })
@@ -74,13 +96,18 @@ describe('signedHeaderFactory verified through @dcl/crypto-middleware', () => {
     ['a reserved property name', '"signer"', '"Signer"'],
     ['a property value', '"MyRealm"', '"myrealm"']
   ])('when %s is re-cased after signing', (_case, from, to) => {
-    it('should fail verification', async () => {
-      const signed = sign()
-      const rewritten = signed[AUTH_METADATA_HEADER].replace(from, to)
-      // Guards the fixtures: a replace that matched nothing would make this pass vacuously.
-      expect(rewritten).not.toBe(signed[AUTH_METADATA_HEADER])
+    let delivered: Record<string, string>
 
-      const delivered = { ...signed, [AUTH_METADATA_HEADER]: rewritten }
+    beforeEach(() => {
+      delivered = { ...signedHeaders, [AUTH_METADATA_HEADER]: signedHeaders[AUTH_METADATA_HEADER].replace(from, to) }
+    })
+
+    it('should deliver metadata bytes that differ from the signed ones', () => {
+      // Guards the fixtures: a replace that matched nothing would make the next case pass vacuously.
+      expect(delivered[AUTH_METADATA_HEADER]).not.toBe(signedHeaders[AUTH_METADATA_HEADER])
+    })
+
+    it('should reject with an Invalid signature error', async () => {
       await expect(verify(method, path, delivered)).rejects.toThrow('Invalid signature')
     })
   })

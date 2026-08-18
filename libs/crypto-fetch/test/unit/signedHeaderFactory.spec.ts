@@ -100,16 +100,24 @@ describe('signedHeaderFactory', () => {
     })
 
     describe('when the metadata contains camelCase property names', () => {
-      it('should sign the exact bytes it puts in the metadata header', () => {
-        const signedHeader = signedHeaderFactory()
-        const metadata = { sceneId: 'QmAbC', isGuest: false, realm: { serverName: 'MyRealm' } }
-        const headers = signedHeader(identity, 'GET', '/scene/resource', metadata)
+      let metadata: Record<string, unknown>
+      let delivered: string
+      let payload: string
 
+      beforeEach(() => {
+        metadata = { sceneId: 'QmAbC', isGuest: false, realm: { serverName: 'MyRealm' } }
+        const headers = signedHeaderFactory()(identity, 'GET', '/scene/resource', metadata)
+        delivered = headers.get(AUTH_METADATA_HEADER) ?? ''
+        payload = signPayloadSpy.mock.calls[0][1] as string
+      })
+
+      it('should put the verbatim metadata in the header', () => {
+        expect(delivered).toBe(JSON.stringify(metadata))
+      })
+
+      it('should sign the exact bytes it puts in the metadata header', () => {
         // The verifier rebuilds the payload from the delivered header, so the signed metadata
         // segment and the header must be the same string.
-        const [, payload] = signPayloadSpy.mock.calls[0]
-        const delivered = headers.get(AUTH_METADATA_HEADER) ?? ''
-        expect(delivered).toBe(JSON.stringify(metadata))
         expect(payload).toBe(`get:/scene/resource:1700000000000:${delivered}`)
       })
     })
