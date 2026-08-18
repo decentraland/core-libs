@@ -119,9 +119,6 @@ importers:
         specifier: workspace:*
         version: link:../crypto
     devDependencies:
-      '@dcl/crypto-middleware':
-        specifier: workspace:*
-        version: link:../crypto-middleware
       '@dcl/eslint-config':
         specifier: ^2.4.3
         version: 2.4.3(@babel/core@7.28.5)(babel-plugin-module-resolver@5.0.2)(typescript@5.9.3)
