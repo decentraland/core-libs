@@ -15,6 +15,6 @@ wellKnownComponents({
 
 The current format is tried first; only a signature mismatch falls through. Before accepting a legacy request, every declared key must be delivered in exactly that spelling — the legacy payload folds the metadata, so `{"Signer":...}` otherwise shares a valid signature with `{"signer":...}` and reads as absent to a service comparing `metadata.signer`. The ambiguity is refused, never resolved, so nothing is rewritten and `authMetadata` still holds what the client sent.
 
-The list doubles as the switch: there is no way to accept the legacy payload without naming the fields that make doing so safe, and declaring it empty throws rather than being treated as disabled. Values stay the job of `metadataValidator`, which runs on both paths.
+A field delivered under two spellings at once is refused as ambiguous even when one is canonical, since which the service reads would otherwise depend on key order. The list doubles as the switch: there is no way to accept the legacy payload without naming the fields that make doing so safe. It is validated at the start of every call and at runtime rather than by types alone, so a misconfigured rollout fails immediately. Values stay the job of `metadataValidator`, which runs on both paths.
 
 Absent by default. Remove the option once the callers have migrated.

@@ -111,10 +111,59 @@ describe('canonicalMetadataKeys and the legacy payload', () => {
     })
   })
 
+  describe('and a declared key is delivered under two spellings at once', () => {
+    describe.each([
+      ['at the top level', '"signer":"dcl:explorer"', '"signer":"dcl:explorer","Signer":"other"'],
+      ['nested', '"serverName":"LocalPreview"', '"serverName":"LocalPreview","servername":"other"']
+    ])('when it is duplicated %s', (_case, from, to) => {
+      it('should refuse it as ambiguous even though one spelling is canonical', async () => {
+        // Both orderings fold to the same signed string, so which value the service reads depends
+        // on key order rather than on anything the signature pinned.
+        const delivered = JSON.stringify(METADATA).replace(from, to)
+        expect(delivered).not.toBe(JSON.stringify(METADATA))
+
+        await expect(
+          verify(method, path, legacySignedHeaders(delivered), { fetcher, canonicalMetadataKeys: SCENE_KEYS })
+        ).rejects.toThrow('Invalid chain metadata')
+      })
+    })
+  })
+
+  describe.each([
+    ['a bare string, as JavaScript callers can pass', 'signer'],
+    ['an array holding a non-string', [42]],
+    ['an array holding an empty string', ['']],
+    ['a path with an empty segment', ['realm..serverName']]
+  ])('when canonicalMetadataKeys is %s', (_case, value) => {
+    it('should throw a configuration error rather than silently skip the guard', async () => {
+      // TypeScript would catch these; this package is published as JavaScript, so the runtime must.
+      await expect(
+        verify(method, path, legacySignedHeaders(), {
+          fetcher,
+          canonicalMetadataKeys: value as unknown as string[]
+        })
+      ).rejects.toThrow('canonicalMetadataKeys')
+    })
+  })
+
   describe('when the option is declared with no keys', () => {
     it('should throw a configuration error rather than accept unbound metadata', async () => {
       await expect(verify(method, path, legacySignedHeaders(), { fetcher, canonicalMetadataKeys: [] })).rejects.toThrow(
-        'must name at least one field'
+        'canonicalMetadataKeys must be a non-empty array'
+      )
+    })
+
+    it('should throw even for a request that would have verified on the current format', async () => {
+      // Validated up front, so a bad rollout config surfaces on the first request rather than on
+      // the first one that happens to need the fallback.
+      const timestamp = Date.now()
+      const raw = JSON.stringify(METADATA)
+      const payload = [method.toLowerCase(), path.toLowerCase(), String(timestamp), raw].join(':')
+      const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, METADATA)
+      headers[AUTH_METADATA_HEADER] = raw
+
+      await expect(verify(method, path, headers, { fetcher, canonicalMetadataKeys: [] })).rejects.toThrow(
+        'canonicalMetadataKeys must be a non-empty array'
       )
     })
   })

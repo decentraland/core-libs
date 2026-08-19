@@ -287,13 +287,39 @@ export function createLegacyPayload(
   return [method, path, firstOf(rawTimestamp), firstOf(rawMetadata)].join(':').toLowerCase()
 }
 
-function ownKeyAt(container: unknown, key: string): string | undefined {
+/** Every own key that case-folds to `key`. More than one means the delivery is ambiguous. */
+function foldedMatches(container: unknown, key: string): string[] {
   if (container === null || typeof container !== 'object') {
-    return undefined
+    return []
   }
 
   const folded = key.toLowerCase()
-  return Object.keys(container as Record<string, unknown>).find((candidate) => candidate.toLowerCase() === folded)
+  return Object.keys(container as Record<string, unknown>).filter((candidate) => candidate.toLowerCase() === folded)
+}
+
+/**
+ * Rejects a `canonicalMetadataKeys` value that TypeScript would have caught but JavaScript will not.
+ *
+ * This ships as a published JS package. Left unchecked, `canonicalMetadataKeys: 'signer'` is truthy
+ * with a non-zero length, and the guard would then iterate the string's characters as if they were
+ * field paths — finding nothing, and enabling legacy verification with no protection at all.
+ *
+ * @throws Error when the option is not a non-empty array of non-empty dotted paths.
+ */
+function assertCanonicalKeysOption(keys: unknown): asserts keys is string[] {
+  if (!Array.isArray(keys) || keys.length === 0) {
+    throw new Error('canonicalMetadataKeys must be a non-empty array of metadata field paths')
+  }
+
+  for (const path of keys) {
+    if (typeof path !== 'string' || path.length === 0) {
+      throw new Error(`canonicalMetadataKeys entries must be non-empty strings, got: ${JSON.stringify(path)}`)
+    }
+
+    if (path.split('.').some((segment) => segment.length === 0)) {
+      throw new Error(`canonicalMetadataKeys entries must not contain empty path segments, got: "${path}"`)
+    }
+  }
 }
 
 /**
@@ -316,13 +342,23 @@ export function assertLegacyMetadataKeys(metadata: Record<string, unknown>, cano
     let container: unknown = metadata
 
     for (const segment of declaredPath.split('.')) {
-      const delivered = ownKeyAt(container, segment)
-      if (delivered === undefined) {
+      const delivered = foldedMatches(container, segment)
+      if (delivered.length === 0) {
         break
       }
 
-      if (delivered !== segment) {
-        throw new RequestError(`Invalid chain metadata: expected "${safe(segment)}", got "${safe(delivered)}"`, 400)
+      // More than one spelling folds to the same field, so which one the service reads depends on
+      // key order rather than on anything the signature pinned. Refused as ambiguous, even when one
+      // of them is spelled correctly.
+      if (delivered.length > 1) {
+        throw new RequestError(
+          `Invalid chain metadata: "${safe(segment)}" delivered under ${delivered.length} spellings`,
+          400
+        )
+      }
+
+      if (delivered[0] !== segment) {
+        throw new RequestError(`Invalid chain metadata: expected "${safe(segment)}", got "${safe(delivered[0])}"`, 400)
       }
 
       container = (container as Record<string, unknown>)[segment]
@@ -338,6 +374,12 @@ export default async function verify<P extends Record<string, unknown> = Record<
 ): Promise<DecentralandSignatureData<P>> {
   // Read each header once; the timestamp and metadata are needed both for validation
   // and for the signed payload below.
+  // Validated up front rather than on the legacy branch, so a misconfigured rollout fails on the
+  // first request instead of on the first request that happens to need the fallback.
+  if (options.canonicalMetadataKeys !== undefined) {
+    assertCanonicalKeysOption(options.canonicalMetadataKeys)
+  }
+
   const rawTimestamp = headers[AUTH_TIMESTAMP_HEADER]
   const rawMetadata = headers[AUTH_METADATA_HEADER]
 
@@ -363,12 +405,6 @@ export default async function verify<P extends Record<string, unknown> = Record<
     const canonicalKeys = options.canonicalMetadataKeys
     if (!canonicalKeys || !(err instanceof RequestError) || err.statusCode !== 401) {
       throw err
-    }
-
-    // Declaring the option but naming no fields would accept metadata nothing binds — the bypass
-    // 6.0.0 closed. Refused loudly rather than quietly treated as disabled.
-    if (canonicalKeys.length === 0) {
-      throw new Error('canonicalMetadataKeys must name at least one field to accept the legacy payload')
     }
 
     // Guarded before the second signature check, not after: the guard is free and the check may cost

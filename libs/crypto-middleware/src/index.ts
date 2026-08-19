@@ -14,7 +14,7 @@ import {
   Options,
   VerifyAuthChainHeadersOptions
 } from './types'
-import verify, { assertLegacyMetadataKeys, createLegacyPayload } from './verify'
+import verify from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
 export {
@@ -29,9 +29,7 @@ export {
   AUTH_METADATA_HEADER,
   RequestError,
   createAuthChainHeaders,
-  assertLegacyMetadataKeys,
   canonicalField,
-  createLegacyPayload,
   rejectIfSigner,
   requireCanonicalField,
   requireSigner,
