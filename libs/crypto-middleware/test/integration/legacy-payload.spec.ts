@@ -82,6 +82,56 @@ describe('canonicalMetadataKeys and the legacy payload', () => {
     })
   })
 
+  describe('and a declared path runs through an array of objects', () => {
+    const ARRAY_KEYS = ['items.sceneId']
+    const withItems = (items: unknown) => ({ ...METADATA, items })
+
+    function signedWith(meta: Record<string, unknown>, delivered?: string): Record<string, string> {
+      const timestamp = Date.now()
+      const raw = JSON.stringify(meta)
+      const payload = [method, path, timestamp, raw].join(':').toLowerCase()
+      const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, meta)
+      headers[AUTH_METADATA_HEADER] = delivered ?? raw
+      return headers
+    }
+
+    it('should accept elements whose keys are canonical', async () => {
+      const meta = withItems([{ sceneId: 'bafkreiAbC' }, { sceneId: 'bafkreiDeF' }])
+
+      await expect(
+        verify(method, path, signedWith(meta), { fetcher, canonicalMetadataKeys: ARRAY_KEYS })
+      ).resolves.toMatchObject({ auth: ownerAddress })
+    })
+
+    it('should refuse an element whose key is re-cased, rather than skip the array', async () => {
+      // Before array traversal this was accepted: the walk stopped at the array, so declaring
+      // `items.sceneId` looked like protection and provided none.
+      const meta = withItems([{ sceneId: 'bafkreiAbC' }])
+      const delivered = JSON.stringify(meta).replace('"sceneId":"bafkreiAbC"', '"SceneId":"bafkreiAbC"')
+
+      await expect(
+        verify(method, path, signedWith(meta, delivered), { fetcher, canonicalMetadataKeys: ARRAY_KEYS })
+      ).rejects.toThrow('Invalid chain metadata')
+    })
+
+    it('should check every element, not only the first', async () => {
+      const meta = withItems([{ sceneId: 'bafkreiAbC' }, { sceneId: 'bafkreiDeF' }])
+      const delivered = JSON.stringify(meta).replace('"sceneId":"bafkreiDeF"', '"SceneId":"bafkreiDeF"')
+
+      await expect(
+        verify(method, path, signedWith(meta, delivered), { fetcher, canonicalMetadataKeys: ARRAY_KEYS })
+      ).rejects.toThrow('Invalid chain metadata')
+    })
+
+    it('should ignore an array holding no objects', async () => {
+      const meta = withItems(['bafkreiAbC', 'bafkreiDeF'])
+
+      await expect(
+        verify(method, path, signedWith(meta), { fetcher, canonicalMetadataKeys: ARRAY_KEYS })
+      ).resolves.toMatchObject({ auth: ownerAddress })
+    })
+  })
+
   describe('and an undeclared key is re-cased', () => {
     it('should accept it, since the service does not authorize on that field', async () => {
       // isGuest is deliberately not in SCENE_KEYS here. Stated as a test so the boundary of the

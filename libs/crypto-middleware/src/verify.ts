@@ -288,13 +288,25 @@ export function createLegacyPayload(
 }
 
 /** Every own key that case-folds to `key`. More than one means the delivery is ambiguous. */
-function foldedMatches(container: unknown, key: string): string[] {
-  if (container === null || typeof container !== 'object') {
-    return []
+function foldedMatches(container: Record<string, unknown>, key: string): string[] {
+  const folded = key.toLowerCase()
+  return Object.keys(container).filter((candidate) => candidate.toLowerCase() === folded)
+}
+
+/**
+ * The objects a path segment should be applied to.
+ *
+ * An array is flattened into its elements, nested arrays included, so a declared path like
+ * `'items.sceneId'` reaches the objects inside `items` rather than stopping at the array and
+ * silently guarding nothing. Anything that is not an object contributes nothing — the path simply
+ * does not exist there, which is not an error.
+ */
+function objectsToInspect(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.flatMap(objectsToInspect)
   }
 
-  const folded = key.toLowerCase()
-  return Object.keys(container as Record<string, unknown>).filter((candidate) => candidate.toLowerCase() === folded)
+  return value !== null && typeof value === 'object' ? [value as Record<string, unknown>] : []
 }
 
 /**
@@ -339,29 +351,42 @@ function assertCanonicalKeysOption(keys: unknown): asserts keys is string[] {
  */
 export function assertLegacyMetadataKeys(metadata: Record<string, unknown>, canonicalKeys: string[]): void {
   for (const declaredPath of canonicalKeys) {
-    let container: unknown = metadata
+    let containers: unknown[] = [metadata]
 
     for (const segment of declaredPath.split('.')) {
-      const delivered = foldedMatches(container, segment)
-      if (delivered.length === 0) {
+      const next: unknown[] = []
+
+      for (const container of containers.flatMap(objectsToInspect)) {
+        const delivered = foldedMatches(container, segment)
+        if (delivered.length === 0) {
+          continue
+        }
+
+        // More than one spelling folds to the same field, so which one the service reads depends on
+        // key order rather than on anything the signature pinned. Refused as ambiguous, even when
+        // one of them is spelled correctly.
+        if (delivered.length > 1) {
+          throw new RequestError(
+            `Invalid chain metadata: "${safe(segment)}" delivered under ${delivered.length} spellings`,
+            400
+          )
+        }
+
+        if (delivered[0] !== segment) {
+          throw new RequestError(
+            `Invalid chain metadata: expected "${safe(segment)}", got "${safe(delivered[0])}"`,
+            400
+          )
+        }
+
+        next.push(container[segment])
+      }
+
+      if (next.length === 0) {
         break
       }
 
-      // More than one spelling folds to the same field, so which one the service reads depends on
-      // key order rather than on anything the signature pinned. Refused as ambiguous, even when one
-      // of them is spelled correctly.
-      if (delivered.length > 1) {
-        throw new RequestError(
-          `Invalid chain metadata: "${safe(segment)}" delivered under ${delivered.length} spellings`,
-          400
-        )
-      }
-
-      if (delivered[0] !== segment) {
-        throw new RequestError(`Invalid chain metadata: expected "${safe(segment)}", got "${safe(delivered[0])}"`, 400)
-      }
-
-      container = (container as Record<string, unknown>)[segment]
+      containers = next
     }
   }
 }
