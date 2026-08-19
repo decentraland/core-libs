@@ -78,6 +78,32 @@ All four read fields as **own properties**. That matters: a plain `m.field` read
 
 None of this runs unless you compose it in — the library still has no opinion about which fields exist or what their values mean.
 
+### Accepting the legacy payload during a migration
+
+`acceptLegacyPayload` lets a service verify requests still signed with the pre-6.0.0 format, for the window in which its callers have not shipped the new one. It is **absent by default** and should stay that way unless the callers genuinely cannot be sequenced ahead of the service — an explorer fleet, for instance, where a client release cannot be deployed atomically with a deploy.
+
+```ts
+wellKnownComponents({
+  metadataValidator: rejectIfSigner('decentraland-kernel-scene'),
+  acceptLegacyPayload: {
+    canonicalMetadataKeys: ['signer', 'intent', 'sceneId', 'parcel', 'realm.serverName'],
+    onAccepted: ({ path }) => metrics.increment('legacy_payload_accepted', { path })
+  }
+})
+```
+
+The current format is tried first and, when it verifies, nothing else happens — a caller that has shipped gets the full guarantee immediately. Only a signature mismatch falls through to the legacy payload.
+
+**What keeps this from being a bypass.** The legacy payload folds the metadata, so its casing is outside the signature and `{"Signer":…}` shares a valid signature with `{"signer":…}`. Before accepting such a request, every key named in `canonicalMetadataKeys` must be delivered in exactly that spelling; anything else is a `400`. Dotted paths address nested fields. The ambiguity is refused rather than resolved, so no value is ever rewritten — `authMetadata` still holds exactly what the client sent.
+
+`canonicalMetadataKeys` must be non-empty: enabling legacy acceptance without naming the fields the service authorizes on would accept metadata nothing binds, so it throws instead of defaulting.
+
+**Scope of the guarantee.** It covers the fields you declare. An undeclared field stays unbound on the legacy path — which is sound only because a field the service does not authorize on cannot change an authorization decision. Derive the list from what the code actually reads.
+
+**Values are not covered here.** Compose `rejectIfSigner`, `requireSigner` or `requireCanonicalField` into `metadataValidator`; it runs before signature verification and therefore guards both paths. Requiring canonical *values* in this guard would refuse legitimate traffic, since fields like `sceneId` carry case-sensitive CIDs.
+
+**Two operational notes.** An EIP-1654 chain pays a second catalyst round-trip when it falls through to the legacy path. And `onAccepted` is how you learn when to remove this: once it stops firing in production, the callers have migrated and the option can go.
+
 ## Error format
 
 `DEFAULT_ERROR_FORMAT` emits `{ ok: false, message: 'Internal error' }` for status codes `>= 500` and `{ ok: false, message: err.message }` for client-side errors (`< 500`). The sanitization avoids echoing upstream catalyst hostnames, response bodies, or unexpected internal messages to the client. Consumers that prefer full-fidelity errors (for observability tooling, trusted internal APIs, etc.) should provide their own `onError`:

@@ -272,6 +272,64 @@ export function createPayload(
   return [method.toLowerCase(), path.toLowerCase(), timestamp, firstOf(rawMetadata)].join(':')
 }
 
+/**
+ * Rebuilds the pre-6.0.0 payload: the whole joined string folded, metadata included.
+ *
+ * Kept beside {@link createPayload} on purpose — the two must stay in step, and the difference
+ * between them is the entire migration.
+ */
+export function createLegacyPayload(
+  method: string,
+  path: string,
+  rawTimestamp: string | string[] | undefined,
+  rawMetadata: string | string[] | undefined
+): string {
+  return [method, path, firstOf(rawTimestamp), firstOf(rawMetadata)].join(':').toLowerCase()
+}
+
+function ownKeyAt(container: unknown, key: string): string | undefined {
+  if (container === null || typeof container !== 'object') {
+    return undefined
+  }
+
+  const folded = key.toLowerCase()
+  return Object.keys(container as Record<string, unknown>).find((candidate) => candidate.toLowerCase() === folded)
+}
+
+/**
+ * Refuses legacy-signed metadata whose keys are not in the spelling the service declared.
+ *
+ * The legacy payload folds the metadata, so `{"Signer":...}` and `{"signer":...}` share one valid
+ * signature. A service comparing `metadata.signer` reads the first as absent. Requiring the declared
+ * spelling removes that ambiguity rather than resolving it, so nothing is rewritten.
+ *
+ * Only keys are checked. Values are guarded by whatever `metadataValidator` the service composes,
+ * which runs on both paths — and requiring canonical values here would refuse legitimate traffic,
+ * since fields such as `sceneId` carry case-sensitive CIDs.
+ *
+ * @param metadata - Parsed metadata, as delivered.
+ * @param canonicalKeys - Declared spellings; dotted paths address nested fields.
+ * @throws RequestError 400 when a delivered key case-folds to a declared one but differs from it.
+ */
+export function assertLegacyMetadataKeys(metadata: Record<string, unknown>, canonicalKeys: string[]): void {
+  for (const declaredPath of canonicalKeys) {
+    let container: unknown = metadata
+
+    for (const segment of declaredPath.split('.')) {
+      const delivered = ownKeyAt(container, segment)
+      if (delivered === undefined) {
+        break
+      }
+
+      if (delivered !== segment) {
+        throw new RequestError(`Invalid chain metadata: expected "${safe(segment)}", got "${safe(delivered)}"`, 400)
+      }
+
+      container = (container as Record<string, unknown>)[segment]
+    }
+  }
+}
+
 export default async function verify<P extends Record<string, unknown> = Record<string, unknown>>(
   method: string,
   path: string,
@@ -298,8 +356,29 @@ export default async function verify<P extends Record<string, unknown> = Record<
     throw new RequestError(`Invalid metadata content: ${safe(JSON.stringify(metadata))}`, 400)
   }
 
-  const payload = createPayload(method, path, rawTimestamp, rawMetadata)
-  const ownerAddress = await verifySign(authChain, payload, options)
+  let ownerAddress: string
+  try {
+    ownerAddress = await verifySign(authChain, createPayload(method, path, rawTimestamp, rawMetadata), options)
+  } catch (err) {
+    const legacy = options.acceptLegacyPayload
+    if (!legacy || !(err instanceof RequestError) || err.statusCode !== 401) {
+      throw err
+    }
+
+    // Enabling legacy acceptance without naming the fields the service authorizes on would accept
+    // metadata nothing binds — the bypass 6.0.0 closed. Refused loudly rather than defaulted.
+    if (!Array.isArray(legacy.canonicalMetadataKeys) || legacy.canonicalMetadataKeys.length === 0) {
+      throw new Error('acceptLegacyPayload requires a non-empty canonicalMetadataKeys list')
+    }
+
+    // Guarded before the second signature check, not after: the guard is free and the check may cost
+    // a catalyst round-trip for an EIP-1654 chain. A request refused either way should not pay it.
+    assertLegacyMetadataKeys(metadata, legacy.canonicalMetadataKeys)
+
+    ownerAddress = await verifySign(authChain, createLegacyPayload(method, path, rawTimestamp, rawMetadata), options)
+
+    legacy.onAccepted?.({ method, path })
+  }
 
   return {
     auth: ownerAddress,

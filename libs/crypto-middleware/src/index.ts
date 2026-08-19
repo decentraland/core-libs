@@ -11,14 +11,16 @@ import {
   DecentralandSignatureContext,
   DecentralandSignatureData,
   DecentralandSignatureRequiredContext,
+  LegacyPayloadOptions,
   Options,
   VerifyAuthChainHeadersOptions
 } from './types'
-import verify from './verify'
+import verify, { assertLegacyMetadataKeys, createLegacyPayload } from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
 export {
   Options,
+  LegacyPayloadOptions,
   MetadataPredicate,
   VerifyAuthChainHeadersOptions,
   DecentralandSignatureData,
@@ -29,7 +31,9 @@ export {
   AUTH_METADATA_HEADER,
   RequestError,
   createAuthChainHeaders,
+  assertLegacyMetadataKeys,
   canonicalField,
+  createLegacyPayload,
   rejectIfSigner,
   requireCanonicalField,
   requireSigner,
