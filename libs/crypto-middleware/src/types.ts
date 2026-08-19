@@ -40,44 +40,35 @@ export interface DecentralandSignatureRequiredContext<P extends Record<string, u
   verification: DecentralandSignatureData<P>
 }
 
-/**
- * Opt-in acceptance of the pre-6.0.0 signed-payload format, for the migration window in which
- * clients that fold the whole payload have not yet shipped the new one.
- *
- * Only for services whose callers cannot be sequenced ahead of them — an explorer fleet, say, where
- * a client release cannot be deployed atomically with a service. Everywhere else the callers should
- * ship first and this option should stay absent.
- */
-export interface LegacyPayloadOptions {
-  /**
-   * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths
-   * address nested fields, e.g. `'realm.serverName'`.
-   *
-   * The legacy payload folds the metadata, so its casing is outside the signature and a delivered
-   * key differing only in case would keep a valid signature while reading as absent. A legacy
-   * request whose keys do not match these spellings exactly is refused.
-   *
-   * Required, and refusing an empty list is deliberate: without it the option would silently accept
-   * unbound metadata, which is the bypass 6.0.0 exists to close.
-   *
-   * Property *values* are not covered here — compose `rejectIfSigner`, `requireSigner` or
-   * `requireCanonicalField` into `metadataValidator`, which runs before signature verification and
-   * therefore guards both the current and the legacy path.
-   */
-  canonicalMetadataKeys: string[]
-
-  /** Called when a request is accepted through the legacy format. Use it to know when to remove this. */
-  onAccepted?: (info: { method: string; path: string }) => void
-}
-
 export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown> = Record<string, unknown>> {
   catalyst?: string
   expiration?: number
   fetcher?: IFetchComponent
   maxChainLength?: number
   metadataValidator?: (metadata: P) => boolean
-  /** Absent by default. See {@link LegacyPayloadOptions} before enabling. */
-  acceptLegacyPayload?: LegacyPayloadOptions
+  /**
+   * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths
+   * address nested fields, e.g. `'realm.serverName'`.
+   *
+   * Declaring them opts the service into verifying requests still signed with the pre-6.0.0
+   * payload, for the window in which its callers have not shipped the new one. Only for services
+   * whose callers cannot be sequenced ahead of them — an explorer fleet, say, where a client
+   * release cannot be deployed atomically with a service. Everywhere else, leave this absent and
+   * let the callers ship first.
+   *
+   * The legacy payload folds the metadata, so its casing falls outside the signature and a
+   * delivered key differing only in case would keep a valid signature while reading as absent. A
+   * legacy request whose keys do not match these spellings exactly is refused. Requests signed with
+   * the current format never consult this.
+   *
+   * The list doubles as the switch deliberately: there is no way to accept the legacy payload
+   * without naming the fields that make it safe to do so.
+   *
+   * Property *values* are not covered here — compose `rejectIfSigner`, `requireSigner` or
+   * `requireCanonicalField` into `metadataValidator`, which runs before signature verification and
+   * therefore guards both paths.
+   */
+  canonicalMetadataKeys?: string[]
 }
 
 export interface SessionOptions {

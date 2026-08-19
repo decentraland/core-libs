@@ -11,7 +11,6 @@ import {
   DecentralandSignatureContext,
   DecentralandSignatureData,
   DecentralandSignatureRequiredContext,
-  LegacyPayloadOptions,
   Options,
   VerifyAuthChainHeadersOptions
 } from './types'
@@ -20,7 +19,6 @@ import type { MetadataPredicate } from './metadataValidators'
 
 export {
   Options,
-  LegacyPayloadOptions,
   MetadataPredicate,
   VerifyAuthChainHeadersOptions,
   DecentralandSignatureData,

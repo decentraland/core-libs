@@ -33,29 +33,24 @@ function legacySignedHeaders(delivered?: string): Record<string, string> {
   return headers
 }
 
-describe('acceptLegacyPayload', () => {
+describe('canonicalMetadataKeys and the legacy payload', () => {
   let fetcher: IFetchComponent
 
   beforeEach(() => {
     fetcher = { fetch: jest.fn() } as unknown as IFetchComponent
   })
 
-  describe('when the option is absent', () => {
+  describe('when canonicalMetadataKeys is absent', () => {
     it('should refuse a legacy-signed request, which is the default posture', async () => {
       await expect(verify(method, path, legacySignedHeaders(), { fetcher })).rejects.toThrow('Invalid signature')
     })
   })
 
-  describe('when the option is enabled with the keys the service authorizes on', () => {
+  describe('when the keys the service authorizes on are declared', () => {
     let result: Awaited<ReturnType<typeof verify>>
-    let accepted: jest.Mock
 
     beforeEach(async () => {
-      accepted = jest.fn()
-      result = await verify(method, path, legacySignedHeaders(), {
-        fetcher,
-        acceptLegacyPayload: { canonicalMetadataKeys: SCENE_KEYS, onAccepted: accepted }
-      })
+      result = await verify(method, path, legacySignedHeaders(), { fetcher, canonicalMetadataKeys: SCENE_KEYS })
     })
 
     it('should accept the request', () => {
@@ -64,10 +59,6 @@ describe('acceptLegacyPayload', () => {
 
     it('should hand consumers the metadata with its original casing, not the folded copy', () => {
       expect(result.authMetadata).toEqual(METADATA)
-    })
-
-    it('should report the acceptance so the rollout can be tracked', () => {
-      expect(accepted).toHaveBeenCalledWith({ method, path })
     })
   })
 
@@ -84,7 +75,7 @@ describe('acceptLegacyPayload', () => {
         await expect(
           verify(method, path, legacySignedHeaders(delivered), {
             fetcher,
-            acceptLegacyPayload: { canonicalMetadataKeys: SCENE_KEYS }
+            canonicalMetadataKeys: SCENE_KEYS
           })
         ).rejects.toThrow('Invalid chain metadata')
       })
@@ -100,7 +91,7 @@ describe('acceptLegacyPayload', () => {
       await expect(
         verify(method, path, legacySignedHeaders(delivered), {
           fetcher,
-          acceptLegacyPayload: { canonicalMetadataKeys: SCENE_KEYS }
+          canonicalMetadataKeys: SCENE_KEYS
         })
       ).resolves.toMatchObject({ auth: ownerAddress })
     })
@@ -114,17 +105,17 @@ describe('acceptLegacyPayload', () => {
         verify(method, path, legacySignedHeaders(recased), {
           fetcher,
           metadataValidator: rejectIfSigner('decentraland-kernel-scene'),
-          acceptLegacyPayload: { canonicalMetadataKeys: SCENE_KEYS }
+          canonicalMetadataKeys: SCENE_KEYS
         })
       ).rejects.toThrow('Invalid metadata content')
     })
   })
 
-  describe('when the option is enabled with no declared keys', () => {
+  describe('when the option is declared with no keys', () => {
     it('should throw a configuration error rather than accept unbound metadata', async () => {
-      await expect(
-        verify(method, path, legacySignedHeaders(), { fetcher, acceptLegacyPayload: { canonicalMetadataKeys: [] } })
-      ).rejects.toThrow('requires a non-empty canonicalMetadataKeys list')
+      await expect(verify(method, path, legacySignedHeaders(), { fetcher, canonicalMetadataKeys: [] })).rejects.toThrow(
+        'must name at least one field'
+      )
     })
   })
 
@@ -135,15 +126,9 @@ describe('acceptLegacyPayload', () => {
       const payload = [method.toLowerCase(), path.toLowerCase(), String(timestamp), raw].join(':')
       const headers = createAuthChainHeaders(Authenticator.signPayload(identity, payload), timestamp, METADATA)
       headers[AUTH_METADATA_HEADER] = raw
-      const accepted = jest.fn()
-
       await expect(
-        verify(method, path, headers, {
-          fetcher,
-          acceptLegacyPayload: { canonicalMetadataKeys: SCENE_KEYS, onAccepted: accepted }
-        })
+        verify(method, path, headers, { fetcher, canonicalMetadataKeys: SCENE_KEYS })
       ).resolves.toMatchObject({ auth: ownerAddress })
-      expect(accepted).not.toHaveBeenCalled()
     })
   })
 })

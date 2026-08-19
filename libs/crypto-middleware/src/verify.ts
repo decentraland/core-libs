@@ -360,24 +360,22 @@ export default async function verify<P extends Record<string, unknown> = Record<
   try {
     ownerAddress = await verifySign(authChain, createPayload(method, path, rawTimestamp, rawMetadata), options)
   } catch (err) {
-    const legacy = options.acceptLegacyPayload
-    if (!legacy || !(err instanceof RequestError) || err.statusCode !== 401) {
+    const canonicalKeys = options.canonicalMetadataKeys
+    if (!canonicalKeys || !(err instanceof RequestError) || err.statusCode !== 401) {
       throw err
     }
 
-    // Enabling legacy acceptance without naming the fields the service authorizes on would accept
-    // metadata nothing binds — the bypass 6.0.0 closed. Refused loudly rather than defaulted.
-    if (!Array.isArray(legacy.canonicalMetadataKeys) || legacy.canonicalMetadataKeys.length === 0) {
-      throw new Error('acceptLegacyPayload requires a non-empty canonicalMetadataKeys list')
+    // Declaring the option but naming no fields would accept metadata nothing binds — the bypass
+    // 6.0.0 closed. Refused loudly rather than quietly treated as disabled.
+    if (canonicalKeys.length === 0) {
+      throw new Error('canonicalMetadataKeys must name at least one field to accept the legacy payload')
     }
 
     // Guarded before the second signature check, not after: the guard is free and the check may cost
     // a catalyst round-trip for an EIP-1654 chain. A request refused either way should not pay it.
-    assertLegacyMetadataKeys(metadata, legacy.canonicalMetadataKeys)
+    assertLegacyMetadataKeys(metadata, canonicalKeys)
 
     ownerAddress = await verifySign(authChain, createLegacyPayload(method, path, rawTimestamp, rawMetadata), options)
-
-    legacy.onAccepted?.({ method, path })
   }
 
   return {
