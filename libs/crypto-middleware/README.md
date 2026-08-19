@@ -78,6 +78,29 @@ All four read fields as **own properties**. That matters: a plain `m.field` read
 
 None of this runs unless you compose it in — the library still has no opinion about which fields exist or what their values mean.
 
+### Accepting the legacy payload during a migration
+
+`canonicalMetadataKeys` opts a service into verifying requests still signed with the pre-6.0.0 format, for the window in which its callers have not shipped the new one. It is **absent by default** and should stay that way unless the callers genuinely cannot be sequenced ahead of the service — an explorer fleet, for instance, where a client release cannot be deployed atomically with a deploy.
+
+```ts
+wellKnownComponents({
+  metadataValidator: rejectIfSigner('decentraland-kernel-scene'),
+  canonicalMetadataKeys: ['signer', 'intent', 'sceneId', 'parcel', 'realm.serverName']
+})
+```
+
+The current format is tried first and, when it verifies, nothing else happens — a caller that has shipped gets the full guarantee immediately. Only a signature mismatch falls through to the legacy payload.
+
+**What keeps this from being a bypass.** The legacy payload folds the metadata, so its casing is outside the signature and `{"Signer":…}` shares a valid signature with `{"signer":…}`. Before accepting such a request, every key listed must be delivered in exactly that spelling; anything else is a `400`. Dotted paths address nested fields, and a path is followed through arrays as well as objects — declaring `'items.sceneId'` checks every object inside `items`, rather than stopping at the array and guarding nothing. A field delivered under *two* spellings at once is refused as ambiguous even when one of them is canonical, because which one the service reads would depend on key order rather than on anything the signature pinned. The ambiguity is refused rather than resolved, so no value is ever rewritten — `authMetadata` still holds exactly what the client sent.
+
+The list doubles as the switch deliberately: there is no way to accept the legacy payload without naming the fields that make doing so safe. It is validated at the start of every `verify()` call, not on the legacy branch, so a misconfigured rollout fails on the first request rather than on the first one that happens to need the fallback — and because this ships as JavaScript, the check is a runtime one: a non-array, an empty list, a non-string entry or an empty dotted segment all throw.
+
+**Scope of the guarantee.** It covers the fields you list, at every position a declared path reaches. Declaring a container alone — `'realm'` rather than `'realm.serverName'` — guards only that container's own key spelling, not the keys inside it; list the full path for anything you authorize on. An unlisted field stays unbound on the legacy path — which is sound only because a field the service does not authorize on cannot change an authorization decision. Derive the list from what the code actually reads.
+
+**Values are not covered here.** Compose `rejectIfSigner`, `requireSigner` or `requireCanonicalField` into `metadataValidator`; it runs before signature verification and therefore guards both paths. Requiring canonical *values* in this guard would refuse legitimate traffic, since fields like `sceneId` carry case-sensitive CIDs.
+
+**One operational note.** An EIP-1654 chain pays a second catalyst round-trip when it falls through to the legacy path. Acceptable for a migration window, not indefinitely — remove the option once the callers have migrated.
+
 ## Error format
 
 `DEFAULT_ERROR_FORMAT` emits `{ ok: false, message: 'Internal error' }` for status codes `>= 500` and `{ ok: false, message: err.message }` for client-side errors (`< 500`). The sanitization avoids echoing upstream catalyst hostnames, response bodies, or unexpected internal messages to the client. Consumers that prefer full-fidelity errors (for observability tooling, trusted internal APIs, etc.) should provide their own `onError`:

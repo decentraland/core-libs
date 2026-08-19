@@ -272,6 +272,125 @@ export function createPayload(
   return [method.toLowerCase(), path.toLowerCase(), timestamp, firstOf(rawMetadata)].join(':')
 }
 
+/**
+ * Rebuilds the pre-6.0.0 payload: the whole joined string folded, metadata included.
+ *
+ * Kept beside {@link createPayload} on purpose — the two must stay in step, and the difference
+ * between them is the entire migration.
+ */
+export function createLegacyPayload(
+  method: string,
+  path: string,
+  rawTimestamp: string | string[] | undefined,
+  rawMetadata: string | string[] | undefined
+): string {
+  return [method, path, firstOf(rawTimestamp), firstOf(rawMetadata)].join(':').toLowerCase()
+}
+
+/** Every own key that case-folds to `key`. More than one means the delivery is ambiguous. */
+function foldedMatches(container: Record<string, unknown>, key: string): string[] {
+  const folded = key.toLowerCase()
+  return Object.keys(container).filter((candidate) => candidate.toLowerCase() === folded)
+}
+
+/**
+ * The objects a path segment should be applied to.
+ *
+ * An array is flattened into its elements, nested arrays included, so a declared path like
+ * `'items.sceneId'` reaches the objects inside `items` rather than stopping at the array and
+ * silently guarding nothing. Anything that is not an object contributes nothing — the path simply
+ * does not exist there, which is not an error.
+ */
+function objectsToInspect(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.flatMap(objectsToInspect)
+  }
+
+  return value !== null && typeof value === 'object' ? [value as Record<string, unknown>] : []
+}
+
+/**
+ * Rejects a `canonicalMetadataKeys` value that TypeScript would have caught but JavaScript will not.
+ *
+ * This ships as a published JS package. Left unchecked, `canonicalMetadataKeys: 'signer'` is truthy
+ * with a non-zero length, and the guard would then iterate the string's characters as if they were
+ * field paths — finding nothing, and enabling legacy verification with no protection at all.
+ *
+ * @throws Error when the option is not a non-empty array of non-empty dotted paths.
+ */
+function assertCanonicalKeysOption(keys: unknown): asserts keys is string[] {
+  if (!Array.isArray(keys) || keys.length === 0) {
+    throw new Error('canonicalMetadataKeys must be a non-empty array of metadata field paths')
+  }
+
+  for (const path of keys) {
+    if (typeof path !== 'string' || path.length === 0) {
+      throw new Error(`canonicalMetadataKeys entries must be non-empty strings, got: ${JSON.stringify(path)}`)
+    }
+
+    if (path.split('.').some((segment) => segment.length === 0)) {
+      throw new Error(`canonicalMetadataKeys entries must not contain empty path segments, got: "${path}"`)
+    }
+  }
+}
+
+/**
+ * Refuses legacy-signed metadata whose keys are not in the spelling the service declared.
+ *
+ * The legacy payload folds the metadata, so `{"Signer":...}` and `{"signer":...}` share one valid
+ * signature. A service comparing `metadata.signer` reads the first as absent. Requiring the declared
+ * spelling removes that ambiguity rather than resolving it, so nothing is rewritten.
+ *
+ * Only keys are checked. Values are guarded by whatever `metadataValidator` the service composes,
+ * which runs on both paths — and requiring canonical values here would refuse legitimate traffic,
+ * since fields such as `sceneId` carry case-sensitive CIDs.
+ *
+ * @param metadata - Parsed metadata, as delivered.
+ * @param canonicalKeys - Declared spellings; dotted paths address nested fields.
+ * @throws RequestError 400 when a delivered key case-folds to a declared one but differs from it.
+ */
+export function assertLegacyMetadataKeys(metadata: Record<string, unknown>, canonicalKeys: string[]): void {
+  for (const declaredPath of canonicalKeys) {
+    let containers: unknown[] = [metadata]
+
+    for (const segment of declaredPath.split('.')) {
+      const next: unknown[] = []
+
+      for (const container of containers.flatMap(objectsToInspect)) {
+        const delivered = foldedMatches(container, segment)
+        if (delivered.length === 0) {
+          continue
+        }
+
+        // More than one spelling folds to the same field, so which one the service reads depends on
+        // key order rather than on anything the signature pinned. Refused as ambiguous, even when
+        // one of them is spelled correctly.
+        if (delivered.length > 1) {
+          throw new RequestError(
+            `Invalid chain metadata: "${safe(segment)}" delivered under ${delivered.length} spellings`,
+            400
+          )
+        }
+
+        if (delivered[0] !== segment) {
+          throw new RequestError(
+            `Invalid chain metadata: expected "${safe(segment)}", got "${safe(delivered[0])}"`,
+            400
+          )
+        }
+
+        next.push(container[segment])
+      }
+
+      if (next.length === 0) {
+        break
+      }
+
+      containers = next
+    }
+  }
+}
+
 export default async function verify<P extends Record<string, unknown> = Record<string, unknown>>(
   method: string,
   path: string,
@@ -280,6 +399,12 @@ export default async function verify<P extends Record<string, unknown> = Record<
 ): Promise<DecentralandSignatureData<P>> {
   // Read each header once; the timestamp and metadata are needed both for validation
   // and for the signed payload below.
+  // Validated up front rather than on the legacy branch, so a misconfigured rollout fails on the
+  // first request instead of on the first request that happens to need the fallback.
+  if (options.canonicalMetadataKeys !== undefined) {
+    assertCanonicalKeysOption(options.canonicalMetadataKeys)
+  }
+
   const rawTimestamp = headers[AUTH_TIMESTAMP_HEADER]
   const rawMetadata = headers[AUTH_METADATA_HEADER]
 
@@ -298,8 +423,21 @@ export default async function verify<P extends Record<string, unknown> = Record<
     throw new RequestError(`Invalid metadata content: ${safe(JSON.stringify(metadata))}`, 400)
   }
 
-  const payload = createPayload(method, path, rawTimestamp, rawMetadata)
-  const ownerAddress = await verifySign(authChain, payload, options)
+  let ownerAddress: string
+  try {
+    ownerAddress = await verifySign(authChain, createPayload(method, path, rawTimestamp, rawMetadata), options)
+  } catch (err) {
+    const canonicalKeys = options.canonicalMetadataKeys
+    if (!canonicalKeys || !(err instanceof RequestError) || err.statusCode !== 401) {
+      throw err
+    }
+
+    // Guarded before the second signature check, not after: the guard is free and the check may cost
+    // a catalyst round-trip for an EIP-1654 chain. A request refused either way should not pay it.
+    assertLegacyMetadataKeys(metadata, canonicalKeys)
+
+    ownerAddress = await verifySign(authChain, createLegacyPayload(method, path, rawTimestamp, rawMetadata), options)
+  }
 
   return {
     auth: ownerAddress,

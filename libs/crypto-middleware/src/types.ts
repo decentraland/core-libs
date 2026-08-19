@@ -46,6 +46,29 @@ export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown>
   fetcher?: IFetchComponent
   maxChainLength?: number
   metadataValidator?: (metadata: P) => boolean
+  /**
+   * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths
+   * address nested fields, e.g. `'realm.serverName'`.
+   *
+   * Declaring them opts the service into verifying requests still signed with the pre-6.0.0
+   * payload, for the window in which its callers have not shipped the new one. Only for services
+   * whose callers cannot be sequenced ahead of them — an explorer fleet, say, where a client
+   * release cannot be deployed atomically with a service. Everywhere else, leave this absent and
+   * let the callers ship first.
+   *
+   * The legacy payload folds the metadata, so its casing falls outside the signature and a
+   * delivered key differing only in case would keep a valid signature while reading as absent. A
+   * legacy request whose keys do not match these spellings exactly is refused. Requests signed with
+   * the current format never consult this.
+   *
+   * The list doubles as the switch deliberately: there is no way to accept the legacy payload
+   * without naming the fields that make it safe to do so.
+   *
+   * Property *values* are not covered here — compose `rejectIfSigner`, `requireSigner` or
+   * `requireCanonicalField` into `metadataValidator`, which runs before signature verification and
+   * therefore guards both paths.
+   */
+  canonicalMetadataKeys?: string[]
 }
 
 export interface SessionOptions {
