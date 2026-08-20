@@ -38,6 +38,24 @@ function ownField(metadata: Record<string, unknown> | undefined, field: string):
   return metadata[field]
 }
 
+/**
+ * Whether any own key case-folds to `field` without being spelled exactly that.
+ *
+ * `ownField` reads the exact key, so `{"Signer": ...}` presents no `signer` and every predicate here
+ * would read the field as absent — `rejectIfSigner('decentraland-kernel-scene')` answering "allowed"
+ * for metadata that visibly declares that signer. Treated as a rejection rather than an absence, so
+ * a differently-spelled or duplicated key cannot decide the outcome. Nothing is folded: the value is
+ * refused, never rewritten.
+ */
+function hasFoldedVariant(metadata: Record<string, unknown> | undefined, field: string): boolean {
+  if (metadata === null || metadata === undefined) {
+    return false
+  }
+
+  const folded = field.toLowerCase()
+  return Object.keys(metadata).some((key) => key !== field && key.toLowerCase() === folded)
+}
+
 function assertCanonicalArguments(fn: string, values: unknown[]): asserts values is string[] {
   if (values.length === 0) {
     throw new Error(`${fn}() requires at least one value`)
@@ -78,6 +96,10 @@ export function canonicalField<P extends Record<string, unknown> = Record<string
   field: string
 ): MetadataPredicate<P> {
   return (metadata: P): boolean => {
+    if (hasFoldedVariant(metadata, field)) {
+      return false
+    }
+
     const value = ownField(metadata, field)
     if (value === undefined) {
       return true
@@ -112,6 +134,10 @@ export function requireCanonicalField<P extends Record<string, unknown> = Record
   assertCanonicalArguments('requireCanonicalField', values)
 
   return (metadata: P): boolean => {
+    if (hasFoldedVariant(metadata, field)) {
+      return false
+    }
+
     const value = ownField(metadata, field)
     return typeof value === 'string' && isCanonical(value) && values.includes(value)
   }

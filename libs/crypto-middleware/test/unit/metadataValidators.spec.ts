@@ -182,6 +182,57 @@ describe('prototype-inherited fields', () => {
   })
 })
 
+// `ownField` reads the exact key, so a differently-spelled one would otherwise present as absent —
+// `rejectIfSigner` answering "allowed" for metadata that visibly declares the signer it refuses.
+// Treated as a rejection rather than an absence, in every predicate.
+describe('a key that case-folds to the field without being spelled it', () => {
+  describe.each([
+    ['a re-cased key', { Signer: 'decentraland-kernel-scene' }],
+    ['an upper-cased key', { SIGNER: 'decentraland-kernel-scene' }],
+    ['the canonical key alongside a re-cased one', { signer: 'dcl:explorer', Signer: 'decentraland-kernel-scene' }]
+  ])('when the metadata carries %s', (_case, metadata) => {
+    it('should be refused by rejectIfSigner rather than read as absent', () => {
+      expect(rejectIfSigner('decentraland-kernel-scene')(metadata)).toBe(false)
+    })
+
+    it('should be refused by requireSigner', () => {
+      expect(requireSigner('decentraland-kernel-scene')(metadata)).toBe(false)
+    })
+
+    it('should be refused by canonicalField', () => {
+      expect(canonicalField('signer')(metadata)).toBe(false)
+    })
+  })
+
+  describe('when a non-signer field carries a folded key', () => {
+    it('should be refused by requireCanonicalField', () => {
+      expect(
+        requireCanonicalField(
+          'intent',
+          'dcl:explorer:comms-handshake'
+        )({
+          Intent: 'dcl:explorer:comms-handshake'
+        })
+      ).toBe(false)
+    })
+  })
+
+  describe('when every key is spelled exactly as declared', () => {
+    it('should still accept legitimate metadata', () => {
+      expect(rejectIfSigner('decentraland-kernel-scene')({ signer: 'dcl:explorer' })).toBe(true)
+      expect(canonicalField('signer')({ signer: 'dcl:explorer' })).toBe(true)
+      expect(
+        requireCanonicalField(
+          'intent',
+          'dcl:explorer:comms-handshake'
+        )({
+          intent: 'dcl:explorer:comms-handshake'
+        })
+      ).toBe(true)
+    })
+  })
+})
+
 describe('requireCanonicalField', () => {
   let predicate: ReturnType<typeof requireCanonicalField>
 

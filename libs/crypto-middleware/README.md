@@ -70,6 +70,8 @@ wellKnownComponents({ metadataValidator: requireSigner('decentraland-kernel-scen
 wellKnownComponents({ metadataValidator: requireCanonicalField('intent', 'dcl:explorer:comms-handshake') })
 ```
 
+All four refuse a key that case-folds to the field without being spelled exactly that — `{"Signer": …}` is rejected by `rejectIfSigner('…')` rather than read as "no signer". Without that, a predicate would answer *allowed* for metadata visibly declaring the signer it exists to refuse. The value is never rewritten; the request is refused.
+
 All four read fields as **own properties**. That matters: a plain `m.field` read walks the prototype chain, so a polluted `Object.prototype` can satisfy an equality check with a value no client ever sent. Compare through `requireCanonicalField` rather than writing `m.field === '...'` yourself.
 
 `canonicalField(name)` checks form only — it passes when the field is absent and fails when present but not a trimmed-lowercase string. Use it when you are not comparing the value; when you are, use `requireCanonicalField`.
