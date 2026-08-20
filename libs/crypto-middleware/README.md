@@ -103,6 +103,19 @@ The list doubles as the switch deliberately: there is no way to accept the legac
 
 **One operational note.** An EIP-1654 chain pays a second catalyst round-trip when it falls through to the legacy path. Acceptable for a migration window, not indefinitely — remove the option once the callers have migrated.
 
+### Building the payload from a signer
+
+`createPayload` is exported so a signer can build the payload with the same code that verifies it, which is the only way to guarantee the two cannot drift:
+
+```ts
+import { createPayload } from '@dcl/crypto-middleware'
+
+const payload = createPayload(method, path, timestamp, JSON.stringify(metadata))
+const authChain = Authenticator.signPayload(identity, payload)
+```
+
+Reach for this rather than reimplementing the format, and rather than deep-importing `dist/verify` — that path is not public API and may be reorganized.
+
 ## Error format
 
 `DEFAULT_ERROR_FORMAT` emits `{ ok: false, message: 'Internal error' }` for status codes `>= 500` and `{ ok: false, message: err.message }` for client-side errors (`< 500`). The sanitization avoids echoing upstream catalyst hostnames, response bodies, or unexpected internal messages to the client. Consumers that prefer full-fidelity errors (for observability tooling, trusted internal APIs, etc.) should provide their own `onError`:
