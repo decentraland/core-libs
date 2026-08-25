@@ -70,6 +70,8 @@ wellKnownComponents({ metadataValidator: requireSigner('decentraland-kernel-scen
 wellKnownComponents({ metadataValidator: requireCanonicalField('intent', 'dcl:explorer:comms-handshake') })
 ```
 
+All four refuse a key that case-folds to the field without being spelled exactly that — `{"Signer": …}` is rejected by `rejectIfSigner('…')` rather than read as "no signer". Without that, a predicate would answer *allowed* for metadata visibly declaring the signer it exists to refuse. The value is never rewritten; the request is refused.
+
 All four read fields as **own properties**. That matters: a plain `m.field` read walks the prototype chain, so a polluted `Object.prototype` can satisfy an equality check with a value no client ever sent. Compare through `requireCanonicalField` rather than writing `m.field === '...'` yourself.
 
 `canonicalField(name)` checks form only — it passes when the field is absent and fails when present but not a trimmed-lowercase string. Use it when you are not comparing the value; when you are, use `requireCanonicalField`.
@@ -100,6 +102,19 @@ The list doubles as the switch deliberately: there is no way to accept the legac
 **Values are not covered here.** Compose `rejectIfSigner`, `requireSigner` or `requireCanonicalField` into `metadataValidator`; it runs before signature verification and therefore guards both paths. Requiring canonical *values* in this guard would refuse legitimate traffic, since fields like `sceneId` carry case-sensitive CIDs.
 
 **One operational note.** An EIP-1654 chain pays a second catalyst round-trip when it falls through to the legacy path. Acceptable for a migration window, not indefinitely — remove the option once the callers have migrated.
+
+### Building the payload from a signer
+
+`createPayload` is exported so a signer can build the payload with the same code that verifies it, which is the only way to guarantee the two cannot drift:
+
+```ts
+import { createPayload } from '@dcl/crypto-middleware'
+
+const payload = createPayload(method, path, timestamp, JSON.stringify(metadata))
+const authChain = Authenticator.signPayload(identity, payload)
+```
+
+Reach for this rather than reimplementing the format, and rather than deep-importing `dist/verify` — that path is not public API and may be reorganized.
 
 ## Error format
 
