@@ -74,6 +74,15 @@ export const ADR_290_REJECTED_TIMESTAMP = parseTimestamp(
 export const PROFILE_IDENTITY_TIMESTAMP = parseTimestamp(process.env.PROFILE_IDENTITY_TIMESTAMP, 1786579200000)
 
 /**
+ * The entity file's own bytes count towards the ADR-51 size cap from this timestamp on.
+ * Entities deployed before it keep validating, so replaying history does not reject
+ * deployments that were accepted under the previous accounting.
+ * 1788220800000 = 2026-09-01T00:00:00Z
+ * @public
+ */
+export const ENTITY_FILE_SIZE_TIMESTAMP = parseTimestamp(process.env.ENTITY_FILE_SIZE_TIMESTAMP, 1788220800000)
+
+/**
  * DCL Launch Day
  * @public
  */
