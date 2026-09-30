@@ -188,9 +188,9 @@ export async function verifySign(
     try {
       await validateAuthChainSignature(authChain, payload, options.provider, { maxChainLength: options.maxChainLength })
       return Authenticator.ownerAddress(authChain).toLowerCase()
-    } catch {
-      // Keep provider details out of responses and preserve the guarded legacy-payload fallback.
-      throw new RequestError('Invalid signature', 401)
+    } catch (err) {
+      // Preserve validator diagnostics (including expiry) and the guarded legacy-payload fallback.
+      throw new RequestError(`Invalid signature: ${errorMessage(err)}`, 401)
     }
   }
 

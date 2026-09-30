@@ -32,7 +32,7 @@ Without this option, the existing Catalyst validation path remains unchanged. Wi
 the middleware validates the complete chain, including the ephemeral signature over the HTTP
 method, path, timestamp and metadata. EOA signatures remain offline; contract signatures use
 the provider. Expiration, metadata validation and the guarded legacy-payload fallback still apply.
-Provider validation failures return `401 Invalid signature` without exposing RPC error details.
+Provider validation failures return `401 Invalid signature: ...`, preserving validation diagnostics such as an expired ephemeral key.
 
 ```ts
 import { createRpcProvider, wellKnownComponents } from '@dcl/crypto-middleware'

@@ -152,13 +152,13 @@ describe('when verifying contract signatures with a supplied provider', () => {
 
   describe('and the provider fails', () => {
     beforeEach(() => {
-      sendAsync.mockImplementation((_request, callback) => callback(new Error('Private RPC connection detail')))
+      sendAsync.mockImplementation((_request, callback) => callback(new Error('RPC request timed out')))
     })
 
-    it('should reject the request without exposing RPC details', async () => {
+    it('should reject the request and retain the validation failure reason', async () => {
       await expect(verify('POST', '/identities', headers, { provider, fetcher })).rejects.toMatchObject({
         statusCode: 401,
-        message: 'Invalid signature'
+        message: expect.stringContaining('RPC request timed out')
       })
       expect(fetchMock).not.toHaveBeenCalled()
     })
@@ -176,6 +176,25 @@ describe('when verifying contract signatures with a supplied provider', () => {
       })
       expect(sendAsync).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    describe('and the ephemeral delegation has expired', () => {
+      beforeEach(() => {
+        chain[1] = {
+          ...chain[1],
+          payload: chain[1].payload.replace('3021-10-16T22:32:29.626Z', '2000-01-01T00:00:00.000Z')
+        }
+        headers = createAuthChainHeaders(chain, timestamp, metadata)
+      })
+
+      it('should retain the expiry diagnosis used by clients to renew their identity', async () => {
+        await expect(verify('POST', '/identities', headers, { provider, fetcher })).rejects.toMatchObject({
+          statusCode: 401,
+          message: expect.stringMatching(/^Invalid signature: .*Ephemeral key expired/)
+        })
+        expect(sendAsync).not.toHaveBeenCalled()
+        expect(fetchMock).not.toHaveBeenCalled()
+      })
     })
   })
 
