@@ -17,6 +17,10 @@ import {
 import verify, { createPayload } from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
+export { createRpcProvider } from './rpc-provider'
+export type { AuthChainProvider } from './rpc-provider'
+export { validateAuthChainSignature, MAX_AUTH_CHAIN_LENGTH } from './signature-validation'
+
 export {
   Options,
   MetadataPredicate,
