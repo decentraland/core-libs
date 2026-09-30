@@ -4,10 +4,14 @@ import type { AuthChainProvider, JsonRpcResponse } from '../../src/rpc-provider'
 import type { Server, ServerResponse } from 'http'
 import type { AddressInfo } from 'net'
 
-function send(provider: AuthChainProvider, signal?: AbortSignal): Promise<JsonRpcResponse | undefined> {
+function send(
+  provider: AuthChainProvider,
+  signal?: AbortSignal,
+  method = 'eth_call'
+): Promise<JsonRpcResponse | undefined> {
   return new Promise((resolve, reject) => {
     provider.sendAsync(
-      { id: 7, method: 'eth_call', params: [] },
+      { id: 7, method, params: [] },
       (error, response) => (error ? reject(error) : resolve(response)),
       signal
     )
@@ -71,7 +75,7 @@ describe('when a provider makes an HTTP JSON-RPC request', () => {
     })
 
     it('should preserve the block result', async () => {
-      await expect(send(provider)).resolves.toEqual({
+      await expect(send(provider, undefined, 'eth_getBlockByNumber')).resolves.toEqual({
         id: 7,
         jsonrpc: '2.0',
         result: { number: '0x1', timestamp: '0x2' }
@@ -143,7 +147,7 @@ describe('when a provider makes an HTTP JSON-RPC request', () => {
     })
 
     it('should report a parsing error through the callback', async () => {
-      await expect(send(provider)).rejects.toThrow(/not valid JSON/)
+      await expect(send(provider)).rejects.toThrow('Invalid JSON-RPC response')
     })
   })
 

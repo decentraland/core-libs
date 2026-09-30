@@ -191,9 +191,39 @@ describe('validateAuthChainSignature', () => {
       it('should reject the chain rather than let it through', async () => {
         await expect(
           validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
-        ).rejects.toThrow(/No RPC in tests/)
+        ).rejects.toThrow(/RPC request failed/)
       })
     })
+
+    describe.each(['callback error', 'synchronous throw', 'JSON-RPC error response'])(
+      'and a custom provider exposes a secret through a %s',
+      (failureMode) => {
+        let validation: Promise<void>
+
+        beforeEach(() => {
+          sendAsync.mockImplementation((payload: JsonRpcRequest, callback: JsonRpcCallback) => {
+            if (failureMode === 'synchronous throw') {
+              throw new Error('private-provider-secret')
+            }
+            if (failureMode === 'JSON-RPC error response') {
+              callback(null, {
+                id: payload.id,
+                jsonrpc: '2.0',
+                error: { code: -32603, message: 'private-provider-secret' }
+              })
+              return
+            }
+            callback(new Error('private-provider-secret'))
+          })
+          validation = validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
+        })
+
+        it('should reject without including provider secrets in the helper error', async () => {
+          await expect(validation).rejects.toThrow('RPC request failed')
+          await expect(validation).rejects.not.toThrow('private-provider-secret')
+        })
+      }
+    )
   })
 
   describe('when the chain is empty', () => {

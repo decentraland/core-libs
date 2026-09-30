@@ -1,5 +1,9 @@
 const DEFAULT_RPC_TIMEOUT_IN_MILLISECONDS = 5_000
 const MAX_ERROR_MESSAGE_LENGTH = 200
+const MAX_RPC_RESPONSE_BYTES = 1024 * 1024
+
+/** Only errors produced here may be exposed to callers; native fetch errors can contain credentials. */
+class RpcResponseError extends Error {}
 
 export interface JsonRpcRequest {
   id: number | string
@@ -26,7 +30,9 @@ export interface AuthChainProvider {
  * checked by calling the account on chain. Plain EOA signatures are still verified offline and never
  * reach it.
  *
- * Each request is bounded by a deadline that covers the response body. Whatever the RPC answers is
+ * Each request is bounded by a deadline and a 1 MiB response limit, including decoded bodies.
+ * This signature-verification provider only accepts up to one ABI word from `eth_call`.
+ * Whatever the RPC answers is
  * reduced to a well-formed JSON-RPC response before it is handed on, so any failure — an error
  * status, an unreadable or malformed body, a timeout — is reported through the callback as an error
  * rather than escaping from it.
@@ -45,10 +51,26 @@ export function createRpcProvider(
 
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined)
-      throw new Error(`RPC request failed with status ${response.status}`)
+      throw new RpcResponseError(`RPC request failed with status ${response.status}`)
     }
 
-    return toJsonRpcResponse(payload.id, JSON.parse(await response.text()))
+    const text = await readBoundedBody(response)
+    let body: unknown
+    try {
+      body = JSON.parse(text)
+    } catch {
+      // JSON.parse errors can echo part of an upstream body, including private configuration.
+      throw new RpcResponseError('Invalid JSON-RPC response')
+    }
+    const result = toJsonRpcResponse(payload.id, body)
+    if (
+      payload.method === 'eth_call' &&
+      'result' in result &&
+      (typeof result.result !== 'string' || !/^0x(?:[a-fA-F0-9]{2}){0,32}$/.test(result.result))
+    ) {
+      throw new RpcResponseError('Invalid eth_call result')
+    }
+    return result
   }
 
   return {
@@ -69,7 +91,7 @@ export function createRpcProvider(
             ? 'RPC request cancelled'
             : timeoutSignal.aborted
               ? 'RPC request timed out'
-              : error instanceof Error
+              : error instanceof RpcResponseError
                 ? error.message
                 : 'RPC request failed'
           deliver(callback, new Error(reason))
@@ -79,13 +101,44 @@ export function createRpcProvider(
   }
 }
 
+/** Reads at most 1 MiB, cancelling oversized streams before buffering or parsing their remainder. */
+async function readBoundedBody(response: Response): Promise<string> {
+  const contentLength = Number(response.headers.get('content-length'))
+  if (contentLength > MAX_RPC_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new RpcResponseError('RPC response exceeds size limit')
+  }
+  if (!response.body) {
+    throw new RpcResponseError('Invalid JSON-RPC response')
+  }
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    let chunk = await reader.read()
+    while (!chunk.done) {
+      const { value } = chunk
+      size += value.byteLength
+      if (size > MAX_RPC_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => undefined)
+        throw new RpcResponseError('RPC response exceeds size limit')
+      }
+      chunks.push(value)
+      chunk = await reader.read()
+    }
+    return Buffer.concat(chunks, size).toString('utf8')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 /**
  * Keeps only what a JSON-RPC response is allowed to carry: the request's id, and either a result or
  * an error with a string message. Anything else is rejected as invalid.
  */
 function toJsonRpcResponse(id: JsonRpcRequest['id'], body: unknown): JsonRpcResponse {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    throw new Error('Invalid JSON-RPC response')
+    throw new RpcResponseError('Invalid JSON-RPC response')
   }
 
   const { error, result } = body as { error?: unknown; result?: unknown }
@@ -109,7 +162,7 @@ function toJsonRpcResponse(id: JsonRpcRequest['id'], body: unknown): JsonRpcResp
   const isExpectedResult =
     typeof result === 'string' || (typeof result === 'object' && result !== null && !Array.isArray(result))
   if (!isExpectedResult) {
-    throw new Error('Invalid JSON-RPC response')
+    throw new RpcResponseError('Invalid JSON-RPC response')
   }
 
   return { jsonrpc: '2.0', id, result }

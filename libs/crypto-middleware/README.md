@@ -32,7 +32,7 @@ Without this option, the existing Catalyst validation path remains unchanged. Wi
 the middleware validates the complete chain, including the ephemeral signature over the HTTP
 method, path, timestamp and metadata. EOA signatures remain offline; contract signatures use
 the provider. Expiration, metadata validation and the guarded legacy-payload fallback still apply.
-Provider validation failures return `401 Invalid signature: ...`, preserving validation diagnostics such as an expired ephemeral key.
+Provider validation failures return `401 Invalid signature: ...`, preserving validation diagnostics such as an expired ephemeral key. RPC errors are replaced with a generic message before validation so credentials and upstream response contents are not exposed.
 
 ```ts
 import { createRpcProvider, wellKnownComponents } from '@dcl/crypto-middleware'
@@ -53,7 +53,9 @@ For a signed-fetch chain, `expectedFinalAuthority` is the complete signed HTTP p
 identity delegation chain, it is the final ephemeral address. This helper throws if validation
 fails, limits chains to `MAX_AUTH_CHAIN_LENGTH` (10) by default, and bounds the complete validation
 with a deadline. `createRpcProvider` bounds each RPC request, including its response body, and
-honors cancellation from the validation helper.
+honors cancellation from the validation helper. It cancels responses exceeding 1 MiB while reading
+the decoded stream, including chunked or compressed responses. Since this provider is for signature
+verification, `eth_call` results are limited to one ABI word (32 bytes) before decoding.
 
 For example, auth-server can build one provider from its existing `ETH_RPC_URL` configuration
 and share it between signed-fetch middleware, HTTP body validation and socket handlers. This

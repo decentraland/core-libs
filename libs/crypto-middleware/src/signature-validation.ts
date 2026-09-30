@@ -48,7 +48,23 @@ export async function validateAuthChainSignature(
         callback(timeoutError)
         return
       }
-      l1Provider.sendAsync(payload, callback, controller.signal)
+      // Provider errors can contain credentials, private URLs, or response bodies. Sanitize before
+      // @dcl/crypto incorporates them into its validation message, including third-party providers.
+      try {
+        l1Provider.sendAsync(
+          payload,
+          (error, response) => {
+            if (error || (response && 'error' in response && response.error !== null && response.error !== undefined)) {
+              callback(new Error('RPC request failed'))
+              return
+            }
+            callback(null, response)
+          },
+          controller.signal
+        )
+      } catch {
+        callback(new Error('RPC request failed'))
+      }
     }
   }
   let timer: NodeJS.Timeout | undefined

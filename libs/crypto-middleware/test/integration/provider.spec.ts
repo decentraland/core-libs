@@ -2,7 +2,9 @@ import type { IFetchComponent } from '@dcl/core-commons'
 import type { AuthChain, AuthIdentity } from '@dcl/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
+import { wellKnownComponents } from '../../src/index'
 import { rejectIfSigner } from '../../src/metadataValidators'
+import { createRpcProvider } from '../../src/rpc-provider'
 import { AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER } from '../../src/types'
 import verify, { createPayload } from '../../src/verify'
 import { identity, ownerAddress } from '../fixtures/identity'
@@ -158,9 +160,32 @@ describe('when verifying contract signatures with a supplied provider', () => {
     it('should reject the request and retain the validation failure reason', async () => {
       await expect(verify('POST', '/identities', headers, { provider, fetcher })).rejects.toMatchObject({
         statusCode: 401,
-        message: expect.stringContaining('RPC request timed out')
+        message: expect.stringContaining('RPC request failed')
       })
       expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('and the RPC URL contains credentials', () => {
+    let context: Parameters<ReturnType<typeof wellKnownComponents>>[0]
+    let next: jest.Mock
+    let response: Awaited<ReturnType<ReturnType<typeof wellKnownComponents>>>
+
+    beforeEach(() => {
+      provider = createRpcProvider('https://rpc-user:secret-rpc-password@example.invalid')
+      context = {
+        request: new Request('http://localhost/identities', { method: 'POST', headers }),
+        url: new URL('http://localhost/identities')
+      } as typeof context
+      next = jest.fn()
+    })
+
+    it('should reject the request without disclosing credentials in the default HTTP response', async () => {
+      response = await wellKnownComponents({ provider })(context, next)
+
+      expect(response).toMatchObject({ status: 401, body: { message: expect.stringContaining('RPC request failed') } })
+      expect(JSON.stringify(response)).not.toMatch(/rpc-user|secret-rpc-password|example\.invalid/)
+      expect(next).not.toHaveBeenCalled()
     })
   })
 
