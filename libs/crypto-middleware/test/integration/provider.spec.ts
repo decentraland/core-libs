@@ -4,7 +4,6 @@ import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import { wellKnownComponents } from '../../src/index'
 import { rejectIfSigner } from '../../src/metadataValidators'
-import { createRpcProvider } from '../../src/rpc-provider'
 import { AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER } from '../../src/types'
 import verify, { createPayload } from '../../src/verify'
 import { identity, ownerAddress } from '../fixtures/identity'
@@ -40,6 +39,7 @@ describe('when verifying contract signatures with a supplied provider', () => {
 
   afterEach(() => {
     jest.resetAllMocks()
+    jest.useRealTimers()
   })
 
   describe('and the contract accepts its delegation signature', () => {
@@ -140,7 +140,24 @@ describe('when verifying contract signatures with a supplied provider', () => {
   describe('and the contract rejects the signature', () => {
     beforeEach(() => {
       sendAsync.mockImplementation((request, callback) => {
-        callback(null, { id: request.id, jsonrpc: '2.0', result: '0x' + '0'.repeat(64) })
+        if (request.method === 'eth_getBlockByNumber') {
+          callback(null, {
+            id: request.id,
+            jsonrpc: '2.0',
+            result: {
+              number: request.params?.[0] === '0x1' ? '0x1' : '0x64',
+              timestamp:
+                '0x' + (Math.floor(timestamp / 1000) - (request.params?.[0] === '0x1' ? 1000 : 1)).toString(16),
+              transactions: []
+            }
+          })
+          return
+        }
+        callback(null, {
+          id: request.id,
+          jsonrpc: '2.0',
+          result: request.method === 'eth_blockNumber' ? '0x64' : '0x' + '0'.repeat(64)
+        })
       })
     })
 
@@ -149,6 +166,7 @@ describe('when verifying contract signatures with a supplied provider', () => {
         statusCode: 401
       })
       expect(fetchMock).not.toHaveBeenCalled()
+      expect(sendAsync.mock.calls.filter(([request]) => request.method === 'eth_call')).toHaveLength(4)
     })
   })
 
@@ -157,22 +175,24 @@ describe('when verifying contract signatures with a supplied provider', () => {
       sendAsync.mockImplementation((_request, callback) => callback(new Error('RPC request timed out')))
     })
 
-    it('should reject the request and retain the validation failure reason', async () => {
-      await expect(verify('POST', '/identities', headers, { provider, fetcher })).rejects.toMatchObject({
-        statusCode: 401,
-        message: expect.stringContaining('RPC request failed')
-      })
+    it('should return service unavailable without retrying the legacy payload', async () => {
+      await expect(
+        verify('POST', '/identities', headers, { provider, fetcher, canonicalMetadataKeys: ['intent'] })
+      ).rejects.toMatchObject({ statusCode: 503, message: 'Signature verification unavailable' })
       expect(fetchMock).not.toHaveBeenCalled()
+      expect(sendAsync).toHaveBeenCalledTimes(1)
     })
   })
 
-  describe('and the RPC URL contains credentials', () => {
+  describe('and a custom provider exposes credentials in its error', () => {
     let context: Parameters<ReturnType<typeof wellKnownComponents>>[0]
     let next: jest.Mock
     let response: Awaited<ReturnType<ReturnType<typeof wellKnownComponents>>>
 
     beforeEach(() => {
-      provider = createRpcProvider('https://rpc-user:secret-rpc-password@example.invalid')
+      sendAsync.mockImplementation((_request, callback) =>
+        callback(new Error('Cannot connect to https://rpc-user:secret-rpc-password@example.invalid'))
+      )
       context = {
         request: new Request('http://localhost/identities', { method: 'POST', headers }),
         url: new URL('http://localhost/identities')
@@ -183,9 +203,71 @@ describe('when verifying contract signatures with a supplied provider', () => {
     it('should reject the request without disclosing credentials in the default HTTP response', async () => {
       response = await wellKnownComponents({ provider })(context, next)
 
-      expect(response).toMatchObject({ status: 401, body: { message: expect.stringContaining('RPC request failed') } })
+      expect(response).toMatchObject({ status: 503, body: { message: 'Internal error' } })
       expect(JSON.stringify(response)).not.toMatch(/rpc-user|secret-rpc-password|example\.invalid/)
       expect(next).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('and the provider never answers', () => {
+    let outcome: Promise<void>
+
+    beforeEach(() => {
+      jest.useFakeTimers()
+      outcome = expect(
+        verify('POST', '/identities', headers, { provider, canonicalMetadataKeys: ['intent'] })
+      ).rejects.toMatchObject({ statusCode: 503, message: 'Signature verification unavailable' })
+    })
+
+    it('should report service unavailable after the deadline without starting a legacy retry', async () => {
+      await jest.advanceTimersByTimeAsync(15_000)
+      await outcome
+
+      expect(sendAsync).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe.each(['aabb', ownerAddress.slice(2), '0x' + 'g'.repeat(40)])(
+    'and the signer address is malformed (%s)',
+    (signerAddress) => {
+      beforeEach(() => {
+        chain[0] = { ...chain[0], payload: signerAddress }
+        headers = createAuthChainHeaders(chain, timestamp, metadata)
+      })
+
+      it('should reject the signer without issuing an RPC request', async () => {
+        await expect(verify('POST', '/identities', headers, { provider })).rejects.toMatchObject({ statusCode: 401 })
+        expect(sendAsync).not.toHaveBeenCalled()
+      })
+    }
+  )
+
+  describe('and the contract reverts during signature validation', () => {
+    beforeEach(() => {
+      sendAsync.mockImplementation((request, callback) => {
+        if (request.method === 'eth_getBlockByNumber') {
+          callback(null, {
+            id: request.id,
+            jsonrpc: '2.0',
+            result: {
+              number: request.params?.[0] === '0x1' ? '0x1' : '0x64',
+              timestamp:
+                '0x' + (Math.floor(timestamp / 1000) - (request.params?.[0] === '0x1' ? 1000 : 1)).toString(16),
+              transactions: []
+            }
+          })
+          return
+        }
+        if (request.method === 'eth_blockNumber') {
+          callback(null, { id: request.id, jsonrpc: '2.0', result: '0x64' })
+          return
+        }
+        callback(null, { id: request.id, jsonrpc: '2.0', error: { code: 3, message: 'execution reverted' } })
+      })
+    })
+
+    it('should treat the revert as an invalid signature rather than a service outage', async () => {
+      await expect(verify('POST', '/identities', headers, { provider })).rejects.toMatchObject({ statusCode: 401 })
     })
   })
 

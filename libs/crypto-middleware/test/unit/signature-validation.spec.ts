@@ -1,13 +1,17 @@
 import { AuthLinkType } from '@dcl/crypto'
 import type { AuthChain, AuthIdentity } from '@dcl/crypto'
-import { validateAuthChainSignature } from '../../src/signature-validation'
+import { SignatureValidationInfrastructureError, validateAuthChainSignature } from '../../src/signature-validation'
 import { identity as fixtureIdentity } from '../fixtures/identity'
 import type { AuthChainProvider, JsonRpcCallback, JsonRpcRequest } from '../../src/rpc-provider'
 
 const contractAccountThat =
   (verdict: 'accepts' | 'rejects') => (payload: JsonRpcRequest, callback: JsonRpcCallback) => {
     if (payload.method !== 'eth_call') {
-      callback(new Error('No RPC in tests'))
+      callback(null, {
+        id: payload.id,
+        jsonrpc: '2.0',
+        result: payload.method === 'eth_blockNumber' ? '0x2' : { timestamp: '0x1', number: '0x2' }
+      })
       return
     }
     callback(null, {
@@ -91,12 +95,13 @@ describe('validateAuthChainSignature', () => {
         sendAsync.mockImplementation(() => undefined)
         outcome = expect(
           validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
-        ).rejects.toThrow('Signature validation timed out')
+        ).rejects.toBeInstanceOf(SignatureValidationInfrastructureError)
       })
 
       it('should abort the RPC signal and reject the chain after the deadline', async () => {
         await jest.advanceTimersByTimeAsync(15_000)
         await outcome
+        expect(jest.getTimerCount()).toBe(0)
 
         expect(sendAsync).toHaveBeenCalledWith(
           expect.objectContaining({ method: 'eth_call' }),
@@ -117,7 +122,7 @@ describe('validateAuthChainSignature', () => {
         })
         outcome = expect(
           validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
-        ).rejects.toThrow('Signature validation timed out')
+        ).rejects.toThrow(new SignatureValidationInfrastructureError('Signature validation timed out'))
       })
 
       it('should prevent subsequent chain links from issuing RPC requests', async () => {
@@ -142,7 +147,7 @@ describe('validateAuthChainSignature', () => {
           })
         firstOutcome = expect(
           validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
-        ).rejects.toThrow('Signature validation timed out')
+        ).rejects.toThrow(new SignatureValidationInfrastructureError('Signature validation timed out'))
         await jest.advanceTimersByTimeAsync(10_000)
         secondOutcome = expect(
           validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
@@ -187,6 +192,83 @@ describe('validateAuthChainSignature', () => {
       })
     })
 
+    describe.each([
+      [3, 'private revert reason'],
+      [-32000, 'execution reverted: private revert reason'],
+      [-32000, 'VM Exception while processing transaction: revert private revert reason']
+    ])('and eth_call reverts with code %s and message %s', (code, message) => {
+      let validation: Promise<void>
+
+      beforeEach(() => {
+        sendAsync.mockImplementation((payload: JsonRpcRequest, callback: JsonRpcCallback) => {
+          if (payload.method === 'eth_call') {
+            callback(null, { id: payload.id, jsonrpc: '2.0', error: { code: Number(code), message: String(message) } })
+          } else {
+            contractAccountThat('rejects')(payload, callback)
+          }
+        })
+        validation = validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
+      })
+
+      it('should preserve normal signature rejection after trying prefixed and historical checks', async () => {
+        await expect(validation).rejects.toThrow(/Invalid validation/)
+        await expect(validation).rejects.not.toBeInstanceOf(SignatureValidationInfrastructureError)
+        await expect(validation).rejects.not.toThrow('private revert reason')
+        expect(sendAsync.mock.calls.filter(([payload]) => payload.method === 'eth_call')).toHaveLength(4)
+      })
+    })
+
+    describe('and the first hash reverts but the prefixed hash is accepted', () => {
+      beforeEach(() => {
+        sendAsync
+          .mockImplementationOnce((payload: JsonRpcRequest, callback: JsonRpcCallback) => {
+            callback(null, { id: payload.id, jsonrpc: '2.0', error: { code: 3, message: 'private revert reason' } })
+          })
+          .mockImplementationOnce(contractAccountThat('accepts'))
+      })
+
+      it('should accept the signature after the ordinary EVM revert', async () => {
+        await expect(
+          validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
+        ).resolves.toBeUndefined()
+        expect(sendAsync).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    describe.each([undefined, null, {}, { result: null }, { result: 'private-provider-secret' }, { error: {} }])(
+      'and a custom provider returns malformed data %p',
+      (response) => {
+        let validation: Promise<void>
+
+        beforeEach(() => {
+          sendAsync.mockImplementation((_payload, callback) => callback(null, response))
+          validation = validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
+        })
+
+        it('should fail once with a sanitized infrastructure error', async () => {
+          await expect(validation).rejects.toThrow(SignatureValidationInfrastructureError)
+          await expect(validation).rejects.toThrow('RPC request failed')
+          expect(sendAsync).toHaveBeenCalledTimes(1)
+        })
+      }
+    )
+
+    describe.each(['not-an-address', '0x1234', '0x' + 'z'.repeat(40)])(
+      'and the owner address is malformed: %s',
+      (owner) => {
+        beforeEach(() => {
+          authChain[0] = { ...authChain[0], payload: owner }
+        })
+
+        it('should reject the owner before issuing RPC requests', async () => {
+          await expect(
+            validateAuthChainSignature(authChain, identity.ephemeralIdentity.address, l1Provider)
+          ).rejects.toThrow('Invalid auth chain signer address')
+          expect(sendAsync).not.toHaveBeenCalled()
+        })
+      }
+    )
+
     describe('and the provider cannot be reached', () => {
       it('should reject the chain rather than let it through', async () => {
         await expect(
@@ -195,21 +277,25 @@ describe('validateAuthChainSignature', () => {
       })
     })
 
-    describe.each(['callback error', 'synchronous throw', 'JSON-RPC error response'])(
+    describe.each(['callback error', 'synchronous throw', 'JSON-RPC error response', 'non-revert -32000 response'])(
       'and a custom provider exposes a secret through a %s',
       (failureMode) => {
         let validation: Promise<void>
 
         beforeEach(() => {
+          jest.useFakeTimers()
           sendAsync.mockImplementation((payload: JsonRpcRequest, callback: JsonRpcCallback) => {
             if (failureMode === 'synchronous throw') {
               throw new Error('private-provider-secret')
             }
-            if (failureMode === 'JSON-RPC error response') {
+            if (failureMode === 'JSON-RPC error response' || failureMode === 'non-revert -32000 response') {
               callback(null, {
                 id: payload.id,
                 jsonrpc: '2.0',
-                error: { code: -32603, message: 'private-provider-secret' }
+                error: {
+                  code: failureMode === 'non-revert -32000 response' ? -32000 : -32603,
+                  message: 'private-provider-secret'
+                }
               })
               return
             }
@@ -219,7 +305,10 @@ describe('validateAuthChainSignature', () => {
         })
 
         it('should reject without including provider secrets in the helper error', async () => {
-          await expect(validation).rejects.toThrow('RPC request failed')
+          await expect(validation).rejects.toThrow(SignatureValidationInfrastructureError)
+          expect(sendAsync).toHaveBeenCalledTimes(1)
+          expect(sendAsync.mock.calls[0][2].aborted).toBe(true)
+          expect(jest.getTimerCount()).toBe(0)
           await expect(validation).rejects.not.toThrow('private-provider-secret')
         })
       }

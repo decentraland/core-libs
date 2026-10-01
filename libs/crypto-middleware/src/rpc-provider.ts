@@ -32,15 +32,36 @@ export interface AuthChainProvider {
  *
  * Each request is bounded by a deadline and a 1 MiB response limit, including decoded bodies.
  * This signature-verification provider only accepts up to one ABI word from `eth_call`.
- * Whatever the RPC answers is
- * reduced to a well-formed JSON-RPC response before it is handed on, so any failure — an error
- * status, an unreadable or malformed body, a timeout — is reported through the callback as an error
- * rather than escaping from it.
+ * Responses are reduced to well-formed JSON-RPC before reaching the callback. HTTP errors,
+ * unreadable or malformed bodies, and timeouts are reported through the callback as errors.
+ * Use this specialized provider with `validateAuthChainSignature`, which supplies the overall
+ * validation deadline and cancellation for dependency callbacks.
+ *
+ * @param url HTTP(S) RPC endpoint without user information.
+ * @param options Per-request timeout, including response-body reads.
+ * @throws When the endpoint or timeout configuration is invalid.
  */
 export function createRpcProvider(
   url: string,
   { timeoutInMilliseconds = DEFAULT_RPC_TIMEOUT_IN_MILLISECONDS }: { timeoutInMilliseconds?: number } = {}
 ): AuthChainProvider {
+  let endpoint: URL
+  try {
+    endpoint = new URL(url)
+  } catch {
+    throw new Error('RPC URL must be an HTTP(S) URL without user information')
+  }
+  if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
+    throw new Error('RPC URL must be an HTTP(S) URL without user information')
+  }
+  if (
+    !Number.isSafeInteger(timeoutInMilliseconds) ||
+    timeoutInMilliseconds < 1 ||
+    timeoutInMilliseconds > 2_147_483_647
+  ) {
+    throw new Error('RPC timeout must be a positive integer that fits a Node timer')
+  }
+
   async function call(payload: JsonRpcRequest, signal: AbortSignal): Promise<JsonRpcResponse> {
     const response = await fetch(url, {
       method: 'POST',
@@ -81,9 +102,7 @@ export function createRpcProvider(
       }
 
       const timeoutSignal = AbortSignal.timeout(timeoutInMilliseconds)
-      // Node 22 supports `any`, but the project's TypeScript DOM declarations predate it.
-      const abortSignal = AbortSignal as typeof AbortSignal & { any(signals: AbortSignal[]): AbortSignal }
-      const signal = validationSignal ? abortSignal.any([timeoutSignal, validationSignal]) : timeoutSignal
+      const signal = validationSignal ? AbortSignal.any([timeoutSignal, validationSignal]) : timeoutSignal
       call(payload, signal).then(
         (response) => deliver(callback, null, response),
         (error) => {
@@ -169,8 +188,9 @@ function toJsonRpcResponse(id: JsonRpcRequest['id'], body: unknown): JsonRpcResp
 }
 
 /**
- * The callback belongs to the caller and runs its own handling of the response synchronously. A
- * throw from it is contained here: the request then never settles, and the caller's deadline ends it.
+ * The crypto dependency handles the response synchronously inside this callback. Contain its
+ * exceptions so they cannot become unhandled rejections; `validateAuthChainSignature` supplies
+ * the deadline that terminates a validation whose callback failed before settling it.
  */
 function deliver(callback: JsonRpcCallback, error: Error | null, response?: JsonRpcResponse): void {
   try {

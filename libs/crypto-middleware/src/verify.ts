@@ -1,7 +1,7 @@
 import type { AuthChain } from '@dcl/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import RequestError from './errors'
-import { validateAuthChainSignature } from './signature-validation'
+import { SignatureValidationInfrastructureError, validateAuthChainSignature } from './signature-validation'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -189,6 +189,9 @@ export async function verifySign(
       await validateAuthChainSignature(authChain, payload, options.provider, { maxChainLength: options.maxChainLength })
       return Authenticator.ownerAddress(authChain).toLowerCase()
     } catch (err) {
+      if (err instanceof SignatureValidationInfrastructureError) {
+        throw new RequestError('Signature verification unavailable', 503)
+      }
       // Preserve validator diagnostics (including expiry) and the guarded legacy-payload fallback.
       throw new RequestError(`Invalid signature: ${errorMessage(err)}`, 401)
     }
