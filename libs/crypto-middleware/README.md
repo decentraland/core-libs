@@ -25,12 +25,60 @@ router.get('/user/required', (ctx: DecentralandSignatureRequiredContext) => {
 })
 ```
 
+### Validating against a configured Ethereum network
+
+Pass a `provider` to validate contract-wallet signatures directly on your configured network.
+Without this option, the existing Catalyst validation path remains unchanged. With a provider,
+the middleware validates the complete chain, including the ephemeral signature over the HTTP
+method, path, timestamp and metadata. EOA signatures remain offline; contract signatures use
+the provider. Expiration, metadata validation and the guarded legacy-payload fallback still apply.
+Invalid signatures return `401 Invalid signature: ...`, preserving diagnostics such as an expired ephemeral key.
+RPC failures and validation timeouts return a sanitized `503` and never trigger the legacy-payload retry.
+The shared helper throws `SignatureValidationInfrastructureError` for those failures so body and socket
+handlers can distinguish them too. Provider diagnostics are sanitized before reaching validation errors.
+Signer addresses must have the `0x` prefix and exactly 40 hexadecimal digits, avoiding alternate identity strings.
+
+```ts
+import { createRpcProvider, wellKnownComponents } from '@dcl/crypto-middleware'
+
+const provider = createRpcProvider(await components.config.requireString('ETH_RPC_URL'))
+router.post('/identities', wellKnownComponents({ provider }), createIdentityHandler)
+```
+
+Use the same provider for signatures received in request bodies or socket messages:
+
+```ts
+import { validateAuthChainSignature } from '@dcl/crypto-middleware'
+
+await validateAuthChainSignature(authChain, expectedFinalAuthority, provider)
+```
+
+For a signed-fetch chain, `expectedFinalAuthority` is the complete signed HTTP payload. For an
+identity delegation chain, it is the final ephemeral address. This helper throws if validation
+fails, limits chains to `MAX_AUTH_CHAIN_LENGTH` (10) by default, and bounds the complete validation
+with a deadline. `createRpcProvider` bounds each RPC request, including its response body, and
+honors cancellation from the validation helper. It cancels responses exceeding 1 MiB while reading
+the decoded stream, including chunked or compressed responses. Since this provider is for signature
+verification, `eth_call` results are limited to one ABI word (32 bytes) before decoding.
+Use this provider through the helper or middleware. Its dependency callbacks are contained to avoid
+uncaught asynchronous exceptions; the helper supplies their completion deadline. This is not a
+general-purpose JSON-RPC client for arbitrary contract return types.
+
+The provider rejects invalid URLs, non-HTTP(S) schemes, embedded URL credentials, and invalid timeouts
+when constructed. Use an endpoint without URL user information; Basic authentication via `user:pass@`
+is not supported. Constructor errors do not echo the URL.
+
+For example, auth-server can build one provider from its existing `ETH_RPC_URL` configuration
+and share it between signed-fetch middleware, HTTP body validation and socket handlers. This
+keeps a Sepolia deployment from checking headers on mainnet while checking bodies on Sepolia.
+
 ## Options
 
 | Name                | Type                                         | Description                                                                                                    |
 | ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `optional`          | `boolean`                                    | If `true`, requests without a valid signature fall through silently. Default: `false`.                         |
 | `expiration`        | `number`                                     | Time in milliseconds a signature stays valid. Default: `60_000`.                                               |
+| `provider`          | `AuthChainProvider`                          | Optional direct signature provider. Takes precedence over `catalyst` and `fetcher` for signature verification. |
 | `catalyst`          | `string`                                     | Catalyst URL used to validate contract wallet (EIP-1654) signatures. Default: `https://peer.decentraland.org`. |
 | `fetcher`           | `IFetchComponent`                            | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                            |
 | `maxChainLength`    | `number`                                     | Maximum number of `x-identity-auth-chain-*` headers accepted. Default: `10`.                                   |
@@ -129,6 +177,10 @@ wellKnownComponents({ onError: (err) => ({ ok: false, message: err.message, caus
 ## Threat model and operational notes
 
 - **`options.catalyst` must be trusted configuration.** It is passed through to `new URL(...)` and used as the outbound destination for signature verification. Accepting this value from end-user input (query strings, request bodies, etc.) opens an SSRF vector — a client could direct the server at arbitrary internal hosts. Pin it in startup config and treat it like a database connection string.
+
+- **The URL passed to `createRpcProvider` must be trusted configuration.** Choose the network at startup and reuse that provider for all signatures belonging to that network. Do not accept the RPC URL from incoming requests.
+
+- **Capacity controls remain the service's responsibility.** Signature validation can perform several RPC calls, including historical-block fallback. Apply request-rate and concurrency limits at the service or RPC proxy according to its capacity; the per-validation deadline is not a service-wide rate limit.
 
 - **Incoming request size is bounded by the HTTP server, not by this library.** Keep `maxHeaderSize` / `maxHeadersCount` on your HTTP server set to sensible values. `extractAuthChain` caps at `DEFAULT_MAX_CHAIN_LENGTH = 10` entries per request; the `maxChainLength` option lets you tighten this further. `verifyMetadata` parses the metadata header value via `JSON.parse`; depth/shape validation beyond "must be an object" is the consumer's responsibility via `metadataValidator`.
 

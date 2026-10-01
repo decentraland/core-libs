@@ -5,6 +5,7 @@ import {
   AUTH_TIMESTAMP_HEADER as _AUTH_TIMESTAMP_HEADER
 } from '@dcl/crypto'
 import RequestError from './errors'
+import type { AuthChainProvider } from './rpc-provider'
 
 /** @deprecated Import from `@dcl/crypto` directly. Kept here for backwards compatibility. */
 export const AUTH_CHAIN_HEADER_PREFIX = _AUTH_CHAIN_HEADER_PREFIX
@@ -41,6 +42,8 @@ export interface DecentralandSignatureRequiredContext<P extends Record<string, u
 }
 
 export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown> = Record<string, unknown>> {
+  /** Validates signatures directly on the configured chain instead of consulting Catalyst. */
+  provider?: AuthChainProvider
   catalyst?: string
   expiration?: number
   fetcher?: IFetchComponent

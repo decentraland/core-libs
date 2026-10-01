@@ -1,6 +1,7 @@
 import type { AuthChain } from '@dcl/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import RequestError from './errors'
+import { SignatureValidationInfrastructureError, validateAuthChainSignature } from './signature-validation'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -178,11 +179,24 @@ export async function verifyEIP1654Sign(
   return ownerAddress
 }
 
-export function verifySign(
+export async function verifySign(
   authChain: AuthChain,
   payload: string,
-  options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher'> = {}
+  options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher' | 'provider' | 'maxChainLength'> = {}
 ): Promise<string> {
+  if (options.provider) {
+    try {
+      await validateAuthChainSignature(authChain, payload, options.provider, { maxChainLength: options.maxChainLength })
+      return Authenticator.ownerAddress(authChain).toLowerCase()
+    } catch (err) {
+      if (err instanceof SignatureValidationInfrastructureError) {
+        throw new RequestError('Signature verification unavailable', 503)
+      }
+      // Preserve validator diagnostics (including expiry) and the guarded legacy-payload fallback.
+      throw new RequestError(`Invalid signature: ${errorMessage(err)}`, 401)
+    }
+  }
+
   if (isEIP1654AuthChain(authChain)) {
     return verifyEIP1654Sign(authChain, payload, options)
   }
