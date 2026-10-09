@@ -13,6 +13,7 @@ core-libs/
 │   ├── crypto/              # Crypto auth primitives for Decentraland
 │   ├── crypto-middleware/   # Multi-framework authentication middleware for Decentraland signed requests
 │   ├── crypto-fetch/        # fetch wrapper that signs requests with a Decentraland Identity
+│   ├── authoritative-delegation/ # Scope delegation claim for authoritative scene servers
 │   ├── hashing/             # Hashing functions for Decentraland Content Identifiers
 │   ├── content-validator/   # Catalyst content validations
 │   ├── urn-resolver/        # URN resolver for Decentraland assets
@@ -32,6 +33,10 @@ core-libs/
 ### Crypto Middleware
 
 - **Crypto Middleware** (`@dcl/crypto-middleware`) - Authentication middleware for Decentraland signed requests with Express, Koa, and Well-Known Components adapters
+
+### Authoritative Delegation
+
+- **Authoritative Delegation** (`@dcl/authoritative-delegation`) - Scope delegation claim that lets an authoritative scene server act for one scene: payload builder for the minter, strict parser and verifier for the services that accept it
 
 ### Crypto Fetch
 
@@ -131,6 +136,7 @@ This project uses [Changesets](https://github.com/changesets/changesets) for aut
 - `@dcl/crypto`
 - `@dcl/crypto-middleware`
 - `decentraland-crypto-fetch`
+- `@dcl/authoritative-delegation`
 - `@dcl/hashing`
 - `@dcl/content-validator`
 - `@dcl/urn-resolver`

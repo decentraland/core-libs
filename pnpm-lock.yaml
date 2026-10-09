@@ -33,6 +33,22 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  libs/authoritative-delegation:
+    dependencies:
+      '@dcl/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+    devDependencies:
+      '@dcl/eslint-config':
+        specifier: ^2.4.3
+        version: 2.4.3(@babel/core@7.28.5)(babel-plugin-module-resolver@5.0.2)(typescript@5.9.3)
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   libs/content-validator:
     dependencies:
       '@dcl/block-indexer':
