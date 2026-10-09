@@ -1,6 +1,6 @@
 import { createUnsafeIdentity } from '@dcl/crypto/dist/crypto'
 import { Authenticator } from '@dcl/crypto'
-import { buildClaimPayload, DELEGATION_PREFIX, verifyDelegation, verifyStorageDelegation } from '../src'
+import { DELEGATION_PREFIX, buildClaimPayload, verifyDelegation, verifyStorageDelegation } from '../../src'
 
 // A random account standing in for the authoritative root, and a throwaway
 // ephemeral the worker would sign requests with.

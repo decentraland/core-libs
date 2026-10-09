@@ -1,14 +1,15 @@
-import { buildClaimPayload, DELEGATION_PREFIX, parseClaim } from '../src'
+import { DELEGATION_PREFIX, buildClaimPayload, parseClaim } from '../../src'
 
 const EPHEMERAL = '0xAbCdEf0000000000000000000000000000000001'
 const WORLD = 'Boedo.DCL.eth'
 const SCENE = 'bafkrei-scene'
 const PARCEL = '5,7'
 const EXPIRATION = new Date('2030-01-01T00:00:00.000Z')
+const INPUT = { ephemeral: EPHEMERAL, world: WORLD, sceneId: SCENE, parcel: PARCEL, expiration: EXPIRATION }
 
 describe('buildClaimPayload', () => {
   it('writes the prefix and the five fields in canonical order', () => {
-    const payload = buildClaimPayload({ ephemeral: EPHEMERAL, world: WORLD, sceneId: SCENE, parcel: PARCEL, expiration: EXPIRATION })
+    const payload = buildClaimPayload(INPUT)
     expect(payload.split('\n')).toEqual([
       DELEGATION_PREFIX,
       `Ephemeral: ${EPHEMERAL.toLowerCase()}`,
@@ -20,14 +21,14 @@ describe('buildClaimPayload', () => {
   })
 
   it('accepts a numeric expiration (unix millis)', () => {
-    const payload = buildClaimPayload({ ephemeral: EPHEMERAL, world: WORLD, sceneId: SCENE, parcel: PARCEL, expiration: EXPIRATION.getTime() })
+    const payload = buildClaimPayload({ ...INPUT, expiration: EXPIRATION.getTime() })
     expect(payload).toContain('Expiration: 2030-01-01T00:00:00.000Z')
   })
 })
 
 describe('parseClaim', () => {
   it('round-trips what buildClaimPayload produced', () => {
-    const payload = buildClaimPayload({ ephemeral: EPHEMERAL, world: WORLD, sceneId: SCENE, parcel: PARCEL, expiration: EXPIRATION })
+    const payload = buildClaimPayload(INPUT)
     expect(parseClaim(payload)).toEqual({
       ephemeral: EPHEMERAL.toLowerCase(),
       world: 'boedo.dcl.eth',
@@ -50,7 +51,13 @@ describe('parseClaim', () => {
   })
 
   it('rejects a missing prefix', () => {
-    const payload = [`Ephemeral: ${EPHEMERAL}`, `World: ${WORLD}`, `SceneId: ${SCENE}`, `Parcel: ${PARCEL}`, `Expiration: ${EXPIRATION.toISOString()}`].join('\n')
+    const payload = [
+      `Ephemeral: ${EPHEMERAL}`,
+      `World: ${WORLD}`,
+      `SceneId: ${SCENE}`,
+      `Parcel: ${PARCEL}`,
+      `Expiration: ${EXPIRATION.toISOString()}`
+    ].join('\n')
     expect(parseClaim(payload)).toBeNull()
   })
 
@@ -68,17 +75,30 @@ describe('parseClaim', () => {
   })
 
   it('rejects an unknown line', () => {
-    const payload = buildClaimPayload({ ephemeral: EPHEMERAL, world: WORLD, sceneId: SCENE, parcel: PARCEL, expiration: EXPIRATION }) + '\nAudience: badges'
+    const payload = buildClaimPayload(INPUT) + '\nAudience: badges'
     expect(parseClaim(payload)).toBeNull()
   })
 
   it('rejects a missing field', () => {
-    const payload = [DELEGATION_PREFIX, `Ephemeral: ${EPHEMERAL}`, `World: ${WORLD}`, `SceneId: ${SCENE}`, `Parcel: ${PARCEL}`].join('\n')
+    const payload = [
+      DELEGATION_PREFIX,
+      `Ephemeral: ${EPHEMERAL}`,
+      `World: ${WORLD}`,
+      `SceneId: ${SCENE}`,
+      `Parcel: ${PARCEL}`
+    ].join('\n')
     expect(parseClaim(payload)).toBeNull()
   })
 
   it('rejects an unparseable expiration', () => {
-    const payload = [DELEGATION_PREFIX, `Ephemeral: ${EPHEMERAL}`, `World: ${WORLD}`, `SceneId: ${SCENE}`, `Parcel: ${PARCEL}`, 'Expiration: soon'].join('\n')
+    const payload = [
+      DELEGATION_PREFIX,
+      `Ephemeral: ${EPHEMERAL}`,
+      `World: ${WORLD}`,
+      `SceneId: ${SCENE}`,
+      `Parcel: ${PARCEL}`,
+      'Expiration: soon'
+    ].join('\n')
     expect(parseClaim(payload)).toBeNull()
   })
 })
