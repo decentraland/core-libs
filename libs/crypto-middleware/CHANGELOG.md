@@ -1,5 +1,12 @@
 # @dcl/crypto-middleware
 
+## 6.3.1
+
+### Patch Changes
+
+- Updated dependencies [7e99899]
+  - @dcl/crypto@3.8.0
+
 ## 6.3.0
 
 ### Minor Changes
