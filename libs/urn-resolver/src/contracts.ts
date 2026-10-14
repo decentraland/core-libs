@@ -106,6 +106,8 @@ export = (
     "RentalsImplementation": "0xe90636e24d8faf02aa0e01c26d72dab9629865cb",
     "MarketplaceV3": "0x2d6b3508f9aca32d2550f92b2addba932e73c1ff",
     "MarketplaceV4": "0x1b67d0e31eeb6b52d8eeed71d3616c2f5b33b8e7",
+    "MarketplaceV5": "0x0f11d0d1671519683bd48abf3dbe779e300941cd",
+    "CouponManager": "0xf9180eed9fcd5f8b3921c1b8caeb771c10faeb26",
     "ManaEthAggregator": "0x82A44D92D6c329826dc557c5E1Be6ebeC5D5FeB9",
     "ETHUSDAggregator": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
   },
@@ -137,6 +139,8 @@ export = (
     "POIAllowlist": "0xff7fcdbeaf0a5f2c408564036a9afaef9f38182d",
     "MarketplaceV3": "0x54bdd3ffc1448bdab0251f05dd554eec803adb2f",
     "MarketplaceV4": "0x1b67d0e31eeb6b52d8eeed71d3616c2f5b33b8e7",
+    "MarketplaceV5": "0x257db44ac97789c16ab277eae87dcde0c246cc9f",
+    "CouponManager": "0xed558211ae5ae57a6704423918cb9b8501051af0",
     "MockAggregatorManaEth": "0x8184125efb44e8a3950fce7c3ad5292f1d448968",
     "MockAggregatorEthUsd": "0x0cf2901c01df53f868dcf6bb6680cfd9859ea3e1"
   },
@@ -170,13 +174,17 @@ export = (
     "POI": "0xFEC09d5C192aaf7Ec7E2C89Cc8D3224138391B2E",
     "MarketplaceV3": "0x540fb08edb56aae562864b390542c97f562825ba",
     "MarketplaceV4": "0xa40b1d129b8906888720686f3a01921ddf37716f",
-    "CouponManager": "0x3fd3056ee72a2a85e9392fab3a450e7736536081",
+    "MarketplaceV5": "0xe38ef22abe871513555cba89adfe45ab4f548ada",
+    "CouponManager": "0x655fdfa91d69ea49f4ce1a8f7f7e2622c8630813",
     "CouponManager_DEPRECATED": "0x90cb68d170275da51d2a645bdf70be29d215bda7",
+    "CouponManager_DEPRECATED_2": "0x3fd3056ee72a2a85e9392fab3a450e7736536081",
     "CollectionDiscountCoupon": "0xc914507fe297b2dddd1232ac3a8903f1c125e794",
     "CreditsManager_DEPRECATED": "0xe9f961e6ded4e1476bbee4faab886d63a2493eb9",
     "CreditsManager": "0x8b3a40ca1b6f5cafc99d112a4d02e897d1fd8cc5",
     "FeeCollector": "0x184e4D9A26Add0aF1eAfC145550E890a421f16d7",
-    "ManaUsdAggregator": "0xA1CbF3Fe43BC3501e3Fc4b573e822c70e76A7512"
+    "ManaUsdAggregator": "0xA1CbF3Fe43BC3501e3Fc4b573e822c70e76A7512",
+    "RegisterNameCrossChainExecutor_CORAL": "0x84c682B1b862859730446BCA5b853A5693aEfC84",
+    "RegisterNameCrossChainExecutor_ACROSS": "0xc9A9c416FbFd424D09e3F905142799abb10c2FA7"
   },
   "amoy": {
     "MetaTxForwarder": "0x3dd1fef020741386bf9c8d905b7e2b02a668ccda",
@@ -199,9 +207,12 @@ export = (
     "POI": "0x7a0fad6854de8df1245da952cd3ae7f6893154c1",
     "MarketplaceV3": "0x6ab20ae56673ed65f520b7be332aeb61b3ed727d",
     "MarketplaceV4": "0x1b67d0e31eeb6b52d8eeed71d3616c2f5b33b8e7",
-    "CouponManager": "0xa40b1d129b8906888720686f3a01921ddf37716f",
-    "CouponManager_DEPRECATED": "0x910308308066ac75f2212c06596f54922b44e6bd",
-    "CollectionDiscountCoupon": "0x54df9990a3fd9443b9e84f9f5944904704756074",
+    "MarketplaceV5": "0x36fd1434a6c4b8ade80c9847c1d15033ce34488c",
+    "CouponManager": "0x6c956587d9fe70032781edcdc626310648575382",
+    "CouponManager_DEPRECATED": "0xa40b1d129b8906888720686f3a01921ddf37716f",
+    "CouponManager_DEPRECATED_2": "0x910308308066ac75f2212c06596f54922b44e6bd",
+    "CollectionDiscountCoupon": "0x4ee8f6b87f4917a3bbc7c8bb3a06db8555f83db9",
+    "CollectionDiscountCoupon_DEPRECATED": "0x54df9990a3fd9443b9e84f9f5944904704756074",
     "MockAggregatorManaUsd": "0xdcf00f5f60b62b07e668a84c0cedaf6f453d416e",
     "CreditsManager_DEPRECATED": "0x037566bc90f85e76587e1b07f9184585f09c1420",
     "CreditsManager": "0x8052a560e6e6ac86eeb7e711a4497f639b322fb3"

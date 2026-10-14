@@ -1,5 +1,12 @@
 # decentraland-crypto-fetch
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [7e99899]
+  - @dcl/crypto@3.8.0
+
 ## 3.0.0
 
 ### Major Changes
