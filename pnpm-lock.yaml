@@ -45,8 +45,8 @@ importers:
         specifier: workspace:*
         version: link:../hashing
       '@dcl/schemas':
-        specifier: ^27.0.0
-        version: 27.0.0
+        specifier: ^27.3.0
+        version: 27.3.0
       '@dcl/urn-resolver':
         specifier: workspace:*
         version: link:../urn-resolver
@@ -85,8 +85,8 @@ importers:
   libs/crypto:
     dependencies:
       '@dcl/schemas':
-        specifier: ^25.2.0
-        version: 25.3.0
+        specifier: ^27.3.0
+        version: 27.3.0
       eth-connect:
         specifier: ^6.0.3
         version: 6.2.4
@@ -536,11 +536,8 @@ packages:
   '@dcl/schemas@18.8.0':
     resolution: {integrity: sha512-1HxbL0azB7N+kMwYyU4/Uqltc+7F8Lv8UcS3dxDNVTPn71gldIDImj58OM9Y3gIyQG5Tauacrlk5cDkXhjMkOA==}
 
-  '@dcl/schemas@25.3.0':
-    resolution: {integrity: sha512-ChFW3jU3ELN6YsRvs8TZIueBR8/DDxFcWPOeCoPafjLzSRK4GX9wHYrD3Crent07C3i3tm1rX8L/2rw+S39bzQ==}
-
-  '@dcl/schemas@27.0.0':
-    resolution: {integrity: sha512-KwW6ms2p2k8WW+167ta4AOLwQeqJGV1L8jrPcuRiw06kZhbDnlcnOkTqwBibigeIFtN5aoae9you0W3+SceAiA==}
+  '@dcl/schemas@27.3.0':
+    resolution: {integrity: sha512-6w/HpPAjmMKsTIxGOJBJyCA0iuCsmfdkRwN1llIJuZPW8gltnEFy7mNzgGCAMHob1L409VJM4KsiiUVHBPDNSQ==}
 
   '@dnsquery/dns-packet@6.1.1':
     resolution: {integrity: sha512-WXTuFvL3G+74SchFAtz3FgIYVOe196ycvGsMgvSH/8Goptb1qpIQtIuM4SOK9G9lhMWYpHxnXyy544ZhluFOew==}
@@ -4277,14 +4274,7 @@ snapshots:
       ajv-keywords: 5.1.0(ajv@8.17.1)
       mitt: 3.0.1
 
-  '@dcl/schemas@25.3.0':
-    dependencies:
-      ajv: 8.17.1
-      ajv-errors: 3.0.0(ajv@8.17.1)
-      ajv-keywords: 5.1.0(ajv@8.17.1)
-      mitt: 3.0.1
-
-  '@dcl/schemas@27.0.0':
+  '@dcl/schemas@27.3.0':
     dependencies:
       ajv: 8.17.1
       ajv-errors: 3.0.0(ajv@8.17.1)
