@@ -359,18 +359,37 @@ describe('when verifying contract signatures with a supplied provider', () => {
       sendAsync.mockImplementation(
         contractWallet(timestamp, (request, callIndex) => rpcResult(request, callIndex % 2 ? MAGIC_VALUE : ZERO_WORD))
       )
-      outcome = await settle(verify(METHOD, PATH, headers, options))
     })
 
-    it('should reject the chain as invalid with a 401 rather than a service outage', () => {
-      expect(outcome.error).toMatchObject({
-        statusCode: 401,
-        message: `Invalid signature: Auth chain validation exceeded ${DEFAULT_MAX_RPC_CALLS} RPC calls`
+    describe('and the default RPC call budget applies', () => {
+      beforeEach(async () => {
+        outcome = await settle(verify(METHOD, PATH, headers, options))
+      })
+
+      it('should reject the chain as invalid with a 401 rather than a service outage', () => {
+        expect(outcome.error).toMatchObject({
+          statusCode: 401,
+          message: `Invalid signature: Auth chain validation exceeded ${DEFAULT_MAX_RPC_CALLS} RPC calls`
+        })
+      })
+
+      it('should stop forwarding calls to the provider once the budget is spent', () => {
+        expect(sendAsync).toHaveBeenCalledTimes(DEFAULT_MAX_RPC_CALLS)
       })
     })
 
-    it('should stop forwarding calls to the provider once the budget is spent', () => {
-      expect(sendAsync).toHaveBeenCalledTimes(DEFAULT_MAX_RPC_CALLS)
+    describe('and the middleware raises maxRpcCalls to fit the chain', () => {
+      beforeEach(async () => {
+        outcome = await settle(verify(METHOD, PATH, headers, { ...options, maxRpcCalls: 20 }))
+      })
+
+      it('should authenticate the owner of the contract wallet', () => {
+        expect(outcome.value?.auth).toBe(ownerAddress.toLowerCase())
+      })
+
+      it('should spend two calls per contract link', () => {
+        expect(sendAsync).toHaveBeenCalledTimes(18)
+      })
     })
   })
 
@@ -607,6 +626,36 @@ describe('when creating the middleware with a provider', () => {
       maxChainLength = value
       try {
         wellKnownComponents({ provider, maxChainLength })
+        creation = undefined
+      } catch (error) {
+        creation = error as Error
+      }
+    })
+
+    it('should create the middleware', () => {
+      expect(creation).toBeUndefined()
+    })
+  })
+
+  describe.each([0, -1, 1.5, NaN])('and maxRpcCalls is %p', (value) => {
+    beforeEach(() => {
+      try {
+        wellKnownComponents({ provider, maxRpcCalls: value })
+        creation = undefined
+      } catch (error) {
+        creation = error as Error
+      }
+    })
+
+    it('should reject the configuration at construction', () => {
+      expect(creation?.message).toBe('maxRpcCalls must be a positive integer')
+    })
+  })
+
+  describe.each([undefined, 1, 32])('and maxRpcCalls is %p', (value) => {
+    beforeEach(() => {
+      try {
+        wellKnownComponents({ provider, maxRpcCalls: value })
         creation = undefined
       } catch (error) {
         creation = error as Error

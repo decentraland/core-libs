@@ -458,6 +458,7 @@ describe('when validating an auth chain signature', () => {
       [{ code: -32015, message: 'VM execution error.' }],
       [{ code: -32603, message: 'Error: VM Exception while processing transaction: reverted with reason string' }],
       [{ code: -32000, message: 'invalid opcode: INVALID' }],
+      [{ code: -32000, message: 'EVM error InvalidFEOpcode' }],
       [{ code: -32000, message: 'execution reverted' }]
     ])('and eth_call fails with the contract execution error %p', (error) => {
       describe('and every call fails that way', () => {

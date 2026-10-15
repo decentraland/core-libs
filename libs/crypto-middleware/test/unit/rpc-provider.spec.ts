@@ -380,6 +380,8 @@ describe('when classifying JSON-RPC errors as contract execution failures', () =
     ['a stack overflow', { message: 'stack overflow (1025 <=> 1024)' }],
     ['an invalid jump destination', { message: 'invalid jump destination' }],
     ['write protection', { message: 'write protection' }],
+    ['a return data overrun', { message: 'return data out of bounds' }],
+    ['a Reth EVM error', { code: -32000, message: 'EVM error InvalidFEOpcode' }],
     ['an uppercase message', { message: 'EXECUTION REVERTED' }]
   ])('and the error is %s', (_description, error) => {
     let result: boolean
@@ -396,6 +398,8 @@ describe('when classifying JSON-RPC errors as contract execution failures', () =
   describe.each([
     ['a limit exceeded error', { code: -32005, message: 'limit exceeded' }],
     ['an out of gas error from a provider gas cap', { code: -32000, message: 'out of gas' }],
+    ['a Reth out of gas error', { code: -32000, message: 'EVM error OutOfGas(Basic)' }],
+    ['a message with evm error as a prefix of a word', { message: 'evm errors are logged' }],
     ['a missing header', { code: -32000, message: 'header not found' }],
     ['a missing trie node', { code: -32000, message: 'missing trie node 0xabc (path )' }],
     ['an internal error', { code: -32603, message: 'internal error' }],

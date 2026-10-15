@@ -76,11 +76,11 @@ For a signed-fetch chain, `expectedFinalAuthority` is the complete signed HTTP p
 delegation chain, it is the final ephemeral address. The helper throws a plain `Error` when validation
 fails and `SignatureValidationInfrastructureError` when the RPC cannot answer. It enforces:
 
-| Limit               | Default    | Option                  | Notes                                                                      |
-| ------------------- | ---------- | ----------------------- | -------------------------------------------------------------------------- |
-| Chain length        | 10 links   | `maxChainLength`        | At least two links are required: a SIGNER and a signed link.               |
-| Validation deadline | 15 seconds | `timeoutInMilliseconds` | Covers every RPC call; in-flight requests are cancelled when it expires.   |
-| RPC calls           | 16         | `maxRpcCalls`           | A signature valid at the latest block needs at most two per EIP-1654 link. |
+| Limit               | Default    | Option                  | Notes                                                                                                                                                    |
+| ------------------- | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chain length        | 10 links   | `maxChainLength`        | At least two links are required: a SIGNER and a signed link.                                                                                             |
+| Validation deadline | 15 seconds | `timeoutInMilliseconds` | Covers every RPC call; in-flight requests are cancelled when it expires.                                                                                 |
+| RPC calls           | 16         | `maxRpcCalls`           | A signature valid at the latest block needs at most two per EIP-1654 link, so the default fits up to eight contract links; Decentraland chains have one. |
 
 Signer addresses must be `0x` followed by 40 hexadecimal digits, so one wallet cannot authenticate under
 two spellings. The returned middleware address is lowercased.
@@ -92,7 +92,7 @@ signature verification, not a general-purpose provider:
   over 1 MiB are cancelled while streaming, including chunked and compressed bodies.
 - `eth_call` results are limited to one ABI word (32 bytes).
 - Redirects are refused, so a misconfigured endpoint cannot hand validation to another node or network.
-- Contract execution failures (geth, Erigon, Besu, Nethermind and Hardhat error shapes) are returned as
+- Contract execution failures (geth, Erigon, Besu, Nethermind, Reth and Hardhat error shapes) are returned as
   a fixed `execution reverted` error so ERC-1271 fallbacks keep working. Any other upstream error is
   reported by its numeric code only; upstream messages, which can contain API keys, never reach callers.
 - Invalid URLs, non-HTTP(S) schemes, URLs with `user:pass@` credentials and invalid timeouts are
@@ -105,16 +105,17 @@ deployment never checks headers on mainnet while checking bodies on Sepolia.
 
 ## Options
 
-| Name                | Type                                         | Description                                                                                                    |
-| ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `optional`          | `boolean`                                    | If `true`, requests without a valid signature fall through silently. Default: `false`.                         |
-| `expiration`        | `number`                                     | Time in milliseconds a signature stays valid. Default: `60_000`.                                               |
-| `provider`          | `AuthChainProvider`                          | Optional direct signature provider. Takes precedence over `catalyst` and `fetcher` for signature verification. |
-| `catalyst`          | `string`                                     | Catalyst URL used to validate contract wallet (EIP-1654) signatures. Default: `https://peer.decentraland.org`. |
-| `fetcher`           | `IFetchComponent`                            | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                            |
-| `maxChainLength`    | `number`                                     | Maximum number of `x-identity-auth-chain-*` headers accepted. Default: `10`.                                   |
-| `metadataValidator` | `(metadata: P) => boolean`                   | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.         |
-| `onError`           | `(err: Error) => any`                        | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.  |
+| Name                | Type                       | Description                                                                                                     |
+| ------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `optional`          | `boolean`                  | If `true`, requests without a valid signature fall through silently. Default: `false`.                          |
+| `expiration`        | `number`                   | Time in milliseconds a signature stays valid. Default: `60_000`.                                                |
+| `provider`          | `AuthChainProvider`        | Optional direct signature provider. Takes precedence over `catalyst` and `fetcher` for signature verification.  |
+| `catalyst`          | `string`                   | Catalyst URL used to validate contract wallet (EIP-1654) signatures. Default: `https://peer.decentraland.org`.  |
+| `fetcher`           | `IFetchComponent`          | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                             |
+| `maxChainLength`    | `number`                   | Maximum number of `x-identity-auth-chain-*` headers accepted. Default: `10`.                                    |
+| `maxRpcCalls`       | `number`                   | With a `provider`, RPC calls one signature validation may make before it is rejected as invalid. Default: `16`. |
+| `metadataValidator` | `(metadata: P) => boolean` | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.          |
+| `onError`           | `(err: Error) => any`      | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.   |
 
 ## Metadata handling
 

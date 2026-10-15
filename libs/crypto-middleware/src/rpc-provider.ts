@@ -26,11 +26,11 @@ export interface AuthChainProvider {
 }
 
 /**
- * Execution failures reported by geth, Erigon, Besu, Nethermind and Hardhat-style nodes. "out of gas"
+ * Execution failures reported by geth, Erigon, Besu, Nethermind, Reth and Hardhat-style nodes. Out of gas
  * is excluded: hosted RPCs cap eth_call gas, so it can be a provider limit rather than a contract verdict.
  */
 const EXECUTION_FAILURE_MESSAGE =
-  /^(?:error: )?(?:execution reverted|reverted|vm execution error|vm exception while processing transaction|invalid opcode|stack underflow|stack overflow|invalid jump destination|write protection)(?:$|[\s:.(])/i
+  /^(?:error: )?(?:execution reverted|reverted|vm execution error|vm exception while processing transaction|invalid opcode|stack underflow|stack overflow|invalid jump destination|write protection|return data out of bounds|evm error(?! out ?of ?gas))(?:$|[\s:.(])/i
 
 /**
  * Whether a JSON-RPC error means the called contract failed, as opposed to the node or transport.
@@ -42,6 +42,15 @@ export function isExecutionRevert(error: { code?: unknown; message?: unknown }):
     error.code === -32015 ||
     (typeof error.message === 'string' && EXECUTION_FAILURE_MESSAGE.test(error.message))
   )
+}
+
+/** A revert with a fixed message, so contract-chosen text never reaches callers. */
+export function toRevertResponse(id: JsonRpcRequest['id'], error: { code?: unknown }): JsonRpcResponse {
+  return {
+    jsonrpc: '2.0',
+    id,
+    error: { code: typeof error.code === 'number' ? error.code : 3, message: 'execution reverted' }
+  }
 }
 
 /** ERC-1271 returns a single `bytes4` padded to one ABI word; empty data means no code. */
@@ -190,8 +199,7 @@ function toJsonRpcResponse(payload: JsonRpcRequest, body: unknown): JsonRpcRespo
   if (error !== undefined && error !== null) {
     const details = (typeof error === 'object' ? error : {}) as { code?: unknown; message?: unknown }
     if (payload.method === 'eth_call' && isExecutionRevert(details)) {
-      const code = typeof details.code === 'number' ? details.code : 3
-      return { jsonrpc: '2.0', id: payload.id, error: { code, message: 'execution reverted' } }
+      return toRevertResponse(payload.id, details)
     }
     // Upstream messages can echo API keys or project ids, so only the numeric code is kept.
     throw new RpcResponseError(

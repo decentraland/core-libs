@@ -92,13 +92,14 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
 > {
   // Fail at startup rather than as a 401 on every request.
-  const { maxChainLength } = options
-  if (
-    options.provider &&
-    maxChainLength !== undefined &&
-    (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)
-  ) {
-    throw new Error('maxChainLength must be an integer of at least 2 when a provider is set')
+  const { maxChainLength, maxRpcCalls } = options
+  if (options.provider) {
+    if (maxChainLength !== undefined && (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)) {
+      throw new Error('maxChainLength must be an integer of at least 2 when a provider is set')
+    }
+    if (maxRpcCalls !== undefined && (!Number.isSafeInteger(maxRpcCalls) || maxRpcCalls < 1)) {
+      throw new Error('maxRpcCalls must be a positive integer')
+    }
   }
   return async (ctx, next) => {
     try {

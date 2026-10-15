@@ -48,6 +48,8 @@ export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown>
   expiration?: number
   fetcher?: IFetchComponent
   maxChainLength?: number
+  /** With a provider: RPC calls one validation may make before it is rejected. Default: 16. */
+  maxRpcCalls?: number
   metadataValidator?: (metadata: P) => boolean
   /**
    * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths

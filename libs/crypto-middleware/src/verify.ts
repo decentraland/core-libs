@@ -182,11 +182,17 @@ export async function verifyEIP1654Sign(
 export async function verifySign(
   authChain: AuthChain,
   payload: string,
-  options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher' | 'provider' | 'maxChainLength'> = {}
+  options: Pick<
+    VerifyAuthChainHeadersOptions,
+    'catalyst' | 'fetcher' | 'provider' | 'maxChainLength' | 'maxRpcCalls'
+  > = {}
 ): Promise<string> {
   if (options.provider) {
     try {
-      await validateAuthChainSignature(authChain, payload, options.provider, { maxChainLength: options.maxChainLength })
+      await validateAuthChainSignature(authChain, payload, options.provider, {
+        maxChainLength: options.maxChainLength,
+        maxRpcCalls: options.maxRpcCalls
+      })
       return Authenticator.ownerAddress(authChain).toLowerCase()
     } catch (err) {
       if (err instanceof SignatureValidationInfrastructureError) {

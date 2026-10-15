@@ -1,6 +1,6 @@
 import { Authenticator } from '@dcl/crypto'
 import type { AuthChain } from '@dcl/crypto'
-import { isExecutionRevert, isSignatureCallResult, isTimerDuration } from './rpc-provider'
+import { isExecutionRevert, isSignatureCallResult, isTimerDuration, toRevertResponse } from './rpc-provider'
 import { DEFAULT_MAX_CHAIN_LENGTH } from './types'
 import type { AuthChainProvider, JsonRpcRequest, JsonRpcResponse } from './rpc-provider'
 
@@ -152,8 +152,7 @@ function sanitizeResponse(payload: JsonRpcRequest, response: JsonRpcResponse | u
     if (payload.method !== 'eth_call' || !isExecutionRevert(error)) {
       throw new SignatureValidationInfrastructureError()
     }
-    const code = typeof error.code === 'number' ? error.code : 3
-    return { jsonrpc: '2.0', id: payload.id, error: { code, message: 'execution reverted' } }
+    return toRevertResponse(payload.id, error)
   }
   if (!('result' in response)) {
     throw new SignatureValidationInfrastructureError()
