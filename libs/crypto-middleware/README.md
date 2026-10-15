@@ -25,17 +25,97 @@ router.get('/user/required', (ctx: DecentralandSignatureRequiredContext) => {
 })
 ```
 
+### Validating against a configured Ethereum network
+
+Pass a `provider` to validate contract-wallet signatures directly on your configured network.
+Without this option, the existing Catalyst validation path remains unchanged.
+
+```ts
+import { createSignatureRpcProvider, wellKnownComponents } from '@dcl/crypto-middleware'
+
+const provider = createSignatureRpcProvider(await components.config.requireString('ETH_RPC_URL'))
+router.post('/identities', wellKnownComponents({ provider }), createIdentityHandler)
+```
+
+With a provider, the middleware validates the complete chain, including the ephemeral signature over
+the HTTP method, path, timestamp and metadata. EOA signatures are still verified offline and never reach
+the provider; only contract-wallet (ERC-1271) links do. Expiration, metadata validation and the guarded
+legacy-payload fallback still apply.
+
+| Outcome                                         | Status | Error message                         |
+| ----------------------------------------------- | ------ | ------------------------------------- |
+| Invalid, expired or rejected signature          | `401`  | `Invalid signature: ...`              |
+| Chain exceeding its RPC call budget             | `401`  | `Invalid signature: ...`              |
+| RPC failure, unexpected RPC response or timeout | `503`  | `Signature verification unavailable`  |
+
+As with other `5xx` errors, the default `onError` formatter replaces the `503` message with
+`Internal error` in the response body.
+
+Only a `401` triggers the legacy-payload retry (when `canonicalMetadataKeys` is set), so a request can
+take up to two validations (about 30 seconds) in the worst case. A `503` is never retried. With
+`optional: true`, both are swallowed and the request continues unauthenticated, so an RPC outage looks
+like an anonymous request to the handler.
+
+Use the same provider for signatures received in request bodies or socket messages:
+
+```ts
+import { SignatureValidationInfrastructureError, validateAuthChainSignature } from '@dcl/crypto-middleware'
+
+try {
+  await validateAuthChainSignature(authChain, expectedFinalAuthority, provider)
+} catch (error) {
+  // `name` also matches when two copies of this package are installed.
+  if (error instanceof Error && error.name === 'SignatureValidationInfrastructureError') {
+    // Retryable: report the service as unavailable, not the signature as invalid.
+  }
+  throw error
+}
+```
+
+For a signed-fetch chain, `expectedFinalAuthority` is the complete signed HTTP payload. For an identity
+delegation chain, it is the final ephemeral address. The helper throws a plain `Error` when validation
+fails and `SignatureValidationInfrastructureError` when the RPC cannot answer. It enforces:
+
+| Limit               | Default    | Option                  | Notes                                                                                                                                                    |
+| ------------------- | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chain length        | 10 links   | `maxChainLength`        | At least two links are required: a SIGNER and a signed link.                                                                                             |
+| Validation deadline | 15 seconds | `timeoutInMilliseconds` | Covers every RPC call; in-flight requests are cancelled when it expires.                                                                                 |
+| RPC calls           | 16         | `maxRpcCalls`           | A signature valid at the latest block needs at most two per EIP-1654 link, so the default fits up to eight contract links; Decentraland chains have one. |
+
+Signer addresses must be `0x` followed by 40 hexadecimal digits, so one wallet cannot authenticate under
+two spellings. The returned middleware address is lowercased.
+
+`createSignatureRpcProvider(url, { timeoutInMilliseconds })` is a JSON-RPC client specialized for
+signature verification, not a general-purpose provider:
+
+- Each request has a 5-second deadline (configurable) that includes reading the body, and responses
+  over 1 MiB are cancelled while streaming, including chunked and compressed bodies.
+- `eth_call` results are limited to one ABI word (32 bytes).
+- Redirects are refused, so a misconfigured endpoint cannot hand validation to another node or network.
+- Contract execution failures (geth, Erigon, Besu, Nethermind, Reth and Hardhat error shapes) are returned as
+  a fixed `execution reverted` error so ERC-1271 fallbacks keep working. Any other upstream error is
+  reported by its numeric code only; upstream messages, which can contain API keys, never reach callers.
+- Invalid URLs, non-HTTP(S) schemes, URLs with `user:pass@` credentials and invalid timeouts are
+  rejected at construction, without echoing the URL. Send credentials in the path or query instead,
+  as most RPC vendors expect.
+
+Use it through the helper or the middleware, which add the validation deadline and RPC call budget.
+Share one provider per network between signed-fetch middleware, HTTP bodies and sockets, so a Sepolia
+deployment never checks headers on mainnet while checking bodies on Sepolia.
+
 ## Options
 
-| Name                | Type                                         | Description                                                                                                    |
-| ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `optional`          | `boolean`                                    | If `true`, requests without a valid signature fall through silently. Default: `false`.                         |
-| `expiration`        | `number`                                     | Time in milliseconds a signature stays valid. Default: `60_000`.                                               |
-| `catalyst`          | `string`                                     | Catalyst URL used to validate contract wallet (EIP-1654) signatures. Default: `https://peer.decentraland.org`. |
-| `fetcher`           | `IFetchComponent`                            | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                            |
-| `maxChainLength`    | `number`                                     | Maximum number of `x-identity-auth-chain-*` headers accepted. Default: `10`.                                   |
-| `metadataValidator` | `(metadata: P) => boolean`                   | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.         |
-| `onError`           | `(err: Error) => any`                        | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.  |
+| Name                | Type                       | Description                                                                                                     |
+| ------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `optional`          | `boolean`                  | If `true`, requests without a valid signature fall through silently. Default: `false`.                          |
+| `expiration`        | `number`                   | Time in milliseconds a signature stays valid. Default: `60_000`.                                                |
+| `provider`          | `AuthChainProvider`        | Optional direct signature provider. Takes precedence over `catalyst` and `fetcher` for signature verification.  |
+| `catalyst`          | `string`                   | Catalyst URL used to validate contract wallet (EIP-1654) signatures. Default: `https://peer.decentraland.org`.  |
+| `fetcher`           | `IFetchComponent`          | Optional Well-Known-Components fetch component. If omitted, global `fetch` is used.                             |
+| `maxChainLength`    | `number`                   | Maximum number of `x-identity-auth-chain-*` headers accepted. Default: `10`.                                    |
+| `maxRpcCalls`       | `number`                   | With a `provider`, RPC calls one signature validation may make before it is rejected as invalid. Default: `16`. |
+| `metadataValidator` | `(metadata: P) => boolean` | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.          |
+| `onError`           | `(err: Error) => any`      | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.   |
 
 ## Metadata handling
 
@@ -129,6 +209,10 @@ wellKnownComponents({ onError: (err) => ({ ok: false, message: err.message, caus
 ## Threat model and operational notes
 
 - **`options.catalyst` must be trusted configuration.** It is passed through to `new URL(...)` and used as the outbound destination for signature verification. Accepting this value from end-user input (query strings, request bodies, etc.) opens an SSRF vector — a client could direct the server at arbitrary internal hosts. Pin it in startup config and treat it like a database connection string.
+
+- **The URL passed to `createSignatureRpcProvider` must be trusted configuration.** Choose the network at startup and reuse that provider for all signatures belonging to that network. Do not accept the RPC URL from incoming requests.
+
+- **Capacity controls remain the service's responsibility.** Each validation is capped at `maxRpcCalls` (16 by default, so up to 32 with the legacy-payload retry), but unauthenticated callers can still send many requests. Apply request-rate and concurrency limits at the service or RPC proxy; the per-validation budget and deadline are not a service-wide rate limit.
 
 - **Incoming request size is bounded by the HTTP server, not by this library.** Keep `maxHeaderSize` / `maxHeadersCount` on your HTTP server set to sensible values. `extractAuthChain` caps at `DEFAULT_MAX_CHAIN_LENGTH = 10` entries per request; the `maxChainLength` option lets you tighten this further. `verifyMetadata` parses the metadata header value via `JSON.parse`; depth/shape validation beyond "must be an object" is the consumer's responsibility via `metadataValidator`.
 

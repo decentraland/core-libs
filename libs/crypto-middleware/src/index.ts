@@ -17,6 +17,15 @@ import {
 import verify, { createPayload } from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
+export { createSignatureRpcProvider } from './rpc-provider'
+export type { AuthChainProvider, JsonRpcRequest, JsonRpcResponse, JsonRpcCallback } from './rpc-provider'
+export {
+  validateAuthChainSignature,
+  MAX_AUTH_CHAIN_LENGTH,
+  SignatureValidationInfrastructureError
+} from './signature-validation'
+export type { SignatureValidationOptions } from './signature-validation'
+
 export {
   Options,
   MetadataPredicate,
@@ -82,6 +91,16 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
 ): IHttpServerComponent.IRequestHandler<
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
 > {
+  // Fail at startup rather than as a 401 on every request.
+  const { maxChainLength, maxRpcCalls } = options
+  if (options.provider) {
+    if (maxChainLength !== undefined && (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)) {
+      throw new Error('maxChainLength must be an integer of at least 2 when a provider is set')
+    }
+    if (maxRpcCalls !== undefined && (!Number.isSafeInteger(maxRpcCalls) || maxRpcCalls < 1)) {
+      throw new Error('maxRpcCalls must be a positive integer')
+    }
+  }
   return async (ctx, next) => {
     try {
       // Pass `verify()` only the auth-related headers (chain links, timestamp, metadata)
