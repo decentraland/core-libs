@@ -30,7 +30,7 @@ export interface AuthChainProvider {
  * is excluded: hosted RPCs cap eth_call gas, so it can be a provider limit rather than a contract verdict.
  */
 const EXECUTION_FAILURE_MESSAGE =
-  /^(?:error: )?(?:execution reverted|reverted|vm execution error|vm exception while processing transaction|invalid opcode|stack underflow|stack overflow|invalid jump destination|write protection|return data out of bounds|evm error(?! out ?of ?gas))(?:$|[\s:.(])/i
+  /^(?:error: )?(?:execution reverted|reverted|vm execution error|vm exception while processing transaction|invalid opcode|stack underflow|stack overflow|invalid jump destination|write protection|return data out of bounds|evm error(?![\s\S]*(?:out ?of ?gas|oog)))(?:$|[\s:.(])/i
 
 /**
  * Whether a JSON-RPC error means the called contract failed, as opposed to the node or transport.

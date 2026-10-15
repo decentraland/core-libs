@@ -382,6 +382,7 @@ describe('when classifying JSON-RPC errors as contract execution failures', () =
     ['write protection', { message: 'write protection' }],
     ['a return data overrun', { message: 'return data out of bounds' }],
     ['a Reth EVM error', { code: -32000, message: 'EVM error InvalidFEOpcode' }],
+    ['a Reth EVM error with a colon', { code: -32000, message: 'EVM error: OpcodeNotFound' }],
     ['an uppercase message', { message: 'EXECUTION REVERTED' }]
   ])('and the error is %s', (_description, error) => {
     let result: boolean
@@ -399,6 +400,8 @@ describe('when classifying JSON-RPC errors as contract execution failures', () =
     ['a limit exceeded error', { code: -32005, message: 'limit exceeded' }],
     ['an out of gas error from a provider gas cap', { code: -32000, message: 'out of gas' }],
     ['a Reth out of gas error', { code: -32000, message: 'EVM error OutOfGas(Basic)' }],
+    ['a Reth out of gas error with a colon', { code: -32000, message: 'EVM error: OutOfGas(MemoryLimit)' }],
+    ['a Reth memory limit out of gas error', { code: -32000, message: 'EVM error MemoryLimitOOG' }],
     ['a message with evm error as a prefix of a word', { message: 'evm errors are logged' }],
     ['a missing header', { code: -32000, message: 'header not found' }],
     ['a missing trie node', { code: -32000, message: 'missing trie node 0xabc (path )' }],
