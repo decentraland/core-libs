@@ -1,6 +1,6 @@
 {
   "name": "@dcl/crypto",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Crypto auth for Decentraland",
   "author": "Decentraland",
   "license": "Apache-2.0",
@@ -29,7 +29,7 @@
     "ethereum"
   ],
   "dependencies": {
-    "@dcl/schemas": "^25.2.0",
+    "@dcl/schemas": "^27.3.0",
     "eth-connect": "^6.0.3",
     "ethereum-cryptography": "^2.0.0"
   },
