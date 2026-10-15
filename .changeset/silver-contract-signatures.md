@@ -2,8 +2,8 @@
 '@dcl/crypto-middleware': minor
 ---
 
-Support direct contract signature validation with an optional Ethereum RPC provider. Export a cancellable RPC provider and bounded auth-chain validator for services to share between signed-fetch middleware, HTTP bodies, and sockets. Existing consumers continue using Catalyst unless they supply a provider.
+Validate contract-wallet signatures directly on a configured Ethereum network through an optional `provider` option. Consumers without a provider keep the Catalyst path.
 
-Sanitize provider failures before they enter signature error messages, cap decoded RPC response bodies at 1 MiB while streaming, and restrict signature-call results to 32 bytes.
+Add `createSignatureRpcProvider`, a bounded JSON-RPC client for signature verification, and `validateAuthChainSignature`, so services can share one provider between signed-fetch middleware, HTTP bodies and sockets. Validation is bounded by a deadline, a per-validation RPC call budget and a chain-length limit, and requires a signer plus at least one signed link.
 
-Distinguish infrastructure failures from invalid signatures: middleware returns sanitized 503 responses without legacy retries, while known EVM reverts retain signature fallback behavior. Validate signer-address format before RPC and reject unsupported URL credentials at provider construction. Export provider protocol and validation-option types for consumers.
+RPC outages and timeouts throw `SignatureValidationInfrastructureError` and map to `503` without the legacy-payload retry. Contract reverts from geth, Besu, Nethermind and Hardhat-style nodes keep the normal signature fallback. Upstream error text never reaches callers, and redirects and URL credentials are refused.

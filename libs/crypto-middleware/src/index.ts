@@ -17,7 +17,7 @@ import {
 import verify, { createPayload } from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
-export { createRpcProvider } from './rpc-provider'
+export { createSignatureRpcProvider } from './rpc-provider'
 export type { AuthChainProvider, JsonRpcRequest, JsonRpcResponse, JsonRpcCallback } from './rpc-provider'
 export {
   validateAuthChainSignature,
@@ -91,6 +91,15 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
 ): IHttpServerComponent.IRequestHandler<
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
 > {
+  // Fail at startup rather than as a 401 on every request.
+  const { maxChainLength } = options
+  if (
+    options.provider &&
+    maxChainLength !== undefined &&
+    (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)
+  ) {
+    throw new Error('maxChainLength must be an integer of at least 2 when a provider is set')
+  }
   return async (ctx, next) => {
     try {
       // Pass `verify()` only the auth-related headers (chain links, timestamp, metadata)
