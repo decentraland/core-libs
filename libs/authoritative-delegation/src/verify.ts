@@ -9,11 +9,7 @@ export const SCOPE_HEADER = 'x-authoritative-scope'
 // legitimate claim is a few hundred bytes; this caps work on attacker input.
 export const MAX_SCOPE_HEADER_LENGTH = 4096
 
-// `reason` is populated only on rejection.
-export interface DelegationResult {
-  ok: boolean
-  reason?: string
-}
+export type DelegationResult = { ok: true } | { ok: false; reason: string }
 
 /** The scene the request targets, matched against the root-signed claim. */
 export interface DelegationTarget {
@@ -27,6 +23,12 @@ export interface DelegationTarget {
   parcel: string
   /** Lowercased root addresses allowed to sign a claim. */
   trustedSigners: string[]
+  /**
+   * Optional cap on a claim's remaining lifetime: a claim expiring more than
+   * this many millis from now is rejected. Bounds a leaked claim + ephemeral key
+   * regardless of the TTL the minter chose.
+   */
+  maxTtlMs?: number
 }
 
 /**
@@ -37,6 +39,7 @@ export interface DelegationTarget {
  *  - its ephemeral == the request's actual signer (a captured claim can't be
  *    replayed with a different signing key),
  *  - its world, sceneId and parcel == the target's,
+ *  - its expiration is within `maxTtlMs` of now, when set,
  *  - `signature` over `payload` was produced by one of `trustedSigners`
  *    (an EOA personal signature; contract-wallet signers are not supported).
  *
@@ -45,7 +48,7 @@ export interface DelegationTarget {
  * by world. All three are always checked.
  */
 export async function verifyDelegation(scopeHeader: string, target: DelegationTarget): Promise<DelegationResult> {
-  const { signer, world, sceneId, parcel, trustedSigners } = target
+  const { signer, world, sceneId, parcel, trustedSigners, maxTtlMs } = target
 
   if (trustedSigners.length === 0) {
     return { ok: false, reason: 'no trusted authoritative signers configured' }
@@ -87,8 +90,12 @@ export async function verifyDelegation(scopeHeader: string, target: DelegationTa
   if (claim.parcel !== parcel) {
     return { ok: false, reason: 'claim parcel does not match target parcel' }
   }
-  if (!(claim.expiration > Date.now())) {
+  const now = Date.now()
+  if (!(claim.expiration > now)) {
     return { ok: false, reason: 'delegation expired' }
+  }
+  if (maxTtlMs !== undefined && claim.expiration - now > maxTtlMs) {
+    return { ok: false, reason: 'delegation lifetime exceeds maxTtlMs' }
   }
 
   for (const root of trustedSigners) {

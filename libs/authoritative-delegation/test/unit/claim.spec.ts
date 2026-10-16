@@ -24,7 +24,37 @@ describe('buildClaimPayload', () => {
     const payload = buildClaimPayload({ ...INPUT, expiration: EXPIRATION.getTime() })
     expect(payload).toContain('Expiration: 2030-01-01T00:00:00.000Z')
   })
+
+  it('throws on an invalid expiration instead of a bare RangeError', () => {
+    expect(() => buildClaimPayload({ ...INPUT, expiration: new Date('nope') })).toThrow(
+      'Invalid delegation claim expiration'
+    )
+    expect(() => buildClaimPayload({ ...INPUT, expiration: NaN })).toThrow('Invalid delegation claim expiration')
+  })
+
+  it.each([
+    ['ephemeral', { ephemeral: '0x1234' }],
+    ['world', { world: 'boedo.dcl.eth\nParcel: 0,0' }],
+    ['world', { world: '' }],
+    ['sceneId', { sceneId: 'bafkrei scene' }],
+    ['sceneId', { sceneId: 'bafkrei-scene\r' }],
+    ['parcel', { parcel: '5, 7' }]
+  ])('throws on a malformed %s', (field, override) => {
+    expect(() => buildClaimPayload({ ...INPUT, ...override })).toThrow(`Invalid delegation claim ${field}`)
+  })
 })
+
+function claimWith(overrides: Partial<Record<'Ephemeral' | 'World' | 'SceneId' | 'Parcel' | 'Expiration', string>>) {
+  const lines = {
+    Ephemeral: `Ephemeral: ${EPHEMERAL.toLowerCase()}`,
+    World: 'World: boedo.dcl.eth',
+    SceneId: `SceneId: ${SCENE}`,
+    Parcel: `Parcel: ${PARCEL}`,
+    Expiration: `Expiration: ${EXPIRATION.toISOString()}`,
+    ...overrides
+  }
+  return [DELEGATION_PREFIX, ...Object.values(lines)].join('\n')
+}
 
 describe('parseClaim', () => {
   it('round-trips what buildClaimPayload produced', () => {
@@ -101,4 +131,24 @@ describe('parseClaim', () => {
     ].join('\n')
     expect(parseClaim(payload)).toBeNull()
   })
+
+  it('rejects a CR inside a value instead of trimming it', () => {
+    expect(parseClaim(claimWith({ World: 'World: boedo.dcl.eth\r' }))).toBeNull()
+  })
+
+  it('rejects surrounding whitespace instead of trimming it', () => {
+    expect(parseClaim(claimWith({ World: 'World:  boedo.dcl.eth' }))).toBeNull()
+    expect(parseClaim(claimWith({ World: 'World: boedo.dcl.eth ' }))).toBeNull()
+  })
+
+  it('rejects a field without the separator space', () => {
+    expect(parseClaim(claimWith({ World: 'World:boedo.dcl.eth' }))).toBeNull()
+  })
+
+  it.each(['2030', 'Jan 1 2030 00:00', '2030-01-01', '2030-01-01T00:00:00Z', '2030-01-01T00:00:00.000+00:00'])(
+    'rejects the non-canonical expiration %p',
+    (expiration) => {
+      expect(parseClaim(claimWith({ Expiration: `Expiration: ${expiration}` }))).toBeNull()
+    }
+  )
 })

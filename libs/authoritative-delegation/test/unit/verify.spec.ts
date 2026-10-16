@@ -1,6 +1,12 @@
 import { createUnsafeIdentity } from '@dcl/crypto/dist/crypto'
 import { Authenticator } from '@dcl/crypto'
-import { DELEGATION_PREFIX, buildClaimPayload, verifyDelegation, verifyStorageDelegation } from '../../src'
+import {
+  DELEGATION_PREFIX,
+  MAX_SCOPE_HEADER_LENGTH,
+  buildClaimPayload,
+  verifyDelegation,
+  verifyStorageDelegation
+} from '../../src'
 
 // A random account standing in for the authoritative root, and a throwaway
 // ephemeral the worker would sign requests with.
@@ -40,7 +46,14 @@ function buildScopeHeader(
 // simulate a request that doesn't match the claim.
 function verify(
   header: string,
-  target: Partial<{ signer: string; world: string; sceneId: string; parcel: string; trustedSigners: string[] }> = {}
+  target: Partial<{
+    signer: string
+    world: string
+    sceneId: string
+    parcel: string
+    trustedSigners: string[]
+    maxTtlMs: number
+  }> = {}
 ) {
   return verifyDelegation(header, {
     signer: ephemeral.address,
@@ -76,6 +89,47 @@ describe('verifyDelegation', () => {
           trustedSigners: TRUSTED
         })
       ).resolves.toEqual({ ok: true })
+    })
+
+    it('authorizes a claim signed by any of several trusted signers', async () => {
+      const otherRoot = createUnsafeIdentity()
+      const result = await verify(buildScopeHeader(), {
+        trustedSigners: [otherRoot.address.toLowerCase(), ...TRUSTED]
+      })
+      expect(result).toEqual({ ok: true })
+    })
+
+    it('accepts a header of exactly MAX_SCOPE_HEADER_LENGTH', async () => {
+      const payload = buildClaimPayload({
+        ephemeral: ephemeral.address,
+        world: WORLD,
+        sceneId: SCENE,
+        parcel: PARCEL,
+        expiration: Date.now() + 3_600_000
+      })
+      const signature = Authenticator.createSignature(authoritative, payload)
+      // 3 bytes encode to 4 base64 chars; pad the JSON with trailing whitespace
+      // (which JSON.parse ignores) to land exactly on the limit.
+      const json = JSON.stringify({ payload, signature }).padEnd((MAX_SCOPE_HEADER_LENGTH / 4) * 3, ' ')
+      const header = Buffer.from(json, 'utf8').toString('base64')
+      expect(header).toHaveLength(MAX_SCOPE_HEADER_LENGTH)
+      await expect(verify(header)).resolves.toEqual({ ok: true })
+    })
+
+    it('authorizes a claim within maxTtlMs', async () => {
+      const result = await verify(buildScopeHeader({ expiration: Date.now() + 3_600_000 }), {
+        maxTtlMs: 2 * 3_600_000
+      })
+      expect(result).toEqual({ ok: true })
+    })
+  })
+
+  describe('when the claim expires further out than maxTtlMs', () => {
+    it('rejects', async () => {
+      const result = await verify(buildScopeHeader({ expiration: Date.now() + 365 * 24 * 3_600_000 }), {
+        maxTtlMs: 3_600_000
+      })
+      expect(result).toEqual({ ok: false, reason: 'delegation lifetime exceeds maxTtlMs' })
     })
   })
 

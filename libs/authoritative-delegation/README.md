@@ -13,8 +13,9 @@ pnpm add @dcl/authoritative-delegation
 - `badges`: verifies the claim on scene badge awards. First consumer.
 - `world-storage-service`: verifies the claim on storage and env reads/writes. Will replace its own copy of the verifier (`src/utils/storage-delegation.ts`) with this package.
 - `sdk-multiplayer-server`: mints the claim. Will build the payload with `buildClaimPayload` instead of its inline string.
+- `hammurabi-headless`: the scene worker; reads world, scene, parcel and expiry out of its claim to renew it. Will use `parseClaim` instead of its own parser.
 
-Until all three use the package, the claim format is duplicated by hand in the other two, so it must not change.
+Until all of them use the package, the claim format is duplicated by hand in the others, so it must not change.
 
 ## Model
 
@@ -37,12 +38,15 @@ const result = await verifyDelegation(req.headers[SCOPE_HEADER], {
   world,
   sceneId,
   parcel,
-  trustedSigners: [AUTHORITATIVE_SERVER_ADDRESS]
+  trustedSigners: [AUTHORITATIVE_SERVER_ADDRESS],
+  maxTtlMs: 2 * 60 * 60 * 1000 // optional: reject claims expiring further out than this
 })
 if (!result.ok) reject(result.reason)
 ```
 
-`verifyStorageDelegation` and the `Storage*` type names are aliases kept for world-storage-service's import swap.
+`buildClaimPayload` throws if a value doesn't match its format (`EPHEMERAL_FORMAT`, `WORLD_FORMAT`, `SCENE_ID_FORMAT`, `PARCEL_FORMAT`, the same checks sdk-multiplayer-server applies) or `expiration` is not a valid date.
+
+`verifyStorageDelegation` and the `Storage*` type names are deprecated aliases kept for world-storage-service's import swap.
 
 ## Claim payload
 
@@ -55,4 +59,4 @@ Parcel: <x,y>
 Expiration: <ISO8601>
 ```
 
-Parsing is strict: the prefix line, then exactly these five lines, each once. Anything else fails closed.
+Parsing is strict: the prefix line, then exactly these five lines, each once, in any order. Each line is `<Field>: <value>` with one space and no whitespace in the value, and `Expiration` must be the exact `Date#toISOString()` form. Anything else fails closed.
