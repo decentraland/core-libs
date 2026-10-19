@@ -1,15 +1,21 @@
 // Domain-separated prefix for the authoritative scope delegation claim. Kept
 // distinct from "Decentraland Login" so a delegation can never be replayed as a
-// normal signed-fetch login (or vice versa). The minter (sdk-multiplayer-server)
-// and every verifier (world-storage-service, badges) share this exact string.
-export const DELEGATION_PREFIX = 'Decentraland Authoritative Storage Delegation'
+// normal signed-fetch login (or vice versa), and from the v1 "Decentraland
+// Authoritative Storage Delegation" claim that world-storage-service verifies
+// on its own, so neither format can ever parse as the other.
+export const DELEGATION_PREFIX = 'Decentraland Authoritative Delegation'
 
 // Every line after the prefix, each present exactly once. No field prefix is a
 // prefix of another, so matching is unambiguous.
-export const CLAIM_FIELDS = ['Ephemeral:', 'World:', 'SceneId:', 'Parcel:', 'Expiration:'] as const
+export const CLAIM_FIELDS = ['Audience:', 'Ephemeral:', 'World:', 'SceneId:', 'Parcel:', 'Expiration:'] as const
 
-// Value formats enforced by buildClaimPayload, mirroring sdk-multiplayer-server's
-// storage-gatekeeper. None admits whitespace, so no value can inject a claim line.
+// Value formats, enforced by both buildClaimPayload and parseClaim. Ephemeral,
+// world, sceneId and parcel mirror sdk-multiplayer-server's storage-gatekeeper.
+// None admits whitespace, so no value can inject a claim line.
+// Service id the claim is for (`badges`, `storage`), not a hostname, so every
+// environment of a service shares it. Environments are told apart by their
+// trusted signers.
+export const AUDIENCE_FORMAT = /^[a-z0-9-]+$/
 // Lowercased EOA address.
 export const EPHEMERAL_FORMAT = /^0x[0-9a-f]{40}$/
 // Lowercased ENS-style world name; ASCII only, so no NFC/NFD drift between
@@ -20,7 +26,15 @@ export const SCENE_ID_FORMAT = /^[A-Za-z0-9-]+$/
 // Base parcel, integer `"x,y"`. Digit bound matches world-storage-service's PARCEL_PATTERN.
 export const PARCEL_FORMAT = /^-?\d{1,10},-?\d{1,10}$/
 
+// The builder lowercases ephemeral and world for its callers, so it checks the
+// raw input case-insensitively first. Without the `u` flag `/i` folds ASCII
+// only: `'K'` (Kelvin sign) does not match `k`, although it lowercases to it.
+const EPHEMERAL_INPUT_FORMAT = new RegExp(EPHEMERAL_FORMAT.source, 'i')
+const WORLD_INPUT_FORMAT = new RegExp(WORLD_FORMAT.source, 'i')
+
 export interface ParsedClaim {
+  /** Service id the claim is for. */
+  audience: string
   /** Lowercased ephemeral address the claim authorizes. */
   ephemeral: string
   /** Lowercased world name. */
@@ -34,9 +48,11 @@ export interface ParsedClaim {
 }
 
 export interface ClaimInput {
-  /** Ephemeral address; lowercased into the claim. */
+  /** Service id the claim is for, matching `AUDIENCE_FORMAT`. */
+  audience: string
+  /** Ephemeral address, any casing; lowercased into the claim. */
   ephemeral: string
-  /** World name; lowercased into the claim. */
+  /** World name, any ASCII casing; lowercased into the claim. */
   world: string
   sceneId: string
   parcel: string
@@ -47,7 +63,8 @@ export interface ClaimInput {
 /**
  * Build the canonical claim payload the root key signs:
  *
- *   Decentraland Authoritative Storage Delegation
+ *   Decentraland Authoritative Delegation
+ *   Audience: <service>
  *   Ephemeral: 0x<addr>
  *   World: <name>
  *   SceneId: <hash>
@@ -62,21 +79,21 @@ export interface ClaimInput {
  *   valid date.
  */
 export function buildClaimPayload(input: ClaimInput): string {
-  const ephemeral = input.ephemeral.toLowerCase()
-  const world = input.world.toLowerCase()
-  const { sceneId, parcel } = input
+  const { audience, sceneId, parcel } = input
   const expiration = input.expiration instanceof Date ? input.expiration : new Date(input.expiration)
 
-  if (!EPHEMERAL_FORMAT.test(ephemeral)) throw new Error('Invalid delegation claim ephemeral address')
-  if (!WORLD_FORMAT.test(world)) throw new Error('Invalid delegation claim world name')
+  if (!AUDIENCE_FORMAT.test(audience)) throw new Error('Invalid delegation claim audience')
+  if (!EPHEMERAL_INPUT_FORMAT.test(input.ephemeral)) throw new Error('Invalid delegation claim ephemeral address')
+  if (!WORLD_INPUT_FORMAT.test(input.world)) throw new Error('Invalid delegation claim world name')
   if (!SCENE_ID_FORMAT.test(sceneId)) throw new Error('Invalid delegation claim sceneId')
   if (!PARCEL_FORMAT.test(parcel)) throw new Error('Invalid delegation claim parcel')
   if (!Number.isFinite(expiration.getTime())) throw new Error('Invalid delegation claim expiration')
 
   return [
     DELEGATION_PREFIX,
-    `Ephemeral: ${ephemeral}`,
-    `World: ${world}`,
+    `Audience: ${audience}`,
+    `Ephemeral: ${input.ephemeral.toLowerCase()}`,
+    `World: ${input.world.toLowerCase()}`,
     `SceneId: ${sceneId}`,
     `Parcel: ${parcel}`,
     `Expiration: ${expiration.toISOString()}`
@@ -86,10 +103,11 @@ export function buildClaimPayload(input: ClaimInput): string {
 /**
  * Parse a claim payload strictly: the prefix line, then EXACTLY the known field
  * lines, each once, nothing else. Each line is `<Field>: <value>` with a single
- * space and a value free of whitespace, so the value compared is byte-for-byte
- * the value signed. `Expiration` must be the exact `Date#toISOString()` form.
- * Returns null on any deviation, so minter/verifier format drift fails closed
- * instead of silently binding an unexpected value.
+ * space, and each value must match its exported format as written (no case
+ * folding), so the value compared is byte-for-byte the value signed.
+ * `Expiration` must be the exact `Date#toISOString()` form. Returns null on any
+ * deviation, so minter/verifier format drift fails closed instead of silently
+ * binding an unexpected value.
  */
 export function parseClaim(payload: string): ParsedClaim | null {
   const lines = payload.split('\n')
@@ -99,23 +117,33 @@ export function parseClaim(payload: string): ParsedClaim | null {
   for (const line of lines.slice(1)) {
     const prefix = CLAIM_FIELDS.find((p) => line.startsWith(`${p} `))
     if (!prefix || values.has(prefix)) return null
-    const value = line.slice(prefix.length + 1)
-    if (/\s/.test(value)) return null
-    values.set(prefix, value)
+    values.set(prefix, line.slice(prefix.length + 1))
   }
   if (values.size !== CLAIM_FIELDS.length) return null
 
-  const ephemeral = values.get('Ephemeral:')?.toLowerCase()
-  const world = values.get('World:')?.toLowerCase()
-  const sceneId = values.get('SceneId:')
-  const parcel = values.get('Parcel:')
-  const expirationIso = values.get('Expiration:')
-  if (!ephemeral || !world || !sceneId || !parcel || !expirationIso) return null
+  // Every field is present (size check above); '' only satisfies the type, and
+  // matches no format.
+  const field = (name: (typeof CLAIM_FIELDS)[number]) => values.get(name) ?? ''
+  const audience = field('Audience:')
+  const ephemeral = field('Ephemeral:')
+  const world = field('World:')
+  const sceneId = field('SceneId:')
+  const parcel = field('Parcel:')
+  const expirationIso = field('Expiration:')
+  if (
+    !AUDIENCE_FORMAT.test(audience) ||
+    !EPHEMERAL_FORMAT.test(ephemeral) ||
+    !WORLD_FORMAT.test(world) ||
+    !SCENE_ID_FORMAT.test(sceneId) ||
+    !PARCEL_FORMAT.test(parcel)
+  ) {
+    return null
+  }
 
   // Date.parse alone accepts non-ISO forms ("2030", local-time strings); only
   // the canonical form the builder writes round-trips.
   const expiration = Date.parse(expirationIso)
   if (!Number.isFinite(expiration) || new Date(expiration).toISOString() !== expirationIso) return null
 
-  return { ephemeral, world, sceneId, parcel, expiration }
+  return { audience, ephemeral, world, sceneId, parcel, expiration }
 }
