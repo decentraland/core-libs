@@ -1,3 +1,4 @@
+import { createUnsafeIdentity } from '@dcl/crypto/dist/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import type { AuthChain, AuthIdentity } from '@dcl/crypto'
 import { SignatureValidationInfrastructureError, validateAuthChainSignature } from '../../src/signature-validation'
@@ -91,6 +92,30 @@ describe('when validating an auth chain signature', () => {
 
     it('should not call the provider', () => {
       expect(sendAsync).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('and the chain is a scoped login and a service identifier is passed anyway', () => {
+    beforeEach(async () => {
+      const owner = createUnsafeIdentity()
+      const scoped = await Authenticator.initializeScopedAuthChain(
+        owner.address,
+        createUnsafeIdentity(),
+        60,
+        [{ service: 'insights', operation: 'logs-read' }],
+        async (message) => Authenticator.createSignature(owner, message)
+      )
+      // Not in the type, as a JavaScript caller or a widened object could still pass it.
+      options = { service: 'insights' } as SignatureValidationOptions
+      outcome = await settle(
+        validateAuthChainSignature(scoped.authChain, scoped.ephemeralIdentity.address, l1Provider, options)
+      )
+    })
+
+    it('should reject it as a scoped login without a service identifier', () => {
+      expect(outcome).toEqual(
+        expect.objectContaining({ message: expect.stringContaining('Scoped logins are not accepted') })
+      )
     })
   })
 
