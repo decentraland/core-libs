@@ -1,4 +1,5 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
+import { OPERATION_FORMAT, SERVICE_FORMAT, isOperationGranted } from '@dcl/crypto'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
 import { canonicalField, rejectIfSigner, requireCanonicalField, requireSigner } from './metadataValidators'
@@ -11,7 +12,9 @@ import {
   DecentralandSignatureContext,
   DecentralandSignatureData,
   DecentralandSignatureRequiredContext,
+  DecentralandSignatureRouteContext,
   Options,
+  RouteOperationOptions,
   VerifyAuthChainHeadersOptions
 } from './types'
 import verify, { createPayload } from './verify'
@@ -25,6 +28,8 @@ export {
   SignatureValidationInfrastructureError
 } from './signature-validation'
 export type { SignatureValidationOptions } from './signature-validation'
+export { isOperationGranted } from '@dcl/crypto'
+export type { ScopedLoginGrant, ScopedLoginScope } from '@dcl/crypto'
 
 export {
   Options,
@@ -33,6 +38,8 @@ export {
   DecentralandSignatureData,
   DecentralandSignatureContext,
   DecentralandSignatureRequiredContext,
+  DecentralandSignatureRouteContext,
+  RouteOperationOptions,
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_TIMESTAMP_HEADER,
   AUTH_METADATA_HEADER,
@@ -85,14 +92,71 @@ function errorToResponse(err: unknown, options: Pick<Options, 'onError'>): { sta
   return { status, body: onError(asError) }
 }
 
-/** Well-Known Components */
+function isValidOperation(operation: unknown): operation is string {
+  return typeof operation === 'string' && operation !== '*' && OPERATION_FORMAT.test(operation)
+}
+
+/**
+ * Checks a verified request against the route's operation (ADR-162). A full login always passes; a
+ * scoped login passes only when the route names an operation its scope grants on the resource.
+ *
+ * @returns The error to respond with, or undefined when the request may proceed.
+ */
+function checkRouteOperation<P extends Record<string, unknown>>(
+  ctx: DecentralandSignatureRouteContext<P>,
+  verification: DecentralandSignatureData<P>,
+  options: Pick<Options<P>, 'operation' | 'resource'>
+): RequestError | undefined {
+  if (!verification.scope) {
+    return undefined
+  }
+  const operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
+  if (!isValidOperation(operation)) {
+    return new RequestError('This route does not accept scoped logins', 401)
+  }
+  if (!isOperationGranted(verification.scope, operation, options.resource?.(ctx))) {
+    return new RequestError(`The scoped login does not grant "${operation}"`, 403)
+  }
+  return undefined
+}
+
+/**
+ * Well-Known Components middleware: verifies the request's signed-fetch headers (ADR-44) and sets
+ * `ctx.verification`. With `service`, it also accepts scoped logins (ADR-162) on routes that declare
+ * their `operation`, so create one per route.
+ *
+ * @throws Error at creation when an option is malformed, or `operation`, `resource` or
+ *   `maxScopedLoginLifetime` is given without what it depends on.
+ */
 export function wellKnownComponents<P extends Record<string, unknown> = Record<string, unknown>>(
   options: Options<P> = {}
 ): IHttpServerComponent.IRequestHandler<
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
 > {
   // Fail at startup rather than as a 401 on every request.
-  const { maxChainLength, maxRpcCalls } = options
+  const { maxChainLength, maxRpcCalls, service, maxScopedLoginLifetime, operation, resource } = options
+  if (service !== undefined && !SERVICE_FORMAT.test(service)) {
+    throw new Error('service must be 1 to 64 lowercase letters, digits or hyphens')
+  }
+  if (maxScopedLoginLifetime !== undefined) {
+    if (service === undefined) {
+      throw new Error('maxScopedLoginLifetime needs a service')
+    }
+    if (!(Number.isFinite(maxScopedLoginLifetime) && maxScopedLoginLifetime > 0)) {
+      throw new Error('maxScopedLoginLifetime must be a positive number of milliseconds')
+    }
+  }
+  if (operation !== undefined) {
+    if (service === undefined) {
+      throw new Error('operation needs a service')
+    }
+    if (typeof operation !== 'function' && !isValidOperation(operation)) {
+      throw new Error('operation must be 1 to 64 lowercase letters, digits or hyphens')
+    }
+  }
+  if (resource !== undefined && operation === undefined) {
+    throw new Error('resource needs an operation')
+  }
   if (options.provider) {
     if (maxChainLength !== undefined && (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)) {
       throw new Error('maxChainLength must be an integer of at least 2 when a provider is set')
@@ -102,18 +166,30 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
     }
   }
   return async (ctx, next) => {
+    let verification: DecentralandSignatureData<P> | undefined
     try {
       // Pass `verify()` only the auth-related headers (chain links, timestamp, metadata)
       // read straight from the native `Headers`, rather than materializing the whole
       // header set per request. `Headers.get` is case-insensitive, so this also works
       // regardless of header casing.
       const headers = pickSignatureHeaders(ctx.request.headers, options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH)
-      ctx.verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
+      verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
     } catch (err) {
       if (!options.optional) {
         const { status, body } = errorToResponse(err, options)
         return { status, body: body as IHttpServerComponent.ResponseBody }
       }
+    }
+
+    // Outside the try: `optional` lets an unsigned request through, never a scoped login its route
+    // doesn't grant.
+    if (verification) {
+      const denied = checkRouteOperation(ctx as DecentralandSignatureRouteContext<P>, verification, options)
+      if (denied) {
+        const { status, body } = errorToResponse(denied, options)
+        return { status, body: body as IHttpServerComponent.ResponseBody }
+      }
+      ctx.verification = verification
     }
 
     return next()

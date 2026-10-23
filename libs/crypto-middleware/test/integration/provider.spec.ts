@@ -266,10 +266,10 @@ describe('when verifying contract signatures with a supplied provider', () => {
     })
 
     describe('and the canonical metadata keys are declared', () => {
-      let validateSpy: jest.SpiedFunction<typeof signatureValidation.validateAuthChainSignature>
+      let validateSpy: jest.SpiedFunction<typeof signatureValidation.validateScopedAuthChainSignature>
 
       beforeEach(async () => {
-        validateSpy = jest.spyOn(signatureValidation, 'validateAuthChainSignature')
+        validateSpy = jest.spyOn(signatureValidation, 'validateScopedAuthChainSignature')
         options = { ...options, canonicalMetadataKeys: ['intent'] }
         outcome = await settle(verify(METHOD, PATH, headers, options))
       })

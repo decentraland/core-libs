@@ -1,5 +1,5 @@
 import { Authenticator } from '@dcl/crypto'
-import type { AuthChain } from '@dcl/crypto'
+import type { AuthChain, ScopedLoginScope, ScopedLoginValidationOptions } from '@dcl/crypto'
 import { isExecutionRevert, isSignatureCallResult, isTimerDuration, toRevertResponse } from './rpc-provider'
 import { DEFAULT_MAX_CHAIN_LENGTH } from './types'
 import type { AuthChainProvider, JsonRpcRequest, JsonRpcResponse } from './rpc-provider'
@@ -28,10 +28,18 @@ export interface SignatureValidationOptions {
 }
 
 /**
+ * Accepts scoped logins (ADR-162) for a service. Internal: the middleware uses it and checks the
+ * route's operation against the returned scope, which a caller of an exported function could skip.
+ */
+export interface ScopedSignatureValidationOptions extends SignatureValidationOptions, ScopedLoginValidationOptions {}
+
+/**
  * Validates an identity or signed-fetch chain with bounded RPC work.
  * The scoped provider stops new calls after completion and aborts an in-flight fetch on timeout.
  * @param authChain Chain to validate: a SIGNER link followed by at least one signature link.
  * @param expectedFinalAuthority Ephemeral address or signed-fetch payload expected at the end.
+ * Scoped logins (ADR-162) are always rejected: this function can't check the operation they are
+ * used for. Accept them through the middleware's `service` and `operation` options.
  * @param l1Provider Provider for this environment's Ethereum network.
  * @throws SignatureValidationInfrastructureError when RPC infrastructure fails or validation times out.
  * @throws Error when the chain is invalid, exceeds its RPC call budget, or the options are invalid.
@@ -40,12 +48,33 @@ export async function validateAuthChainSignature(
   authChain: AuthChain,
   expectedFinalAuthority: string,
   l1Provider: AuthChainProvider,
+  { maxChainLength, timeoutInMilliseconds, maxRpcCalls }: SignatureValidationOptions = {}
+): Promise<void> {
+  // Only the limits are passed on, so no option can make it accept a scoped login.
+  await validateScopedAuthChainSignature(authChain, expectedFinalAuthority, l1Provider, {
+    maxChainLength,
+    timeoutInMilliseconds,
+    maxRpcCalls
+  })
+}
+
+/**
+ * {@link validateAuthChainSignature}, accepting scoped logins (ADR-162) for `service` and returning
+ * the scope of one, or undefined for a full login. Internal: the caller MUST check the operation of
+ * the request against the scope.
+ */
+export async function validateScopedAuthChainSignature(
+  authChain: AuthChain,
+  expectedFinalAuthority: string,
+  l1Provider: AuthChainProvider,
   {
     maxChainLength = MAX_AUTH_CHAIN_LENGTH,
     timeoutInMilliseconds = DEFAULT_SIGNATURE_VALIDATION_TIMEOUT_IN_MILLISECONDS,
-    maxRpcCalls = DEFAULT_MAX_RPC_CALLS
-  }: SignatureValidationOptions = {}
-): Promise<void> {
+    maxRpcCalls = DEFAULT_MAX_RPC_CALLS,
+    service,
+    maxScopedLoginLifetimeInMillis
+  }: ScopedSignatureValidationOptions = {}
+): Promise<ScopedLoginScope | undefined> {
   if (
     !Number.isSafeInteger(maxChainLength) ||
     maxChainLength < 2 ||
@@ -127,12 +156,16 @@ export async function validateAuthChainSignature(
 
   try {
     const validationResult = await Promise.race([
-      Authenticator.validateSignature(expectedFinalAuthority, authChain, scopedProvider),
+      Authenticator.validateSignature(expectedFinalAuthority, authChain, scopedProvider, Date.now(), {
+        service,
+        maxScopedLoginLifetimeInMillis
+      }),
       interruption
     ])
     if (!validationResult.ok) {
       throw new Error(validationResult.message ?? 'Signature validation failed')
     }
+    return validationResult.scope
   } finally {
     clearTimeout(timer)
     controller.abort()

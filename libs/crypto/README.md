@@ -41,3 +41,31 @@ export async function createIdentity(
   )
 }
 ```
+
+## Create a scoped identity
+
+A scoped login ([ADR-162](https://adr.decentraland.org/adr/ADR-162)) delegates only the listed operations to the ephemeral key. Only services that opt in and are named in the grants accept it; every other verifier rejects it.
+
+```typescript
+const identity = await Authenticator.initializeScopedAuthChain(
+  address,
+  ephemeral,
+  60,
+  [
+    { service: 'insights', operation: 'logs-read' },
+    { service: 'insights', operation: 'metrics-read', resource: 'world:example.dcl.eth' }
+  ],
+  (message) => signer.signMessage(message)
+)
+```
+
+A verifier passes its service identifier to `validateSignature`, and checks each operation against the returned scope:
+
+```typescript
+const result = await Authenticator.validateSignature(payload, authChain, provider, Date.now(), { service: 'insights' })
+if (result.ok && !isOperationGranted(result.scope, 'logs-read')) {
+  // the login doesn't allow this operation
+}
+```
+
+`result.scope` is undefined for a full login, which `isOperationGranted` allows everything.

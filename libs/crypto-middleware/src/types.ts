@@ -1,9 +1,10 @@
-import type { IFetchComponent } from '@dcl/core-commons'
+import type { IFetchComponent, IHttpServerComponent } from '@dcl/core-commons'
 import {
   AUTH_CHAIN_HEADER_PREFIX as _AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER as _AUTH_METADATA_HEADER,
   AUTH_TIMESTAMP_HEADER as _AUTH_TIMESTAMP_HEADER
 } from '@dcl/crypto'
+import type { ScopedLoginScope } from '@dcl/crypto'
 import RequestError from './errors'
 import type { AuthChainProvider } from './rpc-provider'
 
@@ -31,6 +32,12 @@ export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string }
 export interface DecentralandSignatureData<P extends Record<string, unknown> = Record<string, unknown>> {
   auth: string
   authMetadata: P
+  /**
+   * Set when the request was signed with a scoped login (ADR-162): the operations it may perform on
+   * this service. Absent for a full login, which may perform every operation. The middleware has
+   * already checked the route's `operation` against it.
+   */
+  scope?: ScopedLoginScope
 }
 
 export interface DecentralandSignatureContext<P extends Record<string, unknown> = Record<string, unknown>> {
@@ -51,6 +58,16 @@ export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown>
   /** With a provider: RPC calls one validation may make before it is rejected. Default: 16. */
   maxRpcCalls?: number
   metadataValidator?: (metadata: P) => boolean
+  /**
+   * Identifier of this service (e.g. `insights`), which opts it into scoped logins (ADR-162).
+   * Without it, a request signed with a scoped login is rejected. With it, `verify()` accepts one
+   * that grants something to this service, and `verification.scope` lists what; the middleware
+   * also requires the route's `operation` to be granted. Contract-wallet scoped logins are
+   * validated only with `provider`; the catalyst does not validate them.
+   */
+  service?: string
+  /** With `service`: rejects scoped logins that expire further than this many millis from now. */
+  maxScopedLoginLifetime?: number
   /**
    * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths
    * address nested fields, e.g. `'realm.serverName'`.
@@ -81,5 +98,22 @@ export interface SessionOptions {
   onError?: (err: Error) => unknown
 }
 
+export type DecentralandSignatureRouteContext<P extends Record<string, unknown> = Record<string, unknown>> =
+  IHttpServerComponent.DefaultContext<IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>>
+
+export interface RouteOperationOptions<P extends Record<string, unknown> = Record<string, unknown>> {
+  /**
+   * With `service`: the one operation this route performs (e.g. `logs-read`), or a function choosing
+   * it from the request. A request signed with a scoped login is rejected with 403 when the login
+   * doesn't grant it, and with 401 when the route has none (absent, or the function returns
+   * `undefined`), so a scoped login reaches only routes that declare what they do. A full login
+   * always passes. `*` is not an operation.
+   */
+  operation?: string | ((ctx: DecentralandSignatureRouteContext<P>) => string | undefined)
+  /** With `operation`: the resource the request acts on, matched against grants limited to one. */
+  resource?: (ctx: DecentralandSignatureRouteContext<P>) => string | undefined
+}
+
 export type Options<P extends Record<string, unknown> = Record<string, unknown>> = VerifyAuthChainHeadersOptions<P> &
-  SessionOptions
+  SessionOptions &
+  RouteOperationOptions<P>

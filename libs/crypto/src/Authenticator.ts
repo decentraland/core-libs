@@ -8,8 +8,25 @@ import {
 } from './crypto'
 import Blocks from './helper/blocks'
 import { moveMinutes } from './helper/utils'
+import {
+  SERVICE_FORMAT,
+  ScopedAuthLinkType,
+  findScopedLink,
+  getScopedEphemeralMessage,
+  parseScopedEphemeralPayload
+} from './scoped-login'
 import { AuthLinkType } from './types'
-import type { AuthChain, AuthIdentity, AuthLink, EthAddress, IdentityType, Signature, ValidationResult } from './types'
+import type {
+  AuthChain,
+  AuthIdentity,
+  AuthLink,
+  EthAddress,
+  IdentityType,
+  ScopedLoginGrant,
+  ScopedLoginValidationOptions,
+  Signature,
+  ValidationResult
+} from './types'
 
 export const VALID_SIGNATURE = 'VALID_SIGNATURE'
 // bytes4(keccak256("isValidSignature(bytes32,bytes)")
@@ -17,12 +34,18 @@ export const ERC1654_MAGIC_VALUE = '1626ba7e'
 
 const PERSONAL_SIGNATURE_LENGTH = 132
 
-/** Validate that the signature belongs to the Ethereum address */
+/**
+ * Validate that the signature belongs to the Ethereum address.
+ *
+ * A chain with a scoped login link (ADR-162) is valid only when `options.service` is set and the
+ * login grants something to that service; the result then carries those grants in `scope`.
+ */
 export async function validateSignature(
   expectedFinalAuthority: string,
   authChain: AuthChain,
   provider: unknown,
-  dateToValidateExpirationInMillis: number = Date.now()
+  dateToValidateExpirationInMillis: number = Date.now(),
+  options: ScopedLoginValidationOptions = {}
 ): Promise<ValidationResult> {
   let currentAuthority = ''
 
@@ -31,6 +54,16 @@ export async function validateSignature(
       ok: false,
       message: 'ERROR: Malformed authChain'
     }
+  }
+
+  let scopedLinkIndex: number | undefined
+  try {
+    scopedLinkIndex = findScopedLink(authChain)
+  } catch (e) {
+    return { ok: false, message: `ERROR: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  if (scopedLinkIndex !== undefined && (options.service === undefined || !SERVICE_FORMAT.test(options.service))) {
+    return { ok: false, message: 'ERROR: Scoped logins are not accepted without a service identifier' }
   }
 
   for (const authLink of authChain) {
@@ -52,12 +85,39 @@ export async function validateSignature(
 
   const ok = currentAuthority === expectedFinalAuthority
 
-  return {
-    ok,
-    message: ok
-      ? undefined
-      : `ERROR: Invalid final authority. Expected: ${expectedFinalAuthority}. Current ${currentAuthority}.`
+  if (!ok || scopedLinkIndex === undefined) {
+    return {
+      ok,
+      message: ok
+        ? undefined
+        : `ERROR: Invalid final authority. Expected: ${expectedFinalAuthority}. Current ${currentAuthority}.`
+    }
   }
+
+  return scopeOf(authChain[scopedLinkIndex], dateToValidateExpirationInMillis, options)
+}
+
+/** The grants of an already validated scoped link for the verifier's service, or why it is refused. */
+function scopeOf(
+  authLink: AuthLink,
+  dateToValidateExpirationInMillis: number,
+  { service, maxScopedLoginLifetimeInMillis }: ScopedLoginValidationOptions
+): ValidationResult {
+  const { expiration, grants } = parseScopedEphemeralPayload(authLink.payload)
+  const granted = grants.filter((grant) => grant.service === service)
+  if (granted.length === 0) {
+    return { ok: false, message: `ERROR: The scoped login grants nothing to "${service}"` }
+  }
+  if (maxScopedLoginLifetimeInMillis !== undefined) {
+    // A misconfigured cap (NaN, Infinity, a negative number) rejects every scoped login.
+    if (
+      !(Number.isFinite(maxScopedLoginLifetimeInMillis) && maxScopedLoginLifetimeInMillis > 0) ||
+      expiration - dateToValidateExpirationInMillis > maxScopedLoginLifetimeInMillis
+    ) {
+      return { ok: false, message: 'ERROR: The scoped login lasts longer than this verifier accepts' }
+    }
+  }
+  return { ok: true, message: undefined, scope: { service: service as string, expiration, grants: granted } }
 }
 
 export function isValidAuthChain(authChain: AuthChain): boolean {
@@ -158,6 +218,41 @@ export async function initializeAuthChain(
   }
 }
 
+/**
+ * Like `initializeAuthChain`, but delegates only `grants` to the ephemeral key (ADR-162). Only
+ * services that accept scoped logins and are named in `grants` accept the resulting identity; every
+ * other verifier rejects it.
+ *
+ * @throws Error if a grant is malformed (see `getScopedEphemeralMessage`).
+ */
+export async function initializeScopedAuthChain(
+  ethAddress: EthAddress,
+  ephemeralIdentity: IdentityType,
+  ephemeralMinutesDuration: number,
+  grants: ScopedLoginGrant[],
+  signer: (message: string) => Promise<string>
+): Promise<AuthIdentity> {
+  const expiration = moveMinutes(ephemeralMinutesDuration)
+
+  const scopedMessage = getScopedEphemeralMessage(ephemeralIdentity.address, expiration, grants)
+  const firstSignature = await signer(scopedMessage)
+
+  const authChain: AuthChain = [
+    { type: AuthLinkType.SIGNER, payload: ethAddress, signature: '' },
+    {
+      type: getScopedEphemeralSignatureType(firstSignature),
+      payload: scopedMessage,
+      signature: firstSignature
+    }
+  ]
+
+  return {
+    ephemeralIdentity,
+    expiration,
+    authChain
+  }
+}
+
 export function signPayload(authIdentity: AuthIdentity, entityId: string): AuthChain {
   const secondSignature = createSignature(authIdentity.ephemeralIdentity, entityId)
   return [
@@ -196,11 +291,13 @@ export const Authenticator = {
   createSimpleAuthChain,
   createAuthChain,
   initializeAuthChain,
+  initializeScopedAuthChain,
   signPayload,
   createEthereumMessageHash,
   createSignature,
   ownerAddress,
-  getEphemeralMessage
+  getEphemeralMessage,
+  getScopedEphemeralMessage
 } as const
 
 type ValidatorType = (
@@ -314,6 +411,63 @@ export const EIP_1654_SIGNED_ENTITY_VALIDATOR: ValidatorType = async (
   throw new Error(`Invalid validation`)
 }
 
+export const ECDSA_SCOPED_EPHEMERAL_VALIDATOR: ValidatorType = async (
+  authority: string,
+  authLink: AuthLink,
+  options?: ValidationOptions
+) => {
+  if (!authLink.signature) {
+    throw new Error(`Invalid AuthLink. 'signature' must be present for type 'ECDSA_SCOPED_EPHEMERAL_VALIDATOR'`)
+  }
+  const { ephemeralAddress, expiration } = parseScopedEphemeralPayload(authLink.payload)
+
+  const dateToValidateExpirationInMillis = options?.dateToValidateExpirationInMillis || Date.now()
+
+  if (expiration > dateToValidateExpirationInMillis) {
+    const signerAddress = recoverAddressFromEthSignature(authLink.signature, authLink.payload)
+    const expectedSignedAddress = authority.toLocaleLowerCase()
+    const actualSignedAddress = signerAddress.toLocaleLowerCase()
+
+    if (expectedSignedAddress === actualSignedAddress) {
+      return { nextAuthority: ephemeralAddress }
+    }
+
+    throw new Error(`Invalid signer address. Expected: ${expectedSignedAddress}. Actual: ${actualSignedAddress}`)
+  }
+
+  throw new Error(`Ephemeral key expired. Expiration: ${expiration}. Test: ${dateToValidateExpirationInMillis}`)
+}
+
+export const ECDSA_EIP_1654_SCOPED_EPHEMERAL_VALIDATOR: ValidatorType = async (
+  authority: string,
+  authLink: AuthLink,
+  options?: ValidationOptions
+) => {
+  if (!authLink.signature) {
+    throw new Error(
+      `Invalid AuthLink. 'signature' must be present for type 'ECDSA_EIP_1654_SCOPED_EPHEMERAL_VALIDATOR'`
+    )
+  }
+  const { ephemeralAddress, expiration } = parseScopedEphemeralPayload(authLink.payload)
+
+  const dateToValidateExpirationInMillis = options?.dateToValidateExpirationInMillis || Date.now()
+  if (expiration <= dateToValidateExpirationInMillis) {
+    throw new Error(`Ephemeral key expired. Expiration: ${expiration}. Test: ${dateToValidateExpirationInMillis}`)
+  }
+  if (
+    !(await isValidEIP1654Message(
+      options?.provider,
+      authority,
+      authLink.payload,
+      authLink.signature,
+      dateToValidateExpirationInMillis
+    ))
+  ) {
+    throw new Error(`Invalid EIP-1654 signature for ${authority.toLowerCase()}`)
+  }
+  return { nextAuthority: ephemeralAddress }
+}
+
 const ERROR_VALIDATOR: ValidatorType = async (_: string, __: AuthLink) => {
   return { error: 'Error Validator.' }
 }
@@ -324,6 +478,14 @@ export function getEphemeralSignatureType(signature: string): AuthLinkType {
   } else {
     return AuthLinkType.ECDSA_EIP_1654_EPHEMERAL
   }
+}
+
+/** The scoped link type matching a signature: a personal signature, or a contract wallet's. */
+export function getScopedEphemeralSignatureType(signature: string): AuthLinkType {
+  // The scoped types are not in @dcl/schemas' AuthLinkType yet (see ScopedAuthLinkType).
+  return (signature.length === PERSONAL_SIGNATURE_LENGTH
+    ? ScopedAuthLinkType.ECDSA_PERSONAL_SCOPED_EPHEMERAL
+    : ScopedAuthLinkType.ECDSA_EIP_1654_SCOPED_EPHEMERAL) as unknown as AuthLinkType
 }
 
 export function getSignedIdentitySignatureType(signature: string): AuthLinkType {
@@ -439,7 +601,7 @@ async function isValidEIP1654Message(
 }
 
 function getValidatorByType(type: AuthLinkType): ValidatorType {
-  switch (type) {
+  switch (type as string) {
     case AuthLinkType.SIGNER:
       return SIGNER_VALIDATOR
     case AuthLinkType.ECDSA_PERSONAL_EPHEMERAL:
@@ -450,6 +612,10 @@ function getValidatorByType(type: AuthLinkType): ValidatorType {
       return ECDSA_EIP_1654_EPHEMERAL_VALIDATOR
     case AuthLinkType.ECDSA_EIP_1654_SIGNED_ENTITY:
       return EIP_1654_SIGNED_ENTITY_VALIDATOR
+    case ScopedAuthLinkType.ECDSA_PERSONAL_SCOPED_EPHEMERAL:
+      return ECDSA_SCOPED_EPHEMERAL_VALIDATOR
+    case ScopedAuthLinkType.ECDSA_EIP_1654_SCOPED_EPHEMERAL:
+      return ECDSA_EIP_1654_SCOPED_EPHEMERAL_VALIDATOR
     default:
       return ERROR_VALIDATOR
   }

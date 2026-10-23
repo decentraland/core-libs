@@ -116,6 +116,50 @@ deployment never checks headers on mainnet while checking bodies on Sepolia.
 | `maxRpcCalls`       | `number`                   | With a `provider`, RPC calls one signature validation may make before it is rejected as invalid. Default: `16`. |
 | `metadataValidator` | `(metadata: P) => boolean` | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.          |
 | `onError`           | `(err: Error) => any`      | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.   |
+| `service`           | `string`                   | Identifier of this service (e.g. `insights`), which opts it into scoped logins. See below.                      |
+| `maxScopedLoginLifetime` | `number`              | With `service`: rejects scoped logins expiring further than this many milliseconds from now.                   |
+| `operation`         | `string \| (ctx) => string \| undefined` | With `service`: the one operation this route performs. Scoped logins are rejected on routes without one. |
+| `resource`          | `(ctx) => string \| undefined` | With `operation`: the resource the request acts on.                                                          |
+
+## Scoped logins
+
+A scoped login ([ADR-162](https://adr.decentraland.org/adr/ADR-162)) delegates to an ephemeral key only the operations it lists, per service and optionally per resource:
+
+```text
+Decentraland Scoped Login
+Ephemeral: 0x1111111111111111111111111111111111111111
+Expiration: 2026-10-23T18:00:00.000Z
+Allow: insights:logs-read
+Allow: insights:metrics-read for world:example.dcl.eth
+```
+
+A service that doesn't set `service` rejects every request signed with one (401), and so does any service on an earlier version of this library. To accept them, create the middleware per route, naming the one operation the route performs:
+
+```ts
+const auth = (route: Pick<Options, 'operation' | 'resource'> = {}) =>
+  wellKnownComponents({ fetcher, service: 'insights', maxScopedLoginLifetime: 12 * 60 * 60 * 1000, ...route })
+
+router.get('/v1/logs', auth({ operation: 'logs-read' }), logsHandler)
+router.get('/v1/worlds/:world/metrics',
+  auth({ operation: 'metrics-read', resource: (ctx) => `world:${ctx.params.world.toLowerCase()}` }), metricsHandler)
+router.delete('/v1/logs', auth({ operation: (ctx) => (ctx.url.searchParams.has('all') ? 'logs-purge' : 'logs-delete') }), deleteHandler)
+router.put('/v1/settings', auth(), settingsHandler)
+```
+
+- A request signed with a full login (`Decentraland Login`) passes every route, as before.
+- A scoped login passes a route only when it grants the route's operation on its resource, and `ctx.verification.scope` then lists its grants for this service. It gets 403 when the grant is missing.
+- A route without an operation, or whose `operation` function returns `undefined`, rejects scoped logins with 401. A route nobody mapped therefore stays closed to them.
+- Each request performs exactly one operation. A route whose behavior depends on the request chooses it with a function; there is no list of operations.
+- `optional` lets unsigned requests through, never a scoped login the route doesn't grant.
+- `operation` without `service`, and `resource` without `operation`, throw at creation.
+
+Authenticate per route: a global `router.use(wellKnownComponents({ service }))` has no operation, so it rejects every scoped login before a route's own middleware runs.
+
+Resources are compared exactly. Build them in the canonical form your service documents, such as lowercase world names, or a grant written for `world:example.dcl.eth` won't match a request for `Example.dcl.eth` (a 403, never extra access).
+
+A grant never adds access: authorize the signer (`ctx.verification.auth`) as you do for a full login. `isOperationGranted(scope, operation, resource?)` is exported for further checks inside handlers.
+
+Contract-wallet scoped logins are validated only with a `provider`: the catalyst doesn't validate them.
 
 ## Metadata handling
 
