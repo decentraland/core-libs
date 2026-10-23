@@ -1,5 +1,5 @@
 import type { AuthChain, ScopedLoginScope, ScopedLoginValidationOptions } from '@dcl/crypto'
-import { AuthLinkType, Authenticator } from '@dcl/crypto'
+import { AuthLinkType, Authenticator, isScopedAuthLinkType } from '@dcl/crypto'
 import RequestError from './errors'
 import { SignatureValidationInfrastructureError, validateScopedAuthChainSignature } from './signature-validation'
 import {
@@ -121,7 +121,8 @@ async function verifyPersonalSignature(
   // SAFETY: `@dcl/crypto` types the third argument as HTTPProvider but accepts null at
   // runtime for personal-signature verification (no contract call needed). EIP-1654
   // chains — which do require a provider for contract-wallet validation — are routed
-  // to `verifyEIP1654Sign` (catalyst-based) and never reach this path.
+  // to `verifyEIP1654Sign` (catalyst-based), except scoped ones, which fail here with
+  // "Missing provider".
   const verification = await Authenticator.validateSignature(payload, authChain, null as never, Date.now(), scoped)
 
   if (!verification.ok) {
@@ -226,9 +227,9 @@ async function verifySignature(
     }
   }
 
-  // A scoped chain is never routed to the catalyst, which doesn't know scoped links: it ends here,
-  // where a contract-wallet scoped link fails without a provider.
-  if (isEIP1654AuthChain(authChain)) {
+  // A scoped chain is never routed to the catalyst, which doesn't know scoped links and would report
+  // it as a full login. It is validated here, where a contract-wallet link fails without a provider.
+  if (!authChain.some((link) => isScopedAuthLinkType(link.type)) && isEIP1654AuthChain(authChain)) {
     return { ownerAddress: await verifyEIP1654Sign(authChain, payload, options) }
   }
 

@@ -451,21 +451,21 @@ export const ECDSA_EIP_1654_SCOPED_EPHEMERAL_VALIDATOR: ValidatorType = async (
   const { ephemeralAddress, expiration } = parseScopedEphemeralPayload(authLink.payload)
 
   const dateToValidateExpirationInMillis = options?.dateToValidateExpirationInMillis || Date.now()
-  if (expiration > dateToValidateExpirationInMillis) {
-    if (
-      await isValidEIP1654Message(
-        options?.provider,
-        authority,
-        authLink.payload,
-        authLink.signature,
-        dateToValidateExpirationInMillis
-      )
-    ) {
-      return { nextAuthority: ephemeralAddress }
-    }
+  if (expiration <= dateToValidateExpirationInMillis) {
+    throw new Error(`Ephemeral key expired. Expiration: ${expiration}. Test: ${dateToValidateExpirationInMillis}`)
   }
-
-  throw new Error(`Ephemeral key expired. Expiration: ${expiration}. Test: ${dateToValidateExpirationInMillis}`)
+  if (
+    !(await isValidEIP1654Message(
+      options?.provider,
+      authority,
+      authLink.payload,
+      authLink.signature,
+      dateToValidateExpirationInMillis
+    ))
+  ) {
+    throw new Error(`Invalid EIP-1654 signature for ${authority.toLowerCase()}`)
+  }
+  return { nextAuthority: ephemeralAddress }
 }
 
 const ERROR_VALIDATOR: ValidatorType = async (_: string, __: AuthLink) => {

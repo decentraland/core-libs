@@ -1,9 +1,9 @@
 import { createUnsafeIdentity } from '@dcl/crypto/dist/crypto'
 import type { IFetchComponent, IHttpServerComponent } from '@dcl/core-commons'
-import { Authenticator } from '@dcl/crypto'
-import type { AuthIdentity, ScopedLoginGrant } from '@dcl/crypto'
+import { AuthLinkType, Authenticator, ScopedAuthLinkType } from '@dcl/crypto'
+import type { AuthChain, AuthIdentity, ScopedLoginGrant } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
-import { requireOperation, wellKnownComponents } from '../../src/index'
+import { wellKnownComponents } from '../../src/index'
 import { validateScopedAuthChainSignature } from '../../src/signature-validation'
 import { identity as fullLogin } from '../fixtures/identity'
 import type { AuthChainProvider } from '../../src/rpc-provider'
@@ -63,7 +63,7 @@ describe('when a request is signed with a scoped login', () => {
     jest.clearAllMocks()
   })
 
-  describe('and the service has no service identifier', () => {
+  describe('and the middleware has no service identifier', () => {
     beforeEach(async () => {
       outcome = await authenticate(requestSignedWith(identity))
     })
@@ -80,9 +80,26 @@ describe('when a request is signed with a scoped login', () => {
     })
   })
 
-  describe('and the login grants something to the service', () => {
+  describe('and the route has a service identifier but no operation', () => {
     beforeEach(async () => {
       outcome = await authenticate(requestSignedWith(identity), { service: 'insights' })
+    })
+
+    it('should respond 401 saying the route does not accept scoped logins', () => {
+      expect(outcome.result).toMatchObject({
+        status: 401,
+        body: { ok: false, message: 'This route does not accept scoped logins' }
+      })
+    })
+
+    it('should not set a verification', () => {
+      expect(outcome.verification).toBeUndefined()
+    })
+  })
+
+  describe('and the login grants the route operation', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: 'logs-read' })
     })
 
     it('should call next', () => {
@@ -98,9 +115,111 @@ describe('when a request is signed with a scoped login', () => {
     })
   })
 
+  describe('and the login does not grant the route operation', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: 'logs-delete' })
+    })
+
+    it('should respond 403 naming the operation', () => {
+      expect(outcome.result).toMatchObject({
+        status: 403,
+        body: { ok: false, message: 'The scoped login does not grant "logs-delete"' }
+      })
+    })
+
+    it('should not call next', () => {
+      expect(outcome.next).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('and the login grants the route operation only on another resource', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        operation: 'metrics-read',
+        resource: () => 'world:other.dcl.eth'
+      })
+    })
+
+    it('should respond 403', () => {
+      expect(outcome.result).toMatchObject({ status: 403 })
+    })
+  })
+
+  describe('and the login grants the route operation on the same resource', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        operation: 'metrics-read',
+        resource: () => 'world:example.dcl.eth'
+      })
+    })
+
+    it('should call next', () => {
+      expect(outcome.next).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('and the route chooses an operation the login grants', () => {
+    let operation: jest.Mock
+
+    beforeEach(async () => {
+      operation = jest.fn().mockReturnValueOnce('logs-read')
+      outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation })
+    })
+
+    it('should call next', () => {
+      expect(outcome.next).toHaveBeenCalledTimes(1)
+    })
+
+    it('should choose the operation from the request context', () => {
+      expect(operation).toHaveBeenCalledWith(expect.objectContaining({ url: { pathname: PATH } }))
+    })
+  })
+
+  describe('and the route chooses no operation for the request', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: () => undefined })
+    })
+
+    it('should respond 401 saying the route does not accept scoped logins', () => {
+      expect(outcome.result).toMatchObject({
+        status: 401,
+        body: { ok: false, message: 'This route does not accept scoped logins' }
+      })
+    })
+  })
+
+  describe('and the route chooses the wildcard as its operation', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: () => '*' })
+    })
+
+    it('should respond 401 saying the route does not accept scoped logins', () => {
+      expect(outcome.result).toMatchObject({
+        status: 401,
+        body: { ok: false, message: 'This route does not accept scoped logins' }
+      })
+    })
+  })
+
+  describe('and the middleware is optional and the login does not grant the route operation', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        operation: 'logs-delete',
+        optional: true
+      })
+    })
+
+    it('should respond 403 instead of letting the request through', () => {
+      expect(outcome.result).toMatchObject({ status: 403 })
+    })
+  })
+
   describe('and the login grants nothing to the service', () => {
     beforeEach(async () => {
-      outcome = await authenticate(requestSignedWith(identity), { service: 'worlds' })
+      outcome = await authenticate(requestSignedWith(identity), { service: 'worlds', operation: 'deploy' })
     })
 
     it('should respond 401 saying the login grants nothing to the service', () => {
@@ -115,6 +234,7 @@ describe('when a request is signed with a scoped login', () => {
     beforeEach(async () => {
       outcome = await authenticate(requestSignedWith(identity), {
         service: 'insights',
+        operation: 'logs-read',
         maxScopedLoginLifetime: 10 * 60 * 1000
       })
     })
@@ -128,15 +248,64 @@ describe('when a request is signed with a scoped login', () => {
   })
 })
 
-describe('when a request is signed with a full login and the service has a service identifier', () => {
+describe('when a request is signed with a scoped login delegated through a contract wallet', () => {
+  let ctx: Ctx
   let outcome: Outcome
 
   beforeEach(async () => {
-    outcome = await authenticate(requestSignedWith(fullLogin), { service: 'insights' })
+    const ephemeral = createUnsafeIdentity()
+    const scoped = createUnsafeIdentity()
+    const expiration = new Date(Date.now() + 60 * 60 * 1000)
+    const authChain: AuthChain = [
+      { type: AuthLinkType.SIGNER, payload: '0x1111111111111111111111111111111111111111', signature: '' },
+      {
+        type: AuthLinkType.ECDSA_EIP_1654_EPHEMERAL,
+        payload: Authenticator.getEphemeralMessage(ephemeral.address, expiration),
+        signature: '0x00'
+      },
+      {
+        type: ScopedAuthLinkType.ECDSA_PERSONAL_SCOPED_EPHEMERAL as unknown as AuthLinkType,
+        payload: Authenticator.getScopedEphemeralMessage(scoped.address, expiration, GRANTS),
+        signature: Authenticator.createSignature(
+          ephemeral,
+          Authenticator.getScopedEphemeralMessage(scoped.address, expiration, GRANTS)
+        )
+      }
+    ]
+    // Three links, the shape the middleware would otherwise hand to the catalyst.
+    ctx = {
+      request: { method: METHOD, headers: new Headers(createAuthChainHeaders(authChain, Date.now(), {})) },
+      url: { pathname: PATH }
+    } as unknown as Ctx
+    outcome = await authenticate(ctx, { service: 'insights', operation: 'logs-read' })
   })
 
   afterEach(() => {
     jest.clearAllMocks()
+  })
+
+  it('should respond 401', () => {
+    expect(outcome.result).toMatchObject({ status: 401 })
+  })
+
+  it('should not ask the catalyst to validate it', () => {
+    expect(fetcher.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('when a request is signed with a full login and the route has an operation', () => {
+  let outcome: Outcome
+
+  beforeEach(async () => {
+    outcome = await authenticate(requestSignedWith(fullLogin), { service: 'insights', operation: 'logs-delete' })
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('should call next', () => {
+    expect(outcome.next).toHaveBeenCalledTimes(1)
   })
 
   it('should set a verification without a scope', () => {
@@ -158,6 +327,34 @@ describe('when the middleware is created with scoped login options', () => {
     it('should throw at creation', () => {
       expect(() => wellKnownComponents({ service: 'insights', maxScopedLoginLifetime: NaN })).toThrow(
         'maxScopedLoginLifetime must be'
+      )
+    })
+  })
+
+  describe('and the maximum scoped login lifetime has no service identifier', () => {
+    it('should throw at creation', () => {
+      expect(() => wellKnownComponents({ maxScopedLoginLifetime: 60_000 })).toThrow(
+        'maxScopedLoginLifetime needs a service'
+      )
+    })
+  })
+
+  describe('and the operation has no service identifier', () => {
+    it('should throw at creation', () => {
+      expect(() => wellKnownComponents({ operation: 'logs-read' })).toThrow('operation needs a service')
+    })
+  })
+
+  describe('and the operation is the wildcard', () => {
+    it('should throw at creation', () => {
+      expect(() => wellKnownComponents({ service: 'insights', operation: '*' })).toThrow('operation must be')
+    })
+  })
+
+  describe('and the resource has no operation', () => {
+    it('should throw at creation', () => {
+      expect(() => wellKnownComponents({ service: 'insights', resource: () => 'world:example.dcl.eth' })).toThrow(
+        'resource needs an operation'
       )
     })
   })
@@ -184,106 +381,5 @@ describe('when a scoped login is validated with a provider', () => {
         { service: 'insights' }
       )
     ).resolves.toEqual({ service: 'insights', expiration: identity.expiration.getTime(), grants: GRANTS })
-  })
-})
-
-describe('when a route requires an operation', () => {
-  let ctx: Ctx
-  let next: jest.Mock
-  let result: IHttpServerComponent.IResponse
-
-  beforeEach(() => {
-    next = jest.fn().mockResolvedValue({ status: 200, body: 'ok' })
-    ctx = { request: { method: METHOD, headers: new Headers() }, url: { pathname: PATH } } as unknown as Ctx
-  })
-
-  describe('and the request has no verification', () => {
-    beforeEach(async () => {
-      result = await requireOperation('logs-read')(ctx, next)
-    })
-
-    it('should respond 401', () => {
-      expect(result).toMatchObject({ status: 401, body: { ok: false, message: 'Authentication required' } })
-    })
-  })
-
-  describe('and the request was signed with a full login', () => {
-    beforeEach(async () => {
-      ctx.verification = { auth: '0xowner', authMetadata: {} }
-      result = await requireOperation('logs-delete')(ctx, next)
-    })
-
-    it('should call next', () => {
-      expect(next).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  describe('and the scope grants the operation', () => {
-    beforeEach(async () => {
-      ctx.verification = {
-        auth: '0xowner',
-        authMetadata: {},
-        scope: { service: 'insights', expiration: Date.now() + 60_000, grants: GRANTS }
-      }
-      result = await requireOperation('logs-read')(ctx, next)
-    })
-
-    it('should call next', () => {
-      expect(next).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  describe('and the scope does not grant the operation', () => {
-    beforeEach(async () => {
-      ctx.verification = {
-        auth: '0xowner',
-        authMetadata: {},
-        scope: { service: 'insights', expiration: Date.now() + 60_000, grants: GRANTS }
-      }
-      result = await requireOperation('logs-delete')(ctx, next)
-    })
-
-    it('should respond 403 naming the operation', () => {
-      expect(result).toMatchObject({
-        status: 403,
-        body: { ok: false, message: 'The scoped login does not grant "logs-delete"' }
-      })
-    })
-  })
-
-  describe('and the scope grants the operation only on another resource', () => {
-    beforeEach(async () => {
-      ctx.verification = {
-        auth: '0xowner',
-        authMetadata: {},
-        scope: { service: 'insights', expiration: Date.now() + 60_000, grants: GRANTS }
-      }
-      result = await requireOperation('metrics-read', { resource: () => 'world:other.dcl.eth' })(ctx, next)
-    })
-
-    it('should respond 403', () => {
-      expect(result).toMatchObject({ status: 403 })
-    })
-  })
-
-  describe('and the scope grants the operation on the same resource', () => {
-    beforeEach(async () => {
-      ctx.verification = {
-        auth: '0xowner',
-        authMetadata: {},
-        scope: { service: 'insights', expiration: Date.now() + 60_000, grants: GRANTS }
-      }
-      result = await requireOperation('metrics-read', { resource: () => 'world:example.dcl.eth' })(ctx, next)
-    })
-
-    it('should call next', () => {
-      expect(next).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  describe('and the operation name is not valid', () => {
-    it('should throw at creation', () => {
-      expect(() => requireOperation('*')).toThrow('operation must be')
-    })
   })
 })

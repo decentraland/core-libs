@@ -12,7 +12,9 @@ import {
   DecentralandSignatureContext,
   DecentralandSignatureData,
   DecentralandSignatureRequiredContext,
+  DecentralandSignatureRouteContext,
   Options,
+  RouteOperationOptions,
   VerifyAuthChainHeadersOptions
 } from './types'
 import verify, { createPayload } from './verify'
@@ -36,6 +38,8 @@ export {
   DecentralandSignatureData,
   DecentralandSignatureContext,
   DecentralandSignatureRequiredContext,
+  DecentralandSignatureRouteContext,
+  RouteOperationOptions,
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_TIMESTAMP_HEADER,
   AUTH_METADATA_HEADER,
@@ -88,22 +92,70 @@ function errorToResponse(err: unknown, options: Pick<Options, 'onError'>): { sta
   return { status, body: onError(asError) }
 }
 
-/** Well-Known Components */
+function isValidOperation(operation: unknown): operation is string {
+  return typeof operation === 'string' && operation !== '*' && OPERATION_FORMAT.test(operation)
+}
+
+/**
+ * Checks a verified request against the route's operation (ADR-162). A full login always passes; a
+ * scoped login passes only when the route names an operation its scope grants on the resource.
+ *
+ * @returns The error to respond with, or undefined when the request may proceed.
+ */
+function checkRouteOperation<P extends Record<string, unknown>>(
+  ctx: DecentralandSignatureRouteContext<P>,
+  verification: DecentralandSignatureData<P>,
+  options: Pick<Options<P>, 'operation' | 'resource'>
+): RequestError | undefined {
+  if (!verification.scope) {
+    return undefined
+  }
+  const operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
+  if (!isValidOperation(operation)) {
+    return new RequestError('This route does not accept scoped logins', 401)
+  }
+  if (!isOperationGranted(verification.scope, operation, options.resource?.(ctx))) {
+    return new RequestError(`The scoped login does not grant "${operation}"`, 403)
+  }
+  return undefined
+}
+
+/**
+ * Well-Known Components middleware: verifies the request's signed-fetch headers (ADR-44) and sets
+ * `ctx.verification`. With `service`, it also accepts scoped logins (ADR-162) on routes that declare
+ * their `operation`, so create one per route.
+ *
+ * @throws Error at creation when an option is malformed, or `operation`, `resource` or
+ *   `maxScopedLoginLifetime` is given without what it depends on.
+ */
 export function wellKnownComponents<P extends Record<string, unknown> = Record<string, unknown>>(
   options: Options<P> = {}
 ): IHttpServerComponent.IRequestHandler<
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
 > {
   // Fail at startup rather than as a 401 on every request.
-  const { maxChainLength, maxRpcCalls, service, maxScopedLoginLifetime } = options
+  const { maxChainLength, maxRpcCalls, service, maxScopedLoginLifetime, operation, resource } = options
   if (service !== undefined && !SERVICE_FORMAT.test(service)) {
     throw new Error('service must be 1 to 64 lowercase letters, digits or hyphens')
   }
-  if (
-    maxScopedLoginLifetime !== undefined &&
-    !(Number.isFinite(maxScopedLoginLifetime) && maxScopedLoginLifetime > 0)
-  ) {
-    throw new Error('maxScopedLoginLifetime must be a positive number of milliseconds')
+  if (maxScopedLoginLifetime !== undefined) {
+    if (service === undefined) {
+      throw new Error('maxScopedLoginLifetime needs a service')
+    }
+    if (!(Number.isFinite(maxScopedLoginLifetime) && maxScopedLoginLifetime > 0)) {
+      throw new Error('maxScopedLoginLifetime must be a positive number of milliseconds')
+    }
+  }
+  if (operation !== undefined) {
+    if (service === undefined) {
+      throw new Error('operation needs a service')
+    }
+    if (typeof operation !== 'function' && !isValidOperation(operation)) {
+      throw new Error('operation must be 1 to 64 lowercase letters, digits or hyphens')
+    }
+  }
+  if (resource !== undefined && operation === undefined) {
+    throw new Error('resource needs an operation')
   }
   if (options.provider) {
     if (maxChainLength !== undefined && (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)) {
@@ -114,13 +166,14 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
     }
   }
   return async (ctx, next) => {
+    let verification: DecentralandSignatureData<P> | undefined
     try {
       // Pass `verify()` only the auth-related headers (chain links, timestamp, metadata)
       // read straight from the native `Headers`, rather than materializing the whole
       // header set per request. `Headers.get` is case-insensitive, so this also works
       // regardless of header casing.
       const headers = pickSignatureHeaders(ctx.request.headers, options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH)
-      ctx.verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
+      verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
     } catch (err) {
       if (!options.optional) {
         const { status, body } = errorToResponse(err, options)
@@ -128,48 +181,17 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
       }
     }
 
-    return next()
-  }
-}
-
-export interface RequireOperationOptions<C> extends Pick<Options, 'onError'> {
-  /** The resource the request acts on, matched against grants limited to a resource. */
-  resource?: (ctx: C) => string | undefined
-}
-
-/**
- * Rejects a request whose scoped login (ADR-162) does not grant `operation` on this service. Goes
- * after `wellKnownComponents` with a `service`. A request signed with a full login always passes.
- *
- * Responds 401 when the request has no verification (e.g. an optional, unsigned request), and 403
- * when its scope doesn't grant the operation on the resource.
- *
- * @param operation - The operation the route performs, e.g. `logs-read`.
- * @throws Error at creation when `operation` is not a valid operation name.
- */
-export function requireOperation<P extends Record<string, unknown> = Record<string, unknown>>(
-  operation: string,
-  options: RequireOperationOptions<
-    IHttpServerComponent.DefaultContext<IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>>
-  > = {}
-): IHttpServerComponent.IRequestHandler<
-  IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
-> {
-  if (operation === '*' || !OPERATION_FORMAT.test(operation)) {
-    throw new Error('operation must be 1 to 64 lowercase letters, digits or hyphens')
-  }
-  return async (ctx, next) => {
-    if (!ctx.verification) {
-      const { status, body } = errorToResponse(new RequestError('Authentication required', 401), options)
-      return { status, body: body as IHttpServerComponent.ResponseBody }
+    // Outside the try: `optional` lets an unsigned request through, never a scoped login its route
+    // doesn't grant.
+    if (verification) {
+      const denied = checkRouteOperation(ctx as DecentralandSignatureRouteContext<P>, verification, options)
+      if (denied) {
+        const { status, body } = errorToResponse(denied, options)
+        return { status, body: body as IHttpServerComponent.ResponseBody }
+      }
+      ctx.verification = verification
     }
-    if (!isOperationGranted(ctx.verification.scope, operation, options.resource?.(ctx))) {
-      const { status, body } = errorToResponse(
-        new RequestError(`The scoped login does not grant "${operation}"`, 403),
-        options
-      )
-      return { status, body: body as IHttpServerComponent.ResponseBody }
-    }
+
     return next()
   }
 }

@@ -486,6 +486,24 @@ describe('when validating a scoped login signed by a contract wallet', () => {
     })
   })
 
+  describe('and the scoped link has expired', () => {
+    beforeEach(async () => {
+      const expired = getScopedEphemeralMessage(EthCrypto.createIdentity().address, new Date(Date.now() - 1000), [
+        INSIGHTS_GRANTS[0]
+      ])
+      chain = [chain[0], { ...chain[1], payload: expired }, chain[2]]
+      result = await Authenticator.validateSignature(PAYLOAD, chain, provider, Date.now(), { service: 'insights' })
+    })
+
+    it('should reject it as an expired ephemeral key', () => {
+      expect(result.message).toContain('Ephemeral key expired')
+    })
+
+    it('should not ask the contract to validate the signature', () => {
+      expect(isValidSignatureMock).not.toHaveBeenCalled()
+    })
+  })
+
   describe('and the scoped link does not follow the signer directly', () => {
     beforeEach(async () => {
       const login = Authenticator.getEphemeralMessage('0x' + '2'.repeat(40), new Date(Date.now() + 60 * 60 * 1000))
