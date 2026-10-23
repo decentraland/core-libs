@@ -1,5 +1,5 @@
 import { Authenticator } from '@dcl/crypto'
-import type { AuthChain } from '@dcl/crypto'
+import type { AuthChain, ScopedLoginScope, ScopedLoginValidationOptions } from '@dcl/crypto'
 import { isExecutionRevert, isSignatureCallResult, isTimerDuration, toRevertResponse } from './rpc-provider'
 import { DEFAULT_MAX_CHAIN_LENGTH } from './types'
 import type { AuthChainProvider, JsonRpcRequest, JsonRpcResponse } from './rpc-provider'
@@ -18,7 +18,7 @@ export class SignatureValidationInfrastructureError extends Error {
   }
 }
 
-export interface SignatureValidationOptions {
+export interface SignatureValidationOptions extends ScopedLoginValidationOptions {
   /** Maximum number of links, including the SIGNER. Default: 10. */
   maxChainLength?: number
   /** Deadline for the whole validation, including every RPC call. Default: 15 seconds. */
@@ -40,12 +40,27 @@ export async function validateAuthChainSignature(
   authChain: AuthChain,
   expectedFinalAuthority: string,
   l1Provider: AuthChainProvider,
+  options: SignatureValidationOptions = {}
+): Promise<void> {
+  await validateScopedAuthChainSignature(authChain, expectedFinalAuthority, l1Provider, options)
+}
+
+/**
+ * {@link validateAuthChainSignature}, returning the scope of a scoped login (ADR-162), or undefined
+ * for a full login.
+ */
+export async function validateScopedAuthChainSignature(
+  authChain: AuthChain,
+  expectedFinalAuthority: string,
+  l1Provider: AuthChainProvider,
   {
     maxChainLength = MAX_AUTH_CHAIN_LENGTH,
     timeoutInMilliseconds = DEFAULT_SIGNATURE_VALIDATION_TIMEOUT_IN_MILLISECONDS,
-    maxRpcCalls = DEFAULT_MAX_RPC_CALLS
+    maxRpcCalls = DEFAULT_MAX_RPC_CALLS,
+    service,
+    maxScopedLoginLifetimeInMillis
   }: SignatureValidationOptions = {}
-): Promise<void> {
+): Promise<ScopedLoginScope | undefined> {
   if (
     !Number.isSafeInteger(maxChainLength) ||
     maxChainLength < 2 ||
@@ -127,12 +142,16 @@ export async function validateAuthChainSignature(
 
   try {
     const validationResult = await Promise.race([
-      Authenticator.validateSignature(expectedFinalAuthority, authChain, scopedProvider),
+      Authenticator.validateSignature(expectedFinalAuthority, authChain, scopedProvider, Date.now(), {
+        service,
+        maxScopedLoginLifetimeInMillis
+      }),
       interruption
     ])
     if (!validationResult.ok) {
       throw new Error(validationResult.message ?? 'Signature validation failed')
     }
+    return validationResult.scope
   } finally {
     clearTimeout(timer)
     controller.abort()

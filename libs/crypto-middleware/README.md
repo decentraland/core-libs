@@ -116,6 +116,34 @@ deployment never checks headers on mainnet while checking bodies on Sepolia.
 | `maxRpcCalls`       | `number`                   | With a `provider`, RPC calls one signature validation may make before it is rejected as invalid. Default: `16`. |
 | `metadataValidator` | `(metadata: P) => boolean` | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.          |
 | `onError`           | `(err: Error) => any`      | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.   |
+| `service`           | `string`                   | Identifier of this service (e.g. `insights`), which opts it into scoped logins. See below.                      |
+| `maxScopedLoginLifetime` | `number`              | With `service`: rejects scoped logins expiring further than this many milliseconds from now.                   |
+
+## Scoped logins
+
+A scoped login ([ADR-162](https://adr.decentraland.org/adr/ADR-162)) delegates to an ephemeral key only the operations it lists, per service and optionally per resource:
+
+```text
+Decentraland Scoped Login
+Ephemeral: 0x1111111111111111111111111111111111111111
+Expiration: 2026-10-23T18:00:00.000Z
+Allow: insights:logs-read
+Allow: insights:metrics-read for world:example.dcl.eth
+```
+
+A service that doesn't set `service` rejects every request signed with one (401), and so does any service on an earlier version of this library. With `service`, such a request is accepted when the login grants something to that service, and `ctx.verification.scope` lists those grants. Guard each route with the operation it performs:
+
+```ts
+const auth = wellKnownComponents({ service: 'insights', maxScopedLoginLifetime: 12 * 60 * 60 * 1000 })
+
+router.get('/v1/logs', auth, requireOperation('logs-read'), logsHandler)
+router.get('/v1/worlds/:world/metrics', auth,
+  requireOperation('metrics-read', { resource: (ctx) => `world:${ctx.params.world}` }), metricsHandler)
+```
+
+`requireOperation` answers 403 when the scope doesn't grant the operation on the resource, and 401 when the request has no verification. A request signed with a full login (`Decentraland Login`) always passes it. A grant never adds access: authorize the signer (`ctx.verification.auth`) as you do for a full login.
+
+Contract-wallet scoped logins are validated only with a `provider`: the catalyst doesn't validate them.
 
 ## Metadata handling
 

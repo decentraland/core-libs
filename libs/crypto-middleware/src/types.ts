@@ -4,6 +4,7 @@ import {
   AUTH_METADATA_HEADER as _AUTH_METADATA_HEADER,
   AUTH_TIMESTAMP_HEADER as _AUTH_TIMESTAMP_HEADER
 } from '@dcl/crypto'
+import type { ScopedLoginScope } from '@dcl/crypto'
 import RequestError from './errors'
 import type { AuthChainProvider } from './rpc-provider'
 
@@ -31,6 +32,11 @@ export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string }
 export interface DecentralandSignatureData<P extends Record<string, unknown> = Record<string, unknown>> {
   auth: string
   authMetadata: P
+  /**
+   * Set when the request was signed with a scoped login (ADR-162): the operations it may perform on
+   * this service. Absent for a full login, which may perform every operation. See `requireOperation`.
+   */
+  scope?: ScopedLoginScope
 }
 
 export interface DecentralandSignatureContext<P extends Record<string, unknown> = Record<string, unknown>> {
@@ -51,6 +57,15 @@ export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown>
   /** With a provider: RPC calls one validation may make before it is rejected. Default: 16. */
   maxRpcCalls?: number
   metadataValidator?: (metadata: P) => boolean
+  /**
+   * Identifier of this service (e.g. `insights`), which opts it into scoped logins (ADR-162).
+   * Without it, a request signed with a scoped login is rejected. With it, it is accepted when the
+   * login grants something to this service, and `verification.scope` lists what. Contract-wallet
+   * scoped logins are validated only with `provider`; the catalyst does not validate them.
+   */
+  service?: string
+  /** With `service`: rejects scoped logins that expire further than this many millis from now. */
+  maxScopedLoginLifetime?: number
   /**
    * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths
    * address nested fields, e.g. `'realm.serverName'`.

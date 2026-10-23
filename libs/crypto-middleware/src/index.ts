@@ -1,4 +1,5 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
+import { OPERATION_FORMAT, SERVICE_FORMAT, isOperationGranted } from '@dcl/crypto'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
 import { canonicalField, rejectIfSigner, requireCanonicalField, requireSigner } from './metadataValidators'
@@ -25,6 +26,8 @@ export {
   SignatureValidationInfrastructureError
 } from './signature-validation'
 export type { SignatureValidationOptions } from './signature-validation'
+export { isOperationGranted } from '@dcl/crypto'
+export type { ScopedLoginGrant, ScopedLoginScope } from '@dcl/crypto'
 
 export {
   Options,
@@ -92,7 +95,16 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
   IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
 > {
   // Fail at startup rather than as a 401 on every request.
-  const { maxChainLength, maxRpcCalls } = options
+  const { maxChainLength, maxRpcCalls, service, maxScopedLoginLifetime } = options
+  if (service !== undefined && !SERVICE_FORMAT.test(service)) {
+    throw new Error('service must be 1 to 64 lowercase letters, digits or hyphens')
+  }
+  if (
+    maxScopedLoginLifetime !== undefined &&
+    !(Number.isFinite(maxScopedLoginLifetime) && maxScopedLoginLifetime > 0)
+  ) {
+    throw new Error('maxScopedLoginLifetime must be a positive number of milliseconds')
+  }
   if (options.provider) {
     if (maxChainLength !== undefined && (!Number.isSafeInteger(maxChainLength) || maxChainLength < 2)) {
       throw new Error('maxChainLength must be an integer of at least 2 when a provider is set')
@@ -116,6 +128,48 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
       }
     }
 
+    return next()
+  }
+}
+
+export interface RequireOperationOptions<C> extends Pick<Options, 'onError'> {
+  /** The resource the request acts on, matched against grants limited to a resource. */
+  resource?: (ctx: C) => string | undefined
+}
+
+/**
+ * Rejects a request whose scoped login (ADR-162) does not grant `operation` on this service. Goes
+ * after `wellKnownComponents` with a `service`. A request signed with a full login always passes.
+ *
+ * Responds 401 when the request has no verification (e.g. an optional, unsigned request), and 403
+ * when its scope doesn't grant the operation on the resource.
+ *
+ * @param operation - The operation the route performs, e.g. `logs-read`.
+ * @throws Error at creation when `operation` is not a valid operation name.
+ */
+export function requireOperation<P extends Record<string, unknown> = Record<string, unknown>>(
+  operation: string,
+  options: RequireOperationOptions<
+    IHttpServerComponent.DefaultContext<IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>>
+  > = {}
+): IHttpServerComponent.IRequestHandler<
+  IHttpServerComponent.PathAwareContext<DecentralandSignatureContext<P>, string>
+> {
+  if (operation === '*' || !OPERATION_FORMAT.test(operation)) {
+    throw new Error('operation must be 1 to 64 lowercase letters, digits or hyphens')
+  }
+  return async (ctx, next) => {
+    if (!ctx.verification) {
+      const { status, body } = errorToResponse(new RequestError('Authentication required', 401), options)
+      return { status, body: body as IHttpServerComponent.ResponseBody }
+    }
+    if (!isOperationGranted(ctx.verification.scope, operation, options.resource?.(ctx))) {
+      const { status, body } = errorToResponse(
+        new RequestError(`The scoped login does not grant "${operation}"`, 403),
+        options
+      )
+      return { status, body: body as IHttpServerComponent.ResponseBody }
+    }
     return next()
   }
 }

@@ -1,7 +1,7 @@
-import type { AuthChain } from '@dcl/crypto'
+import type { AuthChain, ScopedLoginScope, ScopedLoginValidationOptions } from '@dcl/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import RequestError from './errors'
-import { SignatureValidationInfrastructureError, validateAuthChainSignature } from './signature-validation'
+import { SignatureValidationInfrastructureError, validateScopedAuthChainSignature } from './signature-validation'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -101,18 +101,38 @@ export function extractAuthChain(
   return chain
 }
 
-export async function verifyPersonalSign(authChain: AuthChain, payload: string): Promise<string> {
+/** Who signed a request, and the scope of the login it was signed with (undefined for a full login). */
+interface VerifiedSignature {
+  ownerAddress: string
+  scope?: ScopedLoginScope
+}
+
+function scopedLoginOptions(
+  options: Pick<VerifyAuthChainHeadersOptions, 'service' | 'maxScopedLoginLifetime'>
+): ScopedLoginValidationOptions {
+  return { service: options.service, maxScopedLoginLifetimeInMillis: options.maxScopedLoginLifetime }
+}
+
+async function verifyPersonalSignature(
+  authChain: AuthChain,
+  payload: string,
+  scoped: ScopedLoginValidationOptions
+): Promise<VerifiedSignature> {
   // SAFETY: `@dcl/crypto` types the third argument as HTTPProvider but accepts null at
   // runtime for personal-signature verification (no contract call needed). EIP-1654
   // chains — which do require a provider for contract-wallet validation — are routed
   // to `verifyEIP1654Sign` (catalyst-based) and never reach this path.
-  const verification = await Authenticator.validateSignature(payload, authChain, null as never)
+  const verification = await Authenticator.validateSignature(payload, authChain, null as never, Date.now(), scoped)
 
   if (!verification.ok) {
     throw new RequestError(`Invalid signature: ${verification.message}`, 401)
   }
 
-  return Authenticator.ownerAddress(authChain).toLowerCase()
+  return { ownerAddress: Authenticator.ownerAddress(authChain).toLowerCase(), scope: verification.scope }
+}
+
+export async function verifyPersonalSign(authChain: AuthChain, payload: string): Promise<string> {
+  return (await verifyPersonalSignature(authChain, payload, {})).ownerAddress
 }
 
 export async function verifyEIP1654Sign(
@@ -179,21 +199,24 @@ export async function verifyEIP1654Sign(
   return ownerAddress
 }
 
-export async function verifySign(
+type SignOptions = Pick<
+  VerifyAuthChainHeadersOptions,
+  'catalyst' | 'fetcher' | 'provider' | 'maxChainLength' | 'maxRpcCalls' | 'service' | 'maxScopedLoginLifetime'
+>
+
+async function verifySignature(
   authChain: AuthChain,
   payload: string,
-  options: Pick<
-    VerifyAuthChainHeadersOptions,
-    'catalyst' | 'fetcher' | 'provider' | 'maxChainLength' | 'maxRpcCalls'
-  > = {}
-): Promise<string> {
+  options: SignOptions = {}
+): Promise<VerifiedSignature> {
   if (options.provider) {
     try {
-      await validateAuthChainSignature(authChain, payload, options.provider, {
+      const scope = await validateScopedAuthChainSignature(authChain, payload, options.provider, {
         maxChainLength: options.maxChainLength,
-        maxRpcCalls: options.maxRpcCalls
+        maxRpcCalls: options.maxRpcCalls,
+        ...scopedLoginOptions(options)
       })
-      return Authenticator.ownerAddress(authChain).toLowerCase()
+      return { ownerAddress: Authenticator.ownerAddress(authChain).toLowerCase(), scope }
     } catch (err) {
       if (err instanceof SignatureValidationInfrastructureError) {
         throw new RequestError('Signature verification unavailable', 503)
@@ -203,11 +226,17 @@ export async function verifySign(
     }
   }
 
+  // A scoped chain is never routed to the catalyst, which doesn't know scoped links: it ends here,
+  // where a contract-wallet scoped link fails without a provider.
   if (isEIP1654AuthChain(authChain)) {
-    return verifyEIP1654Sign(authChain, payload, options)
+    return { ownerAddress: await verifyEIP1654Sign(authChain, payload, options) }
   }
 
-  return verifyPersonalSign(authChain, payload)
+  return verifyPersonalSignature(authChain, payload, scopedLoginOptions(options))
+}
+
+export async function verifySign(authChain: AuthChain, payload: string, options: SignOptions = {}): Promise<string> {
+  return (await verifySignature(authChain, payload, options)).ownerAddress
 }
 
 export function verifyTimestamp(value?: string | string[]): number {
@@ -443,9 +472,9 @@ export default async function verify<P extends Record<string, unknown> = Record<
     throw new RequestError(`Invalid metadata content: ${safe(JSON.stringify(metadata))}`, 400)
   }
 
-  let ownerAddress: string
+  let verified: VerifiedSignature
   try {
-    ownerAddress = await verifySign(authChain, createPayload(method, path, rawTimestamp, rawMetadata), options)
+    verified = await verifySignature(authChain, createPayload(method, path, rawTimestamp, rawMetadata), options)
   } catch (err) {
     const canonicalKeys = options.canonicalMetadataKeys
     if (!canonicalKeys || !(err instanceof RequestError) || err.statusCode !== 401) {
@@ -456,11 +485,12 @@ export default async function verify<P extends Record<string, unknown> = Record<
     // a catalyst round-trip for an EIP-1654 chain. A request refused either way should not pay it.
     assertLegacyMetadataKeys(metadata, canonicalKeys)
 
-    ownerAddress = await verifySign(authChain, createLegacyPayload(method, path, rawTimestamp, rawMetadata), options)
+    verified = await verifySignature(authChain, createLegacyPayload(method, path, rawTimestamp, rawMetadata), options)
   }
 
   return {
-    auth: ownerAddress,
-    authMetadata: metadata
+    auth: verified.ownerAddress,
+    authMetadata: metadata,
+    ...(verified.scope ? { scope: verified.scope } : {})
   }
 }
