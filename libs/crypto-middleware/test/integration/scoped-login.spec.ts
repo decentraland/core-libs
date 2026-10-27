@@ -3,8 +3,9 @@ import type { IFetchComponent, IHttpServerComponent } from '@dcl/core-commons'
 import { AuthLinkType, Authenticator, ScopedAuthLinkType } from '@dcl/crypto'
 import type { AuthChain, AuthIdentity, ScopedLoginGrant } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
-import { wellKnownComponents } from '../../src/index'
+import { verify, wellKnownComponents } from '../../src/index'
 import { validateScopedAuthChainSignature } from '../../src/signature-validation'
+import { verifyEIP1654Sign, verifyPersonalSign, verifySign } from '../../src/verify'
 import { identity as fullLogin } from '../fixtures/identity'
 import type { AuthChainProvider } from '../../src/rpc-provider'
 import type { DecentralandSignatureContext, DecentralandSignatureData, Options } from '../../src/types'
@@ -63,6 +64,173 @@ describe('when a request is signed with a scoped login', () => {
     jest.clearAllMocks()
   })
 
+  describe('and a direct signed-fetch caller authorizes an action', () => {
+    let ctx: Ctx
+    let headers: Record<string, string>
+    let verification: DecentralandSignatureData
+
+    beforeEach(() => {
+      ctx = requestSignedWith(identity)
+      headers = Object.fromEntries(ctx.request.headers.entries())
+    })
+
+    describe('and it requests a granted operation', () => {
+      beforeEach(async () => {
+        verification = await verify(METHOD, PATH, headers, { service: 'insights', operation: 'logs-read' })
+      })
+      it('should return the authorized signer', () => {
+        expect(verification.auth).toBe(identity.authChain[0].payload.toLowerCase())
+      })
+    })
+
+    describe('and it requests the granted resource', () => {
+      beforeEach(async () => {
+        verification = await verify(METHOD, PATH, headers, {
+          service: 'insights',
+          operation: 'metrics-read',
+          resource: 'world:example.dcl.eth'
+        })
+      })
+      it('should expose the checked resource read-only', () => {
+        expect(verification.resource).toBe('world:example.dcl.eth')
+        expect(Object.getOwnPropertyDescriptor(verification, 'resource')?.writable).toBe(false)
+      })
+    })
+
+    describe('and it requests another resource', () => {
+      it('should reject the valid signature on the ungranted resource', async () => {
+        await expect(
+          verify(METHOD, PATH, headers, {
+            service: 'insights',
+            operation: 'metrics-read',
+            resource: 'world:other.dcl.eth'
+          })
+        ).rejects.toMatchObject({ statusCode: 403 })
+      })
+    })
+
+    describe('and a JavaScript caller omits the operation', () => {
+      it('should reject with a distinct 403 error', async () => {
+        await expect(
+          Reflect.apply(verify, undefined, [METHOD, PATH, headers, { service: 'insights' }])
+        ).rejects.toMatchObject({
+          statusCode: 403,
+          code: 'SCOPED_OPERATION_REQUIRED'
+        })
+      })
+    })
+
+    describe('and it requests an ungranted operation', () => {
+      it('should reject before returning a verified identity', async () => {
+        await expect(
+          verify(METHOD, PATH, headers, { service: 'insights', operation: 'logs-delete' })
+        ).rejects.toMatchObject({ statusCode: 403 })
+      })
+    })
+
+    describe.each([verifyPersonalSign, verifySign, verifyEIP1654Sign])(
+      'and an address-only helper is called',
+      (helper) => {
+        it('should refuse scoped credentials even with extra JavaScript options', async () => {
+          await expect(
+            Reflect.apply(helper, undefined, [
+              Authenticator.signPayload(identity, payloadFor(Date.now())),
+              payloadFor(Date.now()),
+              { service: 'insights' }
+            ])
+          ).rejects.toMatchObject({ statusCode: 401 })
+        })
+      }
+    )
+  })
+
+  describe('and the resource resolver changes its answer on a second call', () => {
+    let resource: jest.Mock
+
+    beforeEach(async () => {
+      resource = jest.fn().mockReturnValueOnce('world:example.dcl.eth').mockReturnValue('world:other.dcl.eth')
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        operation: 'metrics-read',
+        resource
+      })
+    })
+    it('should resolve the resource only once', () => {
+      expect(resource).toHaveBeenCalledTimes(1)
+    })
+    it('should expose the exact checked value as read-only handler input', () => {
+      expect(outcome.verification?.resource).toBe('world:example.dcl.eth')
+      expect(Object.getOwnPropertyDescriptor(outcome.verification ?? {}, 'resource')?.writable).toBe(false)
+    })
+  })
+
+  describe.each(['operation', 'resource'])('and the %s callback throws', (kind) => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        optional: true,
+        operation:
+          kind === 'operation'
+            ? () => {
+                throw new Error('private detail')
+              }
+            : 'metrics-read',
+        resource:
+          kind === 'resource'
+            ? () => {
+                throw new Error('private detail')
+              }
+            : undefined
+      })
+    })
+    it('should return a controlled 403 without exposing callback details', () => {
+      expect(outcome.result).toMatchObject({
+        status: 403,
+        body: { code: 'SCOPED_RESOLUTION_FAILED', message: 'Cannot resolve the request operation or resource' }
+      })
+    })
+    it('should never run the handler, even with optional authentication', () => {
+      expect(outcome.next).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('and a configured resource resolver returns nothing', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        operation: 'logs-read',
+        resource: () => undefined
+      })
+    })
+    it('should reject rather than act on an unresolved resource', () => {
+      expect(outcome.result).toMatchObject({ status: 403, body: { code: 'SCOPED_RESOURCE_REQUIRED' } })
+    })
+  })
+
+  describe('and the default remaining-validity cap is exceeded', () => {
+    beforeEach(async () => {
+      identity = await scopedLogin(GRANTS, 48 * 60)
+      outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: 'logs-read' })
+    })
+    it('should reject the long-lived login', () => {
+      expect(outcome.result).toMatchObject({ status: 401 })
+    })
+  })
+
+  describe('and the service explicitly permits a longer remaining validity', () => {
+    beforeEach(async () => {
+      identity = await scopedLogin(GRANTS, 48 * 60)
+      outcome = await authenticate(requestSignedWith(identity), {
+        service: 'insights',
+        operation: 'logs-read',
+        maxScopedLoginLifetime: 3 * 86400000
+      })
+    })
+    it('should apply the explicit positive override', () => {
+      expect(outcome.next).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('and the middleware has no service identifier', () => {
     beforeEach(async () => {
       outcome = await authenticate(requestSignedWith(identity))
@@ -85,10 +253,14 @@ describe('when a request is signed with a scoped login', () => {
       outcome = await authenticate(requestSignedWith(identity), { service: 'insights' })
     })
 
-    it('should respond 401 saying the route does not accept scoped logins', () => {
+    it('should respond 403 with a distinct code for the unmapped operation', () => {
       expect(outcome.result).toMatchObject({
-        status: 401,
-        body: { ok: false, message: 'This route does not accept scoped logins' }
+        status: 403,
+        body: {
+          ok: false,
+          code: 'SCOPED_OPERATION_REQUIRED',
+          message: 'This route does not declare a scoped operation'
+        }
       })
     })
 
@@ -182,10 +354,14 @@ describe('when a request is signed with a scoped login', () => {
       outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: () => undefined })
     })
 
-    it('should respond 401 saying the route does not accept scoped logins', () => {
+    it('should respond 403 with a distinct code for the unmapped operation', () => {
       expect(outcome.result).toMatchObject({
-        status: 401,
-        body: { ok: false, message: 'This route does not accept scoped logins' }
+        status: 403,
+        body: {
+          ok: false,
+          code: 'SCOPED_OPERATION_REQUIRED',
+          message: 'This route does not declare a scoped operation'
+        }
       })
     })
   })
@@ -195,10 +371,14 @@ describe('when a request is signed with a scoped login', () => {
       outcome = await authenticate(requestSignedWith(identity), { service: 'insights', operation: () => '*' })
     })
 
-    it('should respond 401 saying the route does not accept scoped logins', () => {
+    it('should respond 403 with a distinct code for the unmapped operation', () => {
       expect(outcome.result).toMatchObject({
-        status: 401,
-        body: { ok: false, message: 'This route does not accept scoped logins' }
+        status: 403,
+        body: {
+          ok: false,
+          code: 'SCOPED_OPERATION_REQUIRED',
+          message: 'This route does not declare a scoped operation'
+        }
       })
     })
   })
@@ -302,6 +482,19 @@ describe('when a request is signed with a full login and the route has an operat
 
   afterEach(() => {
     jest.clearAllMocks()
+  })
+
+  describe('and the route resolves a resource', () => {
+    beforeEach(async () => {
+      outcome = await authenticate(requestSignedWith(fullLogin), {
+        service: 'insights',
+        operation: 'metrics-read',
+        resource: () => 'world:example.dcl.eth'
+      })
+    })
+    it('should pass the resolved resource to the handler for a full login too', () => {
+      expect(outcome.verification?.resource).toBe('world:example.dcl.eth')
+    })
   })
 
   it('should call next', () => {

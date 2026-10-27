@@ -1,8 +1,9 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
-import { OPERATION_FORMAT, SERVICE_FORMAT, isOperationGranted } from '@dcl/crypto'
+import { OPERATION_FORMAT, SERVICE_FORMAT } from '@dcl/crypto'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
 import { canonicalField, rejectIfSigner, requireCanonicalField, requireSigner } from './metadataValidators'
+import { authorizeVerifiedRequest } from './scoped-authorization'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_METADATA_HEADER,
@@ -17,7 +18,7 @@ import {
   RouteOperationOptions,
   VerifyAuthChainHeadersOptions
 } from './types'
-import verify, { createPayload } from './verify'
+import verify, { createPayload, verifyIdentity } from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
 export { createSignatureRpcProvider } from './rpc-provider'
@@ -97,30 +98,6 @@ function isValidOperation(operation: unknown): operation is string {
 }
 
 /**
- * Checks a verified request against the route's operation (ADR-162). A full login always passes; a
- * scoped login passes only when the route names an operation its scope grants on the resource.
- *
- * @returns The error to respond with, or undefined when the request may proceed.
- */
-function checkRouteOperation<P extends Record<string, unknown>>(
-  ctx: DecentralandSignatureRouteContext<P>,
-  verification: DecentralandSignatureData<P>,
-  options: Pick<Options<P>, 'operation' | 'resource'>
-): RequestError | undefined {
-  if (!verification.scope) {
-    return undefined
-  }
-  const operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
-  if (!isValidOperation(operation)) {
-    return new RequestError('This route does not accept scoped logins', 401)
-  }
-  if (!isOperationGranted(verification.scope, operation, options.resource?.(ctx))) {
-    return new RequestError(`The scoped login does not grant "${operation}"`, 403)
-  }
-  return undefined
-}
-
-/**
  * Well-Known Components middleware: verifies the request's signed-fetch headers (ADR-44) and sets
  * `ctx.verification`. With `service`, it also accepts scoped logins (ADR-162) on routes that declare
  * their `operation`, so create one per route.
@@ -173,7 +150,7 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
       // header set per request. `Headers.get` is case-insensitive, so this also works
       // regardless of header casing.
       const headers = pickSignatureHeaders(ctx.request.headers, options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH)
-      verification = await verify<P>(ctx.request.method, ctx.url.pathname, headers, options)
+      verification = await verifyIdentity<P>(ctx.request.method, ctx.url.pathname, headers, options)
     } catch (err) {
       if (!options.optional) {
         const { status, body } = errorToResponse(err, options)
@@ -184,8 +161,21 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
     // Outside the try: `optional` lets an unsigned request through, never a scoped login its route
     // doesn't grant.
     if (verification) {
-      const denied = checkRouteOperation(ctx as DecentralandSignatureRouteContext<P>, verification, options)
-      if (denied) {
+      try {
+        const operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
+        let resource: string | undefined
+        if (options.resource) {
+          resource = options.resource(ctx)
+          if (resource === undefined) {
+            throw new RequestError('Cannot resolve the request resource', 403, 'SCOPED_RESOURCE_REQUIRED')
+          }
+        }
+        verification = authorizeVerifiedRequest(verification, { service: options.service, operation, resource })
+      } catch (err) {
+        const denied =
+          err instanceof RequestError
+            ? err
+            : new RequestError('Cannot resolve the request operation or resource', 403, 'SCOPED_RESOLUTION_FAILED')
         const { status, body } = errorToResponse(denied, options)
         return { status, body: body as IHttpServerComponent.ResponseBody }
       }

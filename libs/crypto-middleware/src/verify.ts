@@ -1,6 +1,7 @@
 import type { AuthChain, ScopedLoginScope, ScopedLoginValidationOptions } from '@dcl/crypto'
 import { AuthLinkType, Authenticator, isScopedAuthLinkType } from '@dcl/crypto'
 import RequestError from './errors'
+import { authorizeVerifiedRequest } from './scoped-authorization'
 import { SignatureValidationInfrastructureError, validateScopedAuthChainSignature } from './signature-validation'
 import {
   AUTH_CHAIN_HEADER_PREFIX,
@@ -10,7 +11,7 @@ import {
   DEFAULT_EXPIRATION,
   DEFAULT_MAX_CHAIN_LENGTH
 } from './types'
-import type { DecentralandSignatureData, VerifyAuthChainHeadersOptions } from './types'
+import type { DecentralandSignatureData, SignatureVerificationOptions, VerifyAuthChainHeadersOptions } from './types'
 
 function firstOf(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
@@ -108,7 +109,7 @@ interface VerifiedSignature {
 }
 
 function scopedLoginOptions(
-  options: Pick<VerifyAuthChainHeadersOptions, 'service' | 'maxScopedLoginLifetime'>
+  options: Pick<SignatureVerificationOptions, 'service' | 'maxScopedLoginLifetime'>
 ): ScopedLoginValidationOptions {
   return { service: options.service, maxScopedLoginLifetimeInMillis: options.maxScopedLoginLifetime }
 }
@@ -139,8 +140,11 @@ export async function verifyPersonalSign(authChain: AuthChain, payload: string):
 export async function verifyEIP1654Sign(
   authChain: AuthChain,
   payload: string,
-  options: Pick<VerifyAuthChainHeadersOptions, 'catalyst' | 'fetcher'> = {}
+  options: Pick<SignatureVerificationOptions, 'catalyst' | 'fetcher'> = {}
 ): Promise<string> {
+  if (authChain.some((link) => isScopedAuthLinkType(link.type))) {
+    throw new RequestError('This signature helper does not accept scoped logins', 401)
+  }
   const catalyst = new URL(options.catalyst ?? DEFAULT_CATALYST)
   const ownerAddress = Authenticator.ownerAddress(authChain).toLowerCase()
   const url = `${catalyst.origin}/lambdas/crypto/validate-signature`
@@ -201,7 +205,7 @@ export async function verifyEIP1654Sign(
 }
 
 type SignOptions = Pick<
-  VerifyAuthChainHeadersOptions,
+  SignatureVerificationOptions,
   'catalyst' | 'fetcher' | 'provider' | 'maxChainLength' | 'maxRpcCalls' | 'service' | 'maxScopedLoginLifetime'
 >
 
@@ -236,8 +240,19 @@ async function verifySignature(
   return verifyPersonalSignature(authChain, payload, scopedLoginOptions(options))
 }
 
-export async function verifySign(authChain: AuthChain, payload: string, options: SignOptions = {}): Promise<string> {
-  return (await verifySignature(authChain, payload, options)).ownerAddress
+export async function verifySign(
+  authChain: AuthChain,
+  payload: string,
+  {
+    catalyst,
+    fetcher,
+    provider,
+    maxChainLength,
+    maxRpcCalls
+  }: Omit<SignOptions, 'service' | 'maxScopedLoginLifetime'> = {}
+): Promise<string> {
+  return (await verifySignature(authChain, payload, { catalyst, fetcher, provider, maxChainLength, maxRpcCalls }))
+    .ownerAddress
 }
 
 export function verifyTimestamp(value?: string | string[]): number {
@@ -279,7 +294,7 @@ export function verifyMetadata(value?: string | string[]): Record<string, unknow
 
 export function verifyExpiration(
   timestamp: number,
-  options: Pick<VerifyAuthChainHeadersOptions, 'expiration'> = {}
+  options: Pick<SignatureVerificationOptions, 'expiration'> = {}
 ): void {
   const expiration = options.expiration ?? DEFAULT_EXPIRATION
   const now = Date.now()
@@ -441,11 +456,16 @@ export function assertLegacyMetadataKeys(metadata: Record<string, unknown>, cano
   }
 }
 
-export default async function verify<P extends Record<string, unknown> = Record<string, unknown>>(
+/**
+ * Internal identity/signature validation. This does not authorize an action: request callers MUST
+ * use the public `verify` wrapper or authorize the result before acting.
+ * @internal
+ */
+export async function verifyIdentity<P extends Record<string, unknown> = Record<string, unknown>>(
   method: string,
   path: string,
   headers: Record<string, string | string[] | undefined>,
-  options: VerifyAuthChainHeadersOptions<P> = {}
+  options: SignatureVerificationOptions<P> = {}
 ): Promise<DecentralandSignatureData<P>> {
   // Read each header once; the timestamp and metadata are needed both for validation
   // and for the signed payload below.
@@ -494,4 +514,19 @@ export default async function verify<P extends Record<string, unknown> = Record<
     authMetadata: metadata,
     ...(verified.scope ? { scope: verified.scope } : {})
   }
+}
+
+/** Verify signed-fetch and authorize its resolved action; a service opt-in requires an operation. */
+export default async function verify<P extends Record<string, unknown> = Record<string, unknown>>(
+  method: string,
+  path: string,
+  headers: Record<string, string | string[] | undefined>,
+  options: VerifyAuthChainHeadersOptions<P> = {}
+): Promise<DecentralandSignatureData<P>> {
+  const { service, operation, resource } = options
+  return authorizeVerifiedRequest(await verifyIdentity(method, path, headers, options), {
+    service,
+    operation,
+    resource
+  })
 }

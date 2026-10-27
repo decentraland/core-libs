@@ -92,7 +92,7 @@ describe('when verifying contract signatures with a supplied provider', () => {
   let timestamp: number
   let metadata: Record<string, unknown>
   let payload: string
-  let options: Options
+  let options: Omit<Options, 'service' | 'operation' | 'resource' | 'maxScopedLoginLifetime'>
   let outcome: Outcome
 
   beforeEach(() => {

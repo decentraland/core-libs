@@ -15,6 +15,8 @@ export type ScopedAuthLinkType = (typeof ScopedAuthLinkType)[keyof typeof Scoped
 
 /** First line of a scoped login message. Distinct from "Decentraland Login", so one never parses as the other. */
 export const SCOPED_LOGIN_PREFIX = 'Decentraland Scoped Login'
+/** Default maximum remaining validity of a scoped delegation: 24 hours. */
+export const DEFAULT_MAX_SCOPED_LOGIN_LIFETIME_IN_MILLIS = 24 * 60 * 60 * 1000
 export const MAX_SCOPED_LOGIN_GRANTS = 32
 export const MAX_SCOPED_LOGIN_PAYLOAD_BYTES = 4096
 

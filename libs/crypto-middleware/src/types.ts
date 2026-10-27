@@ -18,7 +18,7 @@ export const AUTH_TIMESTAMP_HEADER = _AUTH_TIMESTAMP_HEADER
 export const DEFAULT_CATALYST = 'https://peer.decentraland.org'
 export const DEFAULT_EXPIRATION = 1000 * 60
 export const DEFAULT_MAX_CHAIN_LENGTH = 10
-export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string } => {
+export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string; code?: string } => {
   const statusCode = err instanceof RequestError ? err.statusCode : 500
   // 5xx responses hide the internal message to avoid echoing backend detail
   // (catalyst hostnames, upstream errors) to clients. Consumers that need
@@ -26,7 +26,7 @@ export const DEFAULT_ERROR_FORMAT = (err: Error): { ok: false; message: string }
   if (statusCode >= 500) {
     return { ok: false, message: 'Internal error' }
   }
-  return { ok: false, message: err.message }
+  return { ok: false, message: err.message, ...(err instanceof RequestError && err.code ? { code: err.code } : {}) }
 }
 
 export interface DecentralandSignatureData<P extends Record<string, unknown> = Record<string, unknown>> {
@@ -35,9 +35,11 @@ export interface DecentralandSignatureData<P extends Record<string, unknown> = R
   /**
    * Set when the request was signed with a scoped login (ADR-162): the operations it may perform on
    * this service. Absent for a full login, which may perform every operation. The middleware has
-   * already checked the route's `operation` against it.
+   * already checked the request's `operation` against it. Low-level identity validators alone do not authorize actions.
    */
   scope?: ScopedLoginScope
+  /** Canonical resource resolved once and authorized by the verifier. Handlers MUST act on this value. */
+  readonly resource?: string
 }
 
 export interface DecentralandSignatureContext<P extends Record<string, unknown> = Record<string, unknown>> {
@@ -48,7 +50,7 @@ export interface DecentralandSignatureRequiredContext<P extends Record<string, u
   verification: DecentralandSignatureData<P>
 }
 
-export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown> = Record<string, unknown>> {
+export interface SignatureVerificationOptions<P extends Record<string, unknown> = Record<string, unknown>> {
   /** Validates signatures directly on the configured chain instead of consulting Catalyst. */
   provider?: AuthChainProvider
   catalyst?: string
@@ -60,13 +62,11 @@ export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown>
   metadataValidator?: (metadata: P) => boolean
   /**
    * Identifier of this service (e.g. `insights`), which opts it into scoped logins (ADR-162).
-   * Without it, a request signed with a scoped login is rejected. With it, `verify()` accepts one
-   * that grants something to this service, and `verification.scope` lists what; the middleware
-   * also requires the route's `operation` to be granted. Contract-wallet scoped logins are
-   * validated only with `provider`; the catalyst does not validate them.
+   * Without it, scoped signatures are rejected. Request APIs must additionally authorize an operation.
+   * Contract-wallet scoped logins require `provider`; the catalyst does not validate them.
    */
   service?: string
-  /** With `service`: rejects scoped logins that expire further than this many millis from now. */
+  /** With `service`: maximum remaining chain validity in milliseconds (default 24 hours). */
   maxScopedLoginLifetime?: number
   /**
    * Metadata property names this service authorizes on, in their canonical spelling. Dotted paths
@@ -93,6 +93,16 @@ export interface VerifyAuthChainHeadersOptions<P extends Record<string, unknown>
   canonicalMetadataKeys?: string[]
 }
 
+/** Signed requests must declare the action when they opt into scoped credentials. */
+export type VerifyAuthChainHeadersOptions<P extends Record<string, unknown> = Record<string, unknown>> = Omit<
+  SignatureVerificationOptions<P>,
+  'service' | 'maxScopedLoginLifetime'
+> &
+  (
+    | { service?: undefined; operation?: never; resource?: never; maxScopedLoginLifetime?: never }
+    | { service: string; operation: string; resource?: string; maxScopedLoginLifetime?: number }
+  )
+
 export interface SessionOptions {
   optional?: boolean
   onError?: (err: Error) => unknown
@@ -105,7 +115,7 @@ export interface RouteOperationOptions<P extends Record<string, unknown> = Recor
   /**
    * With `service`: the one operation this route performs (e.g. `logs-read`), or a function choosing
    * it from the request. A request signed with a scoped login is rejected with 403 when the login
-   * doesn't grant it, and with 401 when the route has none (absent, or the function returns
+   * doesn't grant it, and with 403/SCOPED_OPERATION_REQUIRED when the route has none (absent, or the function returns
    * `undefined`), so a scoped login reaches only routes that declare what they do. A full login
    * always passes. `*` is not an operation.
    */
@@ -114,6 +124,6 @@ export interface RouteOperationOptions<P extends Record<string, unknown> = Recor
   resource?: (ctx: DecentralandSignatureRouteContext<P>) => string | undefined
 }
 
-export type Options<P extends Record<string, unknown> = Record<string, unknown>> = VerifyAuthChainHeadersOptions<P> &
+export type Options<P extends Record<string, unknown> = Record<string, unknown>> = SignatureVerificationOptions<P> &
   SessionOptions &
   RouteOperationOptions<P>

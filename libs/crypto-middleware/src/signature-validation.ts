@@ -36,10 +36,10 @@ export interface ScopedSignatureValidationOptions extends SignatureValidationOpt
 /**
  * Validates an identity or signed-fetch chain with bounded RPC work.
  * The scoped provider stops new calls after completion and aborts an in-flight fetch on timeout.
- * @param authChain Chain to validate: a SIGNER link followed by at least one signature link.
- * @param expectedFinalAuthority Ephemeral address or signed-fetch payload expected at the end.
  * Scoped logins (ADR-162) are always rejected: this function can't check the operation they are
  * used for. Accept them through the middleware's `service` and `operation` options.
+ * @param authChain Chain to validate: a SIGNER link followed by at least one signature link.
+ * @param expectedFinalAuthority Ephemeral address or signed-fetch payload expected at the end.
  * @param l1Provider Provider for this environment's Ethereum network.
  * @throws SignatureValidationInfrastructureError when RPC infrastructure fails or validation times out.
  * @throws Error when the chain is invalid, exceeds its RPC call budget, or the options are invalid.

@@ -117,7 +117,7 @@ deployment never checks headers on mainnet while checking bodies on Sepolia.
 | `metadataValidator` | `(metadata: P) => boolean` | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.          |
 | `onError`           | `(err: Error) => any`      | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.   |
 | `service`           | `string`                   | Identifier of this service (e.g. `insights`), which opts it into scoped logins. See below.                      |
-| `maxScopedLoginLifetime` | `number`              | With `service`: rejects scoped logins expiring further than this many milliseconds from now.                   |
+| `maxScopedLoginLifetime` | `number`              | Maximum remaining chain validity; defaults to 24 hours. A positive override is explicit service policy.                   |
 | `operation`         | `string \| (ctx) => string \| undefined` | With `service`: the one operation this route performs. Scoped logins are rejected on routes without one. |
 | `resource`          | `(ctx) => string \| undefined` | With `operation`: the resource the request acts on.                                                          |
 
@@ -148,7 +148,7 @@ router.put('/v1/settings', auth(), settingsHandler)
 
 - A request signed with a full login (`Decentraland Login`) passes every route, as before.
 - A scoped login passes a route only when it grants the route's operation on its resource, and `ctx.verification.scope` then lists its grants for this service. It gets 403 when the grant is missing.
-- A route without an operation, or whose `operation` function returns `undefined`, rejects scoped logins with 401. A route nobody mapped therefore stays closed to them.
+- A route without an operation, or whose `operation` function returns `undefined`, rejects scoped logins with 403 and code `SCOPED_OPERATION_REQUIRED`. A route nobody mapped therefore stays closed to them.
 - Each request performs exactly one operation. A route whose behavior depends on the request chooses it with a function; there is no list of operations.
 - `optional` lets unsigned requests through, never a scoped login the route doesn't grant.
 - `operation` without `service`, and `resource` without `operation`, throw at creation.
@@ -156,6 +156,50 @@ router.put('/v1/settings', auth(), settingsHandler)
 Authenticate per route: a global `router.use(wellKnownComponents({ service }))` has no operation, so it rejects every scoped login before a route's own middleware runs.
 
 Resources are compared exactly. Build them in the canonical form your service documents, such as lowercase world names, or a grant written for `world:example.dcl.eth` won't match a request for `Example.dcl.eth` (a 403, never extra access).
+
+Resource callbacks run once. The middleware exposes the exact checked canonical value
+as read-only `ctx.verification.resource`, including on full-login requests to that
+route. **Handlers must use that value** for permission checks and data access;
+reading the URL, metadata or body again can check one world and act on another.
+
+```ts
+async function metricsHandler(ctx) {
+  const resource = ctx.verification.resource // checked canonical world identity
+  return readMetricsForAuthorizedResource(ctx.verification.auth, resource)
+}
+```
+
+A configured resolver returning `undefined` gets 403/`SCOPED_RESOURCE_REQUIRED`.
+A throwing operation/resource callback gets 403/`SCOPED_RESOLUTION_FAILED` and
+never runs the handler, including with `optional`. Responses hide callback details.
+
+For direct signed-fetch or WebSocket callers, `verify` requires the action when
+opting in. Pass resolved static values, and act on the returned resource:
+
+```ts
+const verification = await verify(method, path, headers, {
+  service: 'insights', operation: 'metrics-read', resource: canonicalWorldResource
+})
+await readMetricsForAuthorizedResource(verification.auth, verification.resource)
+```
+
+`Authenticator.authorizeSignature` provides the action-aware API for arbitrary
+signed payloads. `Authenticator.validateSignature` is identity/signature validation
+only: its `ok` and `scope` do not authorize an action. Address-only helpers and
+`validateAuthChainSignature` reject scoped credentials even when JavaScript callers
+supply extra service options.
+
+The default maximum remaining validity is 24 hours; configure a positive
+`maxScopedLoginLifetime` to make another policy explicit. `scope.expiration` is the
+earliest expiration of the whole chain, and must bound any derived session TTL.
+There is no revocation. Clients requesting `service:*` must warn that it includes
+future operations, including destructive/admin actions. The Insights CLI should
+request only `insights:logs-read` and `insights:metrics-read`.
+
+Credentials have no audience/host binding. An `insights` grant can be used across
+`.zone` and `.org`; clients must disclose that scope. Services requiring separation
+must use distinct identifiers such as `insights-zone` and `insights-org`.
+Consumers schema-validating chains must first adopt schemas with the new link types.
 
 A grant never adds access: authorize the signer (`ctx.verification.auth`) as you do for a full login. `isOperationGranted(scope, operation, resource?)` is exported for further checks inside handlers.
 

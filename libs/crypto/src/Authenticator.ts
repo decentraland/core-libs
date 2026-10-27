@@ -9,10 +9,15 @@ import {
 import Blocks from './helper/blocks'
 import { moveMinutes } from './helper/utils'
 import {
+  DEFAULT_MAX_SCOPED_LOGIN_LIFETIME_IN_MILLIS,
+  OPERATION_FORMAT,
+  RESOURCE_FORMAT,
   SERVICE_FORMAT,
   ScopedAuthLinkType,
   findScopedLink,
   getScopedEphemeralMessage,
+  isOperationGranted,
+  isScopedAuthLinkType,
   parseScopedEphemeralPayload
 } from './scoped-login'
 import { AuthLinkType } from './types'
@@ -22,8 +27,10 @@ import type {
   AuthLink,
   EthAddress,
   IdentityType,
+  RequestAuthorizationResult,
   ScopedLoginGrant,
   ScopedLoginValidationOptions,
+  ScopedRequestAuthorizationOptions,
   Signature,
   ValidationResult
 } from './types'
@@ -39,6 +46,8 @@ const PERSONAL_SIGNATURE_LENGTH = 132
  *
  * A chain with a scoped login link (ADR-162) is valid only when `options.service` is set and the
  * login grants something to that service; the result then carries those grants in `scope`.
+ * This validates a stored identity/signature, not permission to perform an action. Request callers
+ * MUST use `authorizeSignature`, or check the operation and resource before acting.
  */
 export async function validateSignature(
   expectedFinalAuthority: string,
@@ -48,6 +57,7 @@ export async function validateSignature(
   options: ScopedLoginValidationOptions = {}
 ): Promise<ValidationResult> {
   let currentAuthority = ''
+  let effectiveExpiration = Infinity
 
   if (!isValidAuthChain(authChain)) {
     return {
@@ -74,6 +84,16 @@ export async function validateSignature(
         dateToValidateExpirationInMillis
       })
       currentAuthority = nextAuthority ? nextAuthority : ''
+      if (scopedLinkIndex !== undefined) {
+        if (isScopedAuthLinkType(authLink.type)) {
+          effectiveExpiration = Math.min(effectiveExpiration, parseScopedEphemeralPayload(authLink.payload).expiration)
+        } else if (
+          authLink.type === AuthLinkType.ECDSA_PERSONAL_EPHEMERAL ||
+          authLink.type === AuthLinkType.ECDSA_EIP_1654_EPHEMERAL
+        ) {
+          effectiveExpiration = Math.min(effectiveExpiration, parseEphemeralPayload(authLink.payload).expiration)
+        }
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       return {
@@ -94,16 +114,20 @@ export async function validateSignature(
     }
   }
 
-  return scopeOf(authChain[scopedLinkIndex], dateToValidateExpirationInMillis, options)
+  return scopeOf(authChain[scopedLinkIndex], effectiveExpiration, dateToValidateExpirationInMillis, options)
 }
 
 /** The grants of an already validated scoped link for the verifier's service, or why it is refused. */
 function scopeOf(
   authLink: AuthLink,
+  expiration: number,
   dateToValidateExpirationInMillis: number,
-  { service, maxScopedLoginLifetimeInMillis }: ScopedLoginValidationOptions
+  {
+    service,
+    maxScopedLoginLifetimeInMillis = DEFAULT_MAX_SCOPED_LOGIN_LIFETIME_IN_MILLIS
+  }: ScopedLoginValidationOptions
 ): ValidationResult {
-  const { expiration, grants } = parseScopedEphemeralPayload(authLink.payload)
+  const { grants } = parseScopedEphemeralPayload(authLink.payload)
   const granted = grants.filter((grant) => grant.service === service)
   if (granted.length === 0) {
     return { ok: false, message: `ERROR: The scoped login grants nothing to "${service}"` }
@@ -118,6 +142,50 @@ function scopeOf(
     }
   }
   return { ok: true, message: undefined, scope: { service: service as string, expiration, grants: granted } }
+}
+
+/**
+ * Validate a chain and authorize one request action. Unlike identity validation, an operation and
+ * service are required, including for non-HTTP consumers such as WebSocket handshakes.
+ */
+export async function authorizeSignature(
+  expectedFinalAuthority: string,
+  authChain: AuthChain,
+  provider: unknown,
+  options: ScopedRequestAuthorizationOptions,
+  dateToValidateExpirationInMillis: number = Date.now()
+): Promise<RequestAuthorizationResult> {
+  if (
+    !options ||
+    !SERVICE_FORMAT.test(options.service ?? '') ||
+    typeof options.operation !== 'string' ||
+    options.operation === '*' ||
+    !OPERATION_FORMAT.test(options.operation) ||
+    (options.resource !== undefined &&
+      (typeof options.resource !== 'string' || !RESOURCE_FORMAT.test(options.resource)))
+  ) {
+    return { ok: false, message: 'ERROR: Request authorization requires a service, operation and valid resource' }
+  }
+  const last = Array.isArray(authChain) ? authChain[authChain.length - 1] : undefined
+  if (
+    !last ||
+    (last.type !== AuthLinkType.ECDSA_PERSONAL_SIGNED_ENTITY && last.type !== AuthLinkType.ECDSA_EIP_1654_SIGNED_ENTITY)
+  ) {
+    return { ok: false, message: 'ERROR: Request authorization requires a signed request payload' }
+  }
+  const { service, operation, resource, maxScopedLoginLifetimeInMillis } = options
+  const result = await validateSignature(
+    expectedFinalAuthority,
+    authChain,
+    provider,
+    dateToValidateExpirationInMillis,
+    { service, maxScopedLoginLifetimeInMillis }
+  )
+  if (!result.ok) return result
+  if (isOperationGranted(result.scope, operation, resource)) {
+    return Object.freeze({ ...result, operation, ...(resource === undefined ? {} : { resource }) })
+  }
+  return { ok: false, message: 'ERROR: The scoped login does not grant this operation on this resource' }
 }
 
 export function isValidAuthChain(authChain: AuthChain): boolean {
@@ -286,6 +354,7 @@ export function getEphemeralMessage(ephemeralAddress: string, expiration: Date):
 
 export const Authenticator = {
   validateSignature,
+  authorizeSignature,
   isValidAuthChain,
   createEIP1271MessageHash,
   createSimpleAuthChain,
