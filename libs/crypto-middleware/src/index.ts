@@ -162,13 +162,16 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
     // doesn't grant.
     if (verification) {
       try {
-        const operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
+        let operation: string | undefined
         let resource: string | undefined
-        if (options.resource) {
-          resource = options.resource(ctx)
-          if (resource === undefined) {
-            throw new RequestError('Cannot resolve the request resource', 403, 'SCOPED_RESOURCE_REQUIRED')
-          }
+        try {
+          operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
+          resource = options.resource?.(ctx)
+        } catch {
+          throw new RequestError('Cannot resolve the request operation or resource', 403, 'SCOPED_RESOLUTION_FAILED')
+        }
+        if (options.resource && resource === undefined) {
+          throw new RequestError('Cannot resolve the request resource', 403, 'SCOPED_RESOURCE_REQUIRED')
         }
         verification = authorizeVerifiedRequest(verification, { service: options.service, operation, resource })
       } catch (err) {

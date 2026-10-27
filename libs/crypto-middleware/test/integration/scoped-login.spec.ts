@@ -3,6 +3,7 @@ import type { IFetchComponent, IHttpServerComponent } from '@dcl/core-commons'
 import { AuthLinkType, Authenticator, ScopedAuthLinkType } from '@dcl/crypto'
 import type { AuthChain, AuthIdentity, ScopedLoginGrant } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
+import RequestError from '../../src/errors'
 import { verify, wellKnownComponents } from '../../src/index'
 import { validateScopedAuthChainSignature } from '../../src/signature-validation'
 import { verifyEIP1654Sign, verifyPersonalSign, verifySign } from '../../src/verify'
@@ -164,35 +165,32 @@ describe('when a request is signed with a scoped login', () => {
     })
   })
 
-  describe.each(['operation', 'resource'])('and the %s callback throws', (kind) => {
-    beforeEach(async () => {
-      outcome = await authenticate(requestSignedWith(identity), {
-        service: 'insights',
-        optional: true,
-        operation:
-          kind === 'operation'
-            ? () => {
-                throw new Error('private detail')
-              }
-            : 'metrics-read',
-        resource:
-          kind === 'resource'
-            ? () => {
-                throw new Error('private detail')
-              }
-            : undefined
+  describe.each(['operation', 'resource', 'operation-request-error', 'resource-request-error'])(
+    'and the %s callback throws',
+    (kind) => {
+      beforeEach(async () => {
+        const fail = () => {
+          if (kind.endsWith('request-error')) throw new RequestError('private detail', 403)
+          throw new Error('private detail')
+        }
+        outcome = await authenticate(requestSignedWith(identity), {
+          service: 'insights',
+          optional: true,
+          operation: kind.startsWith('operation') ? fail : 'metrics-read',
+          resource: kind.startsWith('resource') ? fail : undefined
+        })
       })
-    })
-    it('should return a controlled 403 without exposing callback details', () => {
-      expect(outcome.result).toMatchObject({
-        status: 403,
-        body: { code: 'SCOPED_RESOLUTION_FAILED', message: 'Cannot resolve the request operation or resource' }
+      it('should return a controlled 403 without exposing callback details', () => {
+        expect(outcome.result).toMatchObject({
+          status: 403,
+          body: { code: 'SCOPED_RESOLUTION_FAILED', message: 'Cannot resolve the request operation or resource' }
+        })
       })
-    })
-    it('should never run the handler, even with optional authentication', () => {
-      expect(outcome.next).not.toHaveBeenCalled()
-    })
-  })
+      it('should never run the handler, even with optional authentication', () => {
+        expect(outcome.next).not.toHaveBeenCalled()
+      })
+    }
+  )
 
   describe('and a configured resource resolver returns nothing', () => {
     beforeEach(async () => {
