@@ -150,6 +150,42 @@ describe('when a request is signed with a scoped login', () => {
     )
   })
 
+  describe('and verification options are shared with the middleware', () => {
+    let sharedOptions: VerifyAuthChainHeadersOptions
+
+    beforeEach(() => {
+      sharedOptions = { service: 'insights', operation: 'metrics-read', resource: 'world:example.dcl.eth' }
+    })
+
+    describe('and the static resource is granted', () => {
+      beforeEach(async () => {
+        outcome = await authenticate(requestSignedWith(identity), { ...sharedOptions, optional: true })
+      })
+      it('should expose the checked static resource', () => {
+        expect(outcome.verification?.resource).toBe('world:example.dcl.eth')
+      })
+      it('should run the handler', () => {
+        expect(outcome.next).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    describe.each(['world:other.dcl.eth', 'invalid resource', ''])(
+      'and the static resource %s is not authorized',
+      (resource) => {
+        beforeEach(async () => {
+          sharedOptions.resource = resource
+          outcome = await authenticate(requestSignedWith(identity), { ...sharedOptions, optional: true })
+        })
+        it('should return forbidden', () => {
+          expect(outcome.result).toMatchObject({ status: 403 })
+        })
+        it('should never run the handler', () => {
+          expect(outcome.next).not.toHaveBeenCalled()
+        })
+      }
+    )
+  })
+
   describe('and the resource resolver changes its answer on a second call', () => {
     let resource: jest.Mock
 

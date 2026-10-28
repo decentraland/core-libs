@@ -169,11 +169,11 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
         let resource: string | undefined
         try {
           operation = typeof options.operation === 'function' ? options.operation(ctx) : options.operation
-          resource = options.resource?.(ctx)
+          resource = typeof options.resource === 'function' ? options.resource(ctx) : options.resource
         } catch {
           throw new RequestError('Cannot resolve the request operation or resource', 403, 'SCOPED_RESOLUTION_FAILED')
         }
-        if (options.resource && resource === undefined) {
+        if (options.resource !== undefined && resource === undefined) {
           throw new RequestError('Cannot resolve the request resource', 403, 'SCOPED_RESOURCE_REQUIRED')
         }
         verification = authorizeVerifiedRequest(verification, { service: options.service, operation, resource })

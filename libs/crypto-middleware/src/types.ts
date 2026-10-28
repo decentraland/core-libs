@@ -125,7 +125,7 @@ export interface RouteOperationOptions<P extends Record<string, unknown> = Recor
    */
   operation?: string | ((ctx: DecentralandSignatureRouteContext<P>) => string | undefined)
   /** With `operation`: the resource the request acts on, matched against grants limited to one. */
-  resource?: (ctx: DecentralandSignatureRouteContext<P>) => string | undefined
+  resource?: string | ((ctx: DecentralandSignatureRouteContext<P>) => string | undefined)
 }
 
 export type Options<P extends Record<string, unknown> = Record<string, unknown>> = SignatureVerificationOptions<P> &

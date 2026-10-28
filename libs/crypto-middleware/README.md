@@ -119,7 +119,7 @@ deployment never checks headers on mainnet while checking bodies on Sepolia.
 | `service`           | `string`                   | Identifier of this service (e.g. `insights`), which opts it into scoped logins. See below.                      |
 | `maxScopedLoginLifetime` | `number`              | Maximum remaining chain validity; defaults to 24 hours. A positive override is explicit service policy.                   |
 | `operation`         | `string \| (ctx) => string \| undefined` | With `service`: the one operation this route performs. Scoped logins are rejected on routes without one. |
-| `resource`          | `(ctx) => string \| undefined` | With `operation`: the resource the request acts on.                                                          |
+| `resource`          | `string \| ((ctx) => string \| undefined)` | With `operation`: the resource the request acts on.                                                          |
 
 ## Scoped logins
 
@@ -159,6 +159,8 @@ Authenticate per route: a global `router.use(wellKnownComponents({ service }))` 
 Resources are compared exactly. Build them in the canonical form your service documents, such as lowercase world names, or a grant written for `world:example.dcl.eth` won't match a request for `Example.dcl.eth` (a 403, never extra access).
 
 Resolve operations and resources from pathname parameters or verified signed metadata. ADR-44 signs the pathname, not query parameters; do not use unsigned query parameters to choose an authorized action or resource.
+
+The middleware accepts a static canonical resource string or a resource callback. Shared `VerifyAuthChainHeadersOptions` can be spread into `wellKnownComponents`; static resources receive the same format and grant checks as callback results.
 
 Resource callbacks run once. The middleware exposes the exact checked canonical value
 as read-only `ctx.verification.resource`, including on full-login requests to that
