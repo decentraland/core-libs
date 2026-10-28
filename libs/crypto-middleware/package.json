@@ -40,5 +40,80 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./dist/index": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./dist/index.js": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./dist/types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./dist/types.js": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./dist/createAuthChainHeaders": {
+      "types": "./dist/createAuthChainHeaders.d.ts",
+      "default": "./dist/createAuthChainHeaders.js"
+    },
+    "./dist/createAuthChainHeaders.js": {
+      "types": "./dist/createAuthChainHeaders.d.ts",
+      "default": "./dist/createAuthChainHeaders.js"
+    },
+    "./dist/rpc-provider": {
+      "types": "./dist/rpc-provider.d.ts",
+      "default": "./dist/rpc-provider.js"
+    },
+    "./dist/rpc-provider.js": {
+      "types": "./dist/rpc-provider.d.ts",
+      "default": "./dist/rpc-provider.js"
+    },
+    "./dist/signature-validation": {
+      "types": "./dist/signature-validation.d.ts",
+      "default": "./dist/signature-validation.js"
+    },
+    "./dist/signature-validation.js": {
+      "types": "./dist/signature-validation.d.ts",
+      "default": "./dist/signature-validation.js"
+    },
+    "./dist/errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./dist/errors.js": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./dist/verify": {
+      "types": "./dist/verify.d.ts",
+      "default": "./dist/verify.js"
+    },
+    "./dist/verify.js": {
+      "types": "./dist/verify.d.ts",
+      "default": "./dist/verify.js"
+    },
+    "./dist/metadataValidators": {
+      "types": "./dist/metadataValidators.d.ts",
+      "default": "./dist/metadataValidators.js"
+    },
+    "./dist/metadataValidators.js": {
+      "types": "./dist/metadataValidators.d.ts",
+      "default": "./dist/metadataValidators.js"
+    },
+    "./dist": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   }
 }

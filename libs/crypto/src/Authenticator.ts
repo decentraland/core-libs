@@ -10,13 +10,11 @@ import Blocks from './helper/blocks'
 import { moveMinutes } from './helper/utils'
 import {
   DEFAULT_MAX_SCOPED_LOGIN_LIFETIME_IN_MILLIS,
-  OPERATION_FORMAT,
-  RESOURCE_FORMAT,
   SERVICE_FORMAT,
   ScopedAuthLinkType,
+  authorizeScope,
   findScopedLink,
   getScopedEphemeralMessage,
-  isOperationGranted,
   isScopedAuthLinkType,
   parseScopedEphemeralPayload
 } from './scoped-login'
@@ -132,14 +130,12 @@ function scopeOf(
   if (granted.length === 0) {
     return { ok: false, message: `ERROR: The scoped login grants nothing to "${service}"` }
   }
-  if (maxScopedLoginLifetimeInMillis !== undefined) {
-    // A misconfigured cap (NaN, Infinity, a negative number) rejects every scoped login.
-    if (
-      !(Number.isFinite(maxScopedLoginLifetimeInMillis) && maxScopedLoginLifetimeInMillis > 0) ||
-      expiration - dateToValidateExpirationInMillis > maxScopedLoginLifetimeInMillis
-    ) {
-      return { ok: false, message: 'ERROR: The scoped login lasts longer than this verifier accepts' }
-    }
+  // A misconfigured cap (NaN, Infinity, a negative number) rejects every scoped login.
+  if (
+    !(Number.isFinite(maxScopedLoginLifetimeInMillis) && maxScopedLoginLifetimeInMillis > 0) ||
+    expiration - dateToValidateExpirationInMillis > maxScopedLoginLifetimeInMillis
+  ) {
+    return { ok: false, message: 'ERROR: The scoped login lasts longer than this verifier accepts' }
   }
   return { ok: true, message: undefined, scope: { service: service as string, expiration, grants: granted } }
 }
@@ -155,15 +151,7 @@ export async function authorizeSignature(
   options: ScopedRequestAuthorizationOptions,
   dateToValidateExpirationInMillis: number = Date.now()
 ): Promise<RequestAuthorizationResult> {
-  if (
-    !options ||
-    !SERVICE_FORMAT.test(options.service ?? '') ||
-    typeof options.operation !== 'string' ||
-    options.operation === '*' ||
-    !OPERATION_FORMAT.test(options.operation) ||
-    (options.resource !== undefined &&
-      (typeof options.resource !== 'string' || !RESOURCE_FORMAT.test(options.resource)))
-  ) {
+  if (!options || !authorizeScope(undefined, options).ok) {
     return { ok: false, message: 'ERROR: Request authorization requires a service, operation and valid resource' }
   }
   const last = Array.isArray(authChain) ? authChain[authChain.length - 1] : undefined
@@ -182,7 +170,7 @@ export async function authorizeSignature(
     { service, maxScopedLoginLifetimeInMillis }
   )
   if (!result.ok) return result
-  if (isOperationGranted(result.scope, operation, resource)) {
+  if (authorizeScope(result.scope, { service, operation, resource }).ok) {
     return Object.freeze({ ...result, operation, ...(resource === undefined ? {} : { resource }) })
   }
   return { ok: false, message: 'ERROR: The scoped login does not grant this operation on this resource' }

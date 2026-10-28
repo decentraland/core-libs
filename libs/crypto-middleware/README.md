@@ -142,11 +142,12 @@ const auth = (route: Pick<Options, 'operation' | 'resource'> = {}) =>
 router.get('/v1/logs', auth({ operation: 'logs-read' }), logsHandler)
 router.get('/v1/worlds/:world/metrics',
   auth({ operation: 'metrics-read', resource: (ctx) => `world:${ctx.params.world.toLowerCase()}` }), metricsHandler)
-router.delete('/v1/logs', auth({ operation: (ctx) => (ctx.url.searchParams.has('all') ? 'logs-purge' : 'logs-delete') }), deleteHandler)
+router.delete('/v1/logs/:id', auth({ operation: 'logs-delete' }), deleteHandler)
+router.delete('/v1/logs', auth({ operation: 'logs-purge' }), purgeHandler)
 router.put('/v1/settings', auth(), settingsHandler)
 ```
 
-- A request signed with a full login (`Decentraland Login`) passes every route, as before.
+- A request signed with a full login (`Decentraland Login`) needs no operation grant. On routes with a resource resolver, that resolver must still return a valid resource; unresolved or malformed resources and resolver exceptions get 403, using the same `SCOPED_*` codes as scoped requests.
 - A scoped login passes a route only when it grants the route's operation on its resource, and `ctx.verification.scope` then lists its grants for this service. It gets 403 when the grant is missing.
 - A route without an operation, or whose `operation` function returns `undefined`, rejects scoped logins with 403 and code `SCOPED_OPERATION_REQUIRED`. A route nobody mapped therefore stays closed to them.
 - Each request performs exactly one operation. A route whose behavior depends on the request chooses it with a function; there is no list of operations.
@@ -156,6 +157,8 @@ router.put('/v1/settings', auth(), settingsHandler)
 Authenticate per route: a global `router.use(wellKnownComponents({ service }))` has no operation, so it rejects every scoped login before a route's own middleware runs.
 
 Resources are compared exactly. Build them in the canonical form your service documents, such as lowercase world names, or a grant written for `world:example.dcl.eth` won't match a request for `Example.dcl.eth` (a 403, never extra access).
+
+Resolve operations and resources from pathname parameters or verified signed metadata. ADR-44 signs the pathname, not query parameters; do not use unsigned query parameters to choose an authorized action or resource.
 
 Resource callbacks run once. The middleware exposes the exact checked canonical value
 as read-only `ctx.verification.resource`, including on full-login requests to that
@@ -173,8 +176,9 @@ A configured resolver returning `undefined` gets 403/`SCOPED_RESOURCE_REQUIRED`.
 A throwing operation/resource callback gets 403/`SCOPED_RESOLUTION_FAILED` and
 never runs the handler, including with `optional`. Responses hide callback details.
 
-For direct signed-fetch or WebSocket callers, `verify` requires the action when
-opting in. Pass resolved static values, and act on the returned resource:
+For direct signed-fetch or WebSocket callers, `verify` requires the action at runtime when
+opting in. `VerifyAuthChainHeadersOptions` remains an extensible interface for compatibility;
+use `ScopedVerifyOptions` to require the service and operation in TypeScript too. Pass resolved static values, and act on the returned resource:
 
 ```ts
 const verification = await verify(method, path, headers, {
@@ -358,3 +362,14 @@ The same applies to any other field your service authorizes on.
 - Metadata validation error is now `Invalid metadata content: <json>` (was `Invalid metadata`).
 - The Express and Koa adapters have been removed; use `wellKnownComponents`.
 - **Behavior change:** the signed payload no longer lowercases the metadata — see [From 5.x](#from-5x-breaking-signed-payload-format) below, which applies to you too.
+
+## Package entry points
+
+Import from `@dcl/crypto-middleware` for the supported public API. Existing
+`dist/index`, `dist/types`, `dist/createAuthChainHeaders`, `dist/rpc-provider`,
+`dist/signature-validation`, `dist/errors`, `dist/verify` and `dist/metadataValidators`
+imports remain available, with or without `.js`. Internal verification modules
+are excluded from package exports, and `dist/verify` does not expose identity-only
+verification. The scoped identity-only validator is likewise excluded from
+`dist/signature-validation`; its public address-only validator continues to reject
+scoped credentials. Low-level signature validation is not request authorization.

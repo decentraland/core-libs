@@ -5,11 +5,16 @@ import type { AuthChain, AuthIdentity, ScopedLoginGrant } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import RequestError from '../../src/errors'
 import { verify, wellKnownComponents } from '../../src/index'
-import { validateScopedAuthChainSignature } from '../../src/signature-validation'
+import { validateScopedAuthChainSignature } from '../../src/internal-signature-validation'
 import { verifyEIP1654Sign, verifyPersonalSign, verifySign } from '../../src/verify'
 import { identity as fullLogin } from '../fixtures/identity'
 import type { AuthChainProvider } from '../../src/rpc-provider'
-import type { DecentralandSignatureContext, DecentralandSignatureData, Options } from '../../src/types'
+import type {
+  DecentralandSignatureContext,
+  DecentralandSignatureData,
+  Options,
+  VerifyAuthChainHeadersOptions
+} from '../../src/types'
 
 // Drives the real middleware, so a scoped login is exercised through the path a request takes.
 
@@ -482,6 +487,34 @@ describe('when a request is signed with a full login and the route has an operat
     jest.clearAllMocks()
   })
 
+  describe.each([false, true])('and optional authentication is %s', (optional) => {
+    describe.each(['undefined', 'throws', 'malformed'])('and the resource resolver %s', (kind) => {
+      beforeEach(async () => {
+        outcome = await authenticate(requestSignedWith(fullLogin), {
+          service: 'insights',
+          operation: 'metrics-read',
+          optional,
+          resource: () => {
+            if (kind === 'throws') throw new Error('private resolver details')
+            return kind === 'malformed' ? 'world:contains whitespace' : undefined
+          }
+        })
+      })
+      it('should reject with a controlled resource error', () => {
+        expect(outcome.result).toMatchObject({
+          status: 403,
+          body: { code: kind === 'throws' ? 'SCOPED_RESOLUTION_FAILED' : 'SCOPED_RESOURCE_REQUIRED' }
+        })
+      })
+      it('should never run the handler', () => {
+        expect(outcome.next).not.toHaveBeenCalled()
+      })
+      it('should hide exception details', () => {
+        expect(JSON.stringify(outcome.result)).not.toContain('private resolver details')
+      })
+    })
+  })
+
   describe('and the route resolves a resource', () => {
     beforeEach(async () => {
       outcome = await authenticate(requestSignedWith(fullLogin), {
@@ -572,5 +605,35 @@ describe('when a scoped login is validated with a provider', () => {
         { service: 'insights' }
       )
     ).resolves.toEqual({ service: 'insights', expiration: identity.expiration.getTime(), grants: GRANTS })
+  })
+})
+
+describe('when callers reuse the published verification option types', () => {
+  interface ExtendedOptions extends VerifyAuthChainHeadersOptions {
+    custom?: boolean
+  }
+
+  let headers: Record<string, string>
+  let extended: ExtendedOptions
+  let shared: Options
+  let omitted: Omit<VerifyAuthChainHeadersOptions, 'metadataValidator'>
+
+  beforeEach(() => {
+    headers = Object.fromEntries(requestSignedWith(fullLogin).request.headers.entries())
+    extended = { service: 'insights', operation: 'logs-read' }
+    shared = { service: 'insights', operation: 'logs-read' }
+    omitted = { service: 'insights', operation: 'logs-read' }
+  })
+
+  it('should accept an interface extending the published options', async () => {
+    await expect(verify(METHOD, PATH, headers, extended)).resolves.toHaveProperty('auth')
+  })
+
+  it('should accept shared middleware options', async () => {
+    await expect(verify(METHOD, PATH, headers, shared)).resolves.toHaveProperty('auth')
+  })
+
+  it('should accept options derived with Omit', async () => {
+    await expect(verify(METHOD, PATH, headers, omitted)).resolves.toHaveProperty('auth')
   })
 })

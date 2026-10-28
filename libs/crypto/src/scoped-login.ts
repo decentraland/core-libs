@@ -214,3 +214,39 @@ export function isOperationGranted(scope: ScopedLoginScope | undefined, operatio
       (grant.resource === undefined || grant.resource === resource)
   )
 }
+
+/** Result of checking an action against an already validated scope; this does not verify a signature. */
+export type ScopeAuthorizationResult =
+  | { ok: true }
+  | { ok: false; reason: 'operation-required' | 'resource-invalid' | 'operation-denied' }
+
+/**
+ * Check action syntax and grants consistently for generic and signed-fetch authorization.
+ * @param scope - Validated scope, or undefined for a full login.
+ * @param action - Service, operation and canonical resource resolved by the verifier.
+ * @returns Whether the action is allowed, or a stable reason for denying it.
+ */
+export function authorizeScope(
+  scope: ScopedLoginScope | undefined,
+  action: { service?: string; operation?: string; resource?: string }
+): ScopeAuthorizationResult {
+  if (
+    typeof action.service !== 'string' ||
+    !SERVICE_FORMAT.test(action.service) ||
+    (scope !== undefined && scope.service !== action.service) ||
+    typeof action.operation !== 'string' ||
+    action.operation === '*' ||
+    !OPERATION_FORMAT.test(action.operation)
+  ) {
+    return { ok: false, reason: 'operation-required' }
+  }
+  if (
+    action.resource !== undefined &&
+    (typeof action.resource !== 'string' || !RESOURCE_FORMAT.test(action.resource))
+  ) {
+    return { ok: false, reason: 'resource-invalid' }
+  }
+  return isOperationGranted(scope, action.operation, action.resource)
+    ? { ok: true }
+    : { ok: false, reason: 'operation-denied' }
+}

@@ -2,6 +2,7 @@ import type { IHttpServerComponent } from '@dcl/core-commons'
 import { OPERATION_FORMAT, SERVICE_FORMAT } from '@dcl/crypto'
 import createAuthChainHeaders from './createAuthChainHeaders'
 import RequestError from './errors'
+import { verifyIdentity } from './internal-verification'
 import { canonicalField, rejectIfSigner, requireCanonicalField, requireSigner } from './metadataValidators'
 import { authorizeVerifiedRequest } from './scoped-authorization'
 import {
@@ -16,9 +17,10 @@ import {
   DecentralandSignatureRouteContext,
   Options,
   RouteOperationOptions,
+  ScopedVerifyOptions,
   VerifyAuthChainHeadersOptions
 } from './types'
-import verify, { createPayload, verifyIdentity } from './verify'
+import verify, { createPayload } from './verify'
 import type { MetadataPredicate } from './metadataValidators'
 
 export { createSignatureRpcProvider } from './rpc-provider'
@@ -41,6 +43,7 @@ export {
   DecentralandSignatureRequiredContext,
   DecentralandSignatureRouteContext,
   RouteOperationOptions,
+  ScopedVerifyOptions,
   AUTH_CHAIN_HEADER_PREFIX,
   AUTH_TIMESTAMP_HEADER,
   AUTH_METADATA_HEADER,
@@ -175,11 +178,7 @@ export function wellKnownComponents<P extends Record<string, unknown> = Record<s
         }
         verification = authorizeVerifiedRequest(verification, { service: options.service, operation, resource })
       } catch (err) {
-        const denied =
-          err instanceof RequestError
-            ? err
-            : new RequestError('Cannot resolve the request operation or resource', 403, 'SCOPED_RESOLUTION_FAILED')
-        const { status, body } = errorToResponse(denied, options)
+        const { status, body } = errorToResponse(err, options)
         return { status, body: body as IHttpServerComponent.ResponseBody }
       }
       ctx.verification = verification

@@ -93,15 +93,19 @@ export interface SignatureVerificationOptions<P extends Record<string, unknown> 
   canonicalMetadataKeys?: string[]
 }
 
-/** Signed requests must declare the action when they opt into scoped credentials. */
-export type VerifyAuthChainHeadersOptions<P extends Record<string, unknown> = Record<string, unknown>> = Omit<
-  SignatureVerificationOptions<P>,
-  'service' | 'maxScopedLoginLifetime'
-> &
-  (
-    | { service?: undefined; operation?: never; resource?: never; maxScopedLoginLifetime?: never }
-    | { service: string; operation: string; resource?: string; maxScopedLoginLifetime?: number }
-  )
+/** Signed requests opting into scoped credentials must declare their action at runtime. */
+export interface VerifyAuthChainHeadersOptions<
+  P extends Record<string, unknown> = Record<string, unknown>
+> extends SignatureVerificationOptions<P> {
+  /** Required for scoped requests. Missing operations are rejected with SCOPED_OPERATION_REQUIRED. */
+  operation?: string
+  /** Canonical resource the request acts on. */
+  resource?: string
+}
+
+/** Opt-in type for callers that also want service/action requirements checked by TypeScript. */
+export type ScopedVerifyOptions<P extends Record<string, unknown> = Record<string, unknown>> =
+  VerifyAuthChainHeadersOptions<P> & { service: string; operation: string }
 
 export interface SessionOptions {
   optional?: boolean
@@ -117,7 +121,7 @@ export interface RouteOperationOptions<P extends Record<string, unknown> = Recor
    * it from the request. A request signed with a scoped login is rejected with 403 when the login
    * doesn't grant it, and with 403/SCOPED_OPERATION_REQUIRED when the route has none (absent, or the function returns
    * `undefined`), so a scoped login reaches only routes that declare what they do. A full login
-   * always passes. `*` is not an operation.
+   * does not need an operation grant, but configured resource resolvers must still succeed. `*` is not an operation.
    */
   operation?: string | ((ctx: DecentralandSignatureRouteContext<P>) => string | undefined)
   /** With `operation`: the resource the request acts on, matched against grants limited to one. */

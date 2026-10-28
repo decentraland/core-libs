@@ -48,6 +48,16 @@ describe('when authorizing a scoped request action', () => {
     })
   })
 
+  describe('and the resource has an invalid format', () => {
+    beforeEach(async () => {
+      options.resource = 'world:contains whitespace'
+      result = await Authenticator.authorizeSignature('request', chain, null, options)
+    })
+    it('should reject the malformed resource', () => {
+      expect(result).toMatchObject({ ok: false, message: expect.stringContaining('valid resource') })
+    })
+  })
+
   describe('and only the stored delegation is presented', () => {
     beforeEach(async () => {
       result = await Authenticator.authorizeSignature(
@@ -186,6 +196,34 @@ describe('when a scoped login lasts more than 24 hours', () => {
     })
     it('should accept the explicit policy', () => {
       expect(result.ok).toBe(true)
+    })
+  })
+})
+
+describe('when authorizing a request signed with a full login', () => {
+  let result: RequestAuthorizationResult
+
+  beforeEach(async () => {
+    const owner = EthCrypto.createIdentity()
+    const identity = await Authenticator.initializeAuthChain(
+      owner.address,
+      EthCrypto.createIdentity(),
+      60,
+      async (message) => Authenticator.createSignature(owner, message)
+    )
+    result = await Authenticator.authorizeSignature('request', Authenticator.signPayload(identity, 'request'), null, {
+      service: 'insights',
+      operation: 'metrics-read',
+      resource: 'world:a.dcl.eth'
+    })
+  })
+
+  it('should authorize and expose the checked action without a scoped grant', () => {
+    expect(result).toEqual({
+      ok: true,
+      message: undefined,
+      operation: 'metrics-read',
+      resource: 'world:a.dcl.eth'
     })
   })
 })

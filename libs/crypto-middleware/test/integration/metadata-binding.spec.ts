@@ -5,7 +5,7 @@ import { AUTH_METADATA_HEADER, wellKnownComponents } from '../../src/index'
 import { identity, ownerAddress } from '../fixtures/identity'
 import type { DecentralandSignatureContext, Options } from '../../src/types'
 
-// Unlike test/unit/adapters.spec.ts, this file does NOT mock src/verify — it drives the real
+// Unlike test/unit/adapters.spec.ts, this file does NOT mock src/internal-verification — it drives the real
 // middleware end to end so the binding is exercised through the same path a request takes.
 
 type Ctx = IHttpServerComponent.DefaultContext<
