@@ -1,15 +1,15 @@
 import type { IHttpServerComponent } from '@dcl/core-commons'
 import RequestError from '../../src/errors'
 import { AUTH_CHAIN_HEADER_PREFIX, AUTH_TIMESTAMP_HEADER, wellKnownComponents } from '../../src/index'
-import verify from '../../src/verify'
+import { verifyIdentity } from '../../src/internal-verification'
 import type { DecentralandSignatureContext } from '../../src/types'
 
-jest.mock('../../src/verify', () => ({
-  __esModule: true,
-  default: jest.fn()
-}))
+jest.mock('../../src/internal-verification', () => {
+  const verify = jest.fn()
+  return { __esModule: true, default: verify, verifyIdentity: verify }
+})
 
-const mockVerify = verify as unknown as jest.Mock
+const mockVerify = jest.mocked(verifyIdentity)
 
 const signatureData = { auth: '0xabc', authMetadata: { hello: 'world' } }
 

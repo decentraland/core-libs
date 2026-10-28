@@ -3,8 +3,8 @@ import type { AuthChain, AuthIdentity } from '@dcl/crypto'
 import { AuthLinkType, Authenticator } from '@dcl/crypto'
 import createAuthChainHeaders from '../../src/createAuthChainHeaders'
 import { wellKnownComponents } from '../../src/index'
+import * as signatureValidation from '../../src/internal-signature-validation'
 import { rejectIfSigner } from '../../src/metadataValidators'
-import * as signatureValidation from '../../src/signature-validation'
 import { AUTH_METADATA_HEADER, AUTH_TIMESTAMP_HEADER } from '../../src/types'
 import verify, { createLegacyPayload, createPayload } from '../../src/verify'
 import { identity, ownerAddress } from '../fixtures/identity'
@@ -92,7 +92,7 @@ describe('when verifying contract signatures with a supplied provider', () => {
   let timestamp: number
   let metadata: Record<string, unknown>
   let payload: string
-  let options: Options
+  let options: Omit<Options, 'service' | 'operation' | 'resource' | 'maxScopedLoginLifetime'>
   let outcome: Outcome
 
   beforeEach(() => {
@@ -266,10 +266,10 @@ describe('when verifying contract signatures with a supplied provider', () => {
     })
 
     describe('and the canonical metadata keys are declared', () => {
-      let validateSpy: jest.SpiedFunction<typeof signatureValidation.validateAuthChainSignature>
+      let validateSpy: jest.SpiedFunction<typeof signatureValidation.validateScopedAuthChainSignature>
 
       beforeEach(async () => {
-        validateSpy = jest.spyOn(signatureValidation, 'validateAuthChainSignature')
+        validateSpy = jest.spyOn(signatureValidation, 'validateScopedAuthChainSignature')
         options = { ...options, canonicalMetadataKeys: ['intent'] }
         outcome = await settle(verify(METHOD, PATH, headers, options))
       })

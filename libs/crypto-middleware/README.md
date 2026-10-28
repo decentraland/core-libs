@@ -116,6 +116,100 @@ deployment never checks headers on mainnet while checking bodies on Sepolia.
 | `maxRpcCalls`       | `number`                   | With a `provider`, RPC calls one signature validation may make before it is rejected as invalid. Default: `16`. |
 | `metadataValidator` | `(metadata: P) => boolean` | Runs after expiration, before signature verification. Return `false` to reject the request with a 400.          |
 | `onError`           | `(err: Error) => any`      | Formats the response body on failure. Default sanitizes 5xx messages to `"Internal error"`; echoes 4xx as-is.   |
+| `service`           | `string`                   | Identifier of this service (e.g. `insights`), which opts it into scoped logins. See below.                      |
+| `maxScopedLoginLifetime` | `number`              | Maximum remaining chain validity; defaults to 24 hours. A positive override is explicit service policy.                   |
+| `operation`         | `string \| (ctx) => string \| undefined` | With `service`: the one operation this route performs. Scoped logins are rejected on routes without one. |
+| `resource`          | `string \| ((ctx) => string \| undefined)` | With `operation`: the resource the request acts on.                                                          |
+
+## Scoped logins
+
+A scoped login ([ADR-162](https://adr.decentraland.org/adr/ADR-162)) delegates to an ephemeral key only the operations it lists, per service and optionally per resource:
+
+```text
+Decentraland Scoped Login
+Ephemeral: 0x1111111111111111111111111111111111111111
+Expiration: 2026-10-23T18:00:00.000Z
+Allow: insights:logs-read
+Allow: insights:metrics-read for world:example.dcl.eth
+```
+
+A service that doesn't set `service` rejects every request signed with one (401), and so does any service on an earlier version of this library. To accept them, create the middleware per route, naming the one operation the route performs:
+
+```ts
+const auth = (route: Pick<Options, 'operation' | 'resource'> = {}) =>
+  wellKnownComponents({ fetcher, service: 'insights', maxScopedLoginLifetime: 12 * 60 * 60 * 1000, ...route })
+
+router.get('/v1/logs', auth({ operation: 'logs-read' }), logsHandler)
+router.get('/v1/worlds/:world/metrics',
+  auth({ operation: 'metrics-read', resource: (ctx) => `world:${ctx.params.world.toLowerCase()}` }), metricsHandler)
+router.delete('/v1/logs/:id', auth({ operation: 'logs-delete' }), deleteHandler)
+router.delete('/v1/logs', auth({ operation: 'logs-purge' }), purgeHandler)
+router.put('/v1/settings', auth(), settingsHandler)
+```
+
+- A request signed with a full login (`Decentraland Login`) needs no operation grant. On routes with a resource resolver, that resolver must still return a valid resource; unresolved or malformed resources and resolver exceptions get 403, using the same `SCOPED_*` codes as scoped requests.
+- A scoped login passes a route only when it grants the route's operation on its resource, and `ctx.verification.scope` then lists its grants for this service. It gets 403 when the grant is missing.
+- A route without an operation, or whose `operation` function returns `undefined`, rejects scoped logins with 403 and code `SCOPED_OPERATION_REQUIRED`. A route nobody mapped therefore stays closed to them.
+- Each request performs exactly one operation. A route whose behavior depends on the request chooses it with a function; there is no list of operations.
+- `optional` lets unsigned requests through, never a scoped login the route doesn't grant.
+- `operation` without `service`, and `resource` without `operation`, throw at creation.
+
+Authenticate per route: a global `router.use(wellKnownComponents({ service }))` has no operation, so it rejects every scoped login before a route's own middleware runs.
+
+Resources are compared exactly. Build them in the canonical form your service documents, such as lowercase world names, or a grant written for `world:example.dcl.eth` won't match a request for `Example.dcl.eth` (a 403, never extra access).
+
+Resolve operations and resources from pathname parameters or verified signed metadata. ADR-44 signs the pathname, not query parameters; do not use unsigned query parameters to choose an authorized action or resource.
+
+The middleware accepts a static canonical resource string or a resource callback. Shared `VerifyAuthChainHeadersOptions` can be spread into `wellKnownComponents`; static resources receive the same format and grant checks as callback results.
+
+Resource callbacks run once. The middleware exposes the exact checked canonical value
+as read-only `ctx.verification.resource`, including on full-login requests to that
+route. **Handlers must use that value** for permission checks and data access;
+reading the URL, metadata or body again can check one world and act on another.
+
+```ts
+async function metricsHandler(ctx) {
+  const resource = ctx.verification.resource // checked canonical world identity
+  return readMetricsForAuthorizedResource(ctx.verification.auth, resource)
+}
+```
+
+A configured resolver returning `undefined` gets 403/`SCOPED_RESOURCE_REQUIRED`.
+A throwing operation/resource callback gets 403/`SCOPED_RESOLUTION_FAILED` and
+never runs the handler, including with `optional`. Responses hide callback details.
+
+For direct signed-fetch or WebSocket callers, `verify` requires the action at runtime when
+opting in. `VerifyAuthChainHeadersOptions` remains an extensible interface for compatibility;
+use `ScopedVerifyOptions` to require the service and operation in TypeScript too. Pass resolved static values, and act on the returned resource:
+
+```ts
+const verification = await verify(method, path, headers, {
+  service: 'insights', operation: 'metrics-read', resource: canonicalWorldResource
+})
+await readMetricsForAuthorizedResource(verification.auth, verification.resource)
+```
+
+`Authenticator.authorizeSignature` provides the action-aware API for arbitrary
+signed payloads. `Authenticator.validateSignature` is identity/signature validation
+only: its `ok` and `scope` do not authorize an action. Address-only helpers and
+`validateAuthChainSignature` reject scoped credentials even when JavaScript callers
+supply extra service options.
+
+The default maximum remaining validity is 24 hours; configure a positive
+`maxScopedLoginLifetime` to make another policy explicit. `scope.expiration` is the
+earliest expiration of the whole chain, and must bound any derived session TTL.
+There is no revocation. Clients requesting `service:*` must warn that it includes
+future operations, including destructive/admin actions. The Insights CLI should
+request only `insights:logs-read` and `insights:metrics-read`.
+
+Credentials have no audience/host binding. An `insights` grant can be used across
+`.zone` and `.org`; clients must disclose that scope. Services requiring separation
+must use distinct identifiers such as `insights-zone` and `insights-org`.
+Consumers schema-validating chains must first adopt schemas with the new link types.
+
+A grant never adds access: authorize the signer (`ctx.verification.auth`) as you do for a full login. `isOperationGranted(scope, operation, resource?)` is exported for further checks inside handlers.
+
+Contract-wallet scoped logins are validated only with a `provider`: the catalyst doesn't validate them.
 
 ## Metadata handling
 
@@ -270,3 +364,14 @@ The same applies to any other field your service authorizes on.
 - Metadata validation error is now `Invalid metadata content: <json>` (was `Invalid metadata`).
 - The Express and Koa adapters have been removed; use `wellKnownComponents`.
 - **Behavior change:** the signed payload no longer lowercases the metadata — see [From 5.x](#from-5x-breaking-signed-payload-format) below, which applies to you too.
+
+## Package entry points
+
+Import from `@dcl/crypto-middleware` for the supported public API. Existing
+`dist/index`, `dist/types`, `dist/createAuthChainHeaders`, `dist/rpc-provider`,
+`dist/signature-validation`, `dist/errors`, `dist/verify` and `dist/metadataValidators`
+imports remain available, with or without `.js`. Internal verification modules
+are excluded from package exports, and `dist/verify` does not expose identity-only
+verification. The scoped identity-only validator is likewise excluded from
+`dist/signature-validation`; its public address-only validator continues to reject
+scoped credentials. Low-level signature validation is not request authorization.
