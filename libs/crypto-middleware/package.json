@@ -1,6 +1,6 @@
 {
   "name": "@dcl/crypto-middleware",
-  "version": "6.4.0",
+  "version": "6.5.0",
   "description": "Well-Known Components authentication middleware for Decentraland signed requests",
   "author": "Decentraland",
   "license": "Apache-2.0",
