@@ -1,7 +1,7 @@
 import type { Wearable } from '@dcl/schemas'
 import { EntityType, WearableCategory } from '@dcl/schemas'
 import { entityParameters, skinMaxSizeInMb } from './ADR51'
-import { ADR_45_TIMESTAMP, LEGACY_CONTENT_MIGRATION_TIMESTAMP } from './timestamps'
+import { ADR_45_TIMESTAMP, ENTITY_FILE_SIZE_TIMESTAMP, LEGACY_CONTENT_MIGRATION_TIMESTAMP } from './timestamps'
 import { OK, validationFailed } from '../types'
 import { calculateDeploymentSize } from '.'
 import type { ContentValidatorComponents, DeploymentToValidate, ValidateFn, ValidationResponse } from '../types'
@@ -26,6 +26,18 @@ export function createSizeValidateFn(components: ContentValidatorComponents): Va
       const wearable = entity.metadata as Wearable
       if (wearable.data?.category === WearableCategory.SKIN) {
         maxSizeInMB = skinMaxSizeInMb
+      }
+    }
+
+    // The entity file is not listed in `entity.content`, so the content budget never covers it.
+    if (entity.timestamp >= ENTITY_FILE_SIZE_TIMESTAMP) {
+      const entityFileSizeInBytes = deployment.files.get(entity.id)?.byteLength ?? 0
+      const maxEntityFileSizeInKB = entityParameters[entity.type].maxEntityFileSizeInKB
+      const maxEntityFileSizeInBytes = maxEntityFileSizeInKB * 1024
+      if (entityFileSizeInBytes > maxEntityFileSizeInBytes) {
+        return validationFailed(
+          `The entity file is too big. The maximum allowed size for a ${entity.type} entity file is ${maxEntityFileSizeInKB} KB. You can upload up to ${maxEntityFileSizeInBytes} bytes but you tried to upload ${entityFileSizeInBytes}.`
+        )
       }
     }
 

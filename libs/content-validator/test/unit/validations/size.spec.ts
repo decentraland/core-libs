@@ -1,7 +1,7 @@
 import { hashV1 } from '@dcl/hashing'
 import { EntityType } from '@dcl/schemas'
 import { createSizeValidateFn } from '../../../src/validations/size'
-import { ADR_45_TIMESTAMP } from '../../../src/validations/timestamps'
+import { ADR_45_TIMESTAMP, ENTITY_FILE_SIZE_TIMESTAMP } from '../../../src/validations/timestamps'
 import { buildDeployment } from '../../setup/deployments'
 import { buildEntity } from '../../setup/entity'
 import { buildComponents, buildExternalCalls } from '../../setup/mock'
@@ -9,6 +9,9 @@ import type { DeploymentToValidate, ValidationResponse } from '../../../src/type
 
 const buildFiles = (...files: Array<[hash: string, sizeInMB: number]>): Map<string, Uint8Array> =>
   new Map(files?.map((file) => [file[0], Buffer.alloc(file[1] * 1024 * 1024)]) ?? [])
+
+const buildFilesInKB = (...files: Array<[hash: string, sizeInKB: number]>): Map<string, Uint8Array> =>
+  new Map(files.map((file) => [file[0], Buffer.alloc(file[1] * 1024)]))
 
 describe('when validating deployment size', () => {
   describe('and the entity is before ADR-45', () => {
@@ -166,6 +169,129 @@ describe('when validating deployment size', () => {
       })
 
       it('should return ok', () => {
+        expect(result.ok).toBe(true)
+      })
+    })
+
+    describe('and the entity file size is validated', () => {
+      const entityFileTimestamp = ENTITY_FILE_SIZE_TIMESTAMP + 1
+
+      describe('and the entity file exceeds the maximum allowed for its entity type', () => {
+        let result: ValidationResponse
+
+        beforeEach(async () => {
+          const validateFn = createSizeValidateFn(buildComponents())
+          const entity = buildEntity({ content: [], timestamp: entityFileTimestamp, pointers: ['P1'] })
+          const files = buildFilesInKB([entity.id, 300])
+          const deployment = buildDeployment({ entity, files })
+          result = await validateFn(deployment)
+        })
+
+        it('should return an error reporting the max allowed entity file size for the profile type', () => {
+          expect(result.ok).toBe(false)
+          expect(result.errors).toContain(
+            'The entity file is too big. The maximum allowed size for a profile entity file is 256 KB. You can upload up to 262144 bytes but you tried to upload 307200.'
+          )
+        })
+      })
+
+      describe('and the entity file fits within the maximum allowed for its entity type', () => {
+        let result: ValidationResponse
+
+        beforeEach(async () => {
+          const validateFn = createSizeValidateFn(buildComponents())
+          const entity = buildEntity({ content: [], timestamp: entityFileTimestamp, pointers: ['P1'] })
+          const files = buildFilesInKB([entity.id, 200])
+          const deployment = buildDeployment({ entity, files })
+          result = await validateFn(deployment)
+        })
+
+        it('should return ok', () => {
+          expect(result.ok).toBe(true)
+        })
+      })
+
+      describe('and the same entity file is allowed for a type with a larger allowance', () => {
+        let result: ValidationResponse
+
+        beforeEach(async () => {
+          const validateFn = createSizeValidateFn(buildComponents())
+          const entity = buildEntity({
+            content: [],
+            timestamp: entityFileTimestamp,
+            pointers: ['0,0'],
+            type: EntityType.SCENE
+          })
+          const files = buildFilesInKB([entity.id, 300])
+          const deployment = buildDeployment({ entity, files })
+          result = await validateFn(deployment)
+        })
+
+        it('should return ok because the scene allowance is larger than the profile one', () => {
+          expect(result.ok).toBe(true)
+        })
+      })
+
+      describe('and the content already uses the whole content budget', () => {
+        let result: ValidationResponse
+
+        beforeEach(async () => {
+          const validateFn = createSizeValidateFn(buildComponents())
+          const entity = buildEntity({
+            content: [{ file: 'C', hash: 'C' }],
+            timestamp: entityFileTimestamp,
+            pointers: ['P1']
+          })
+          const files = new Map<string, Uint8Array>([
+            ['C', Buffer.alloc(2 * 1024 * 1024)],
+            [entity.id, Buffer.alloc(200 * 1024)]
+          ])
+          const deployment = buildDeployment({ entity, files })
+          result = await validateFn(deployment)
+        })
+
+        it('should return ok because the entity file does not consume the content budget', () => {
+          expect(result.ok).toBe(true)
+        })
+      })
+
+      describe('and the entity file is not part of the uploaded files', () => {
+        let result: ValidationResponse
+
+        beforeEach(async () => {
+          const validateFn = createSizeValidateFn(buildComponents())
+          const entity = buildEntity({
+            content: [{ file: 'C', hash: 'C' }],
+            timestamp: entityFileTimestamp,
+            pointers: ['P1']
+          })
+          const files = buildFiles(['C', 1])
+          const deployment = buildDeployment({ entity, files })
+          result = await validateFn(deployment)
+        })
+
+        it('should return ok without counting an absent entity file', () => {
+          expect(result.ok).toBe(true)
+        })
+      })
+    })
+
+    describe('and the entity predates the entity file size validation', () => {
+      let result: ValidationResponse
+
+      beforeEach(async () => {
+        const validateFn = createSizeValidateFn(buildComponents())
+        const entity = buildEntity({
+          content: [],
+          timestamp: ENTITY_FILE_SIZE_TIMESTAMP - 1,
+          pointers: ['P1']
+        })
+        const files = buildFilesInKB([entity.id, 300])
+        const deployment = buildDeployment({ entity, files })
+        result = await validateFn(deployment)
+      })
+
+      it('should return ok so replaying history does not reject already accepted deployments', () => {
         expect(result.ok).toBe(true)
       })
     })
