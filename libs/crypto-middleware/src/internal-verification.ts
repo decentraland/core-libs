@@ -150,6 +150,9 @@ export async function verifyEIP1654Sign(
   }
   const catalyst = new URL(options.catalyst ?? DEFAULT_CATALYST)
   const ownerAddress = Authenticator.ownerAddress(authChain).toLowerCase()
+  if (Authenticator.isReservedAddress(ownerAddress)) {
+    throw new RequestError('Invalid signature', 401)
+  }
   const url = `${catalyst.origin}/lambdas/crypto/validate-signature`
   const init = {
     method: 'POST',
