@@ -57,18 +57,19 @@ export async function validateSignature(
   let currentAuthority = ''
   let effectiveExpiration = Infinity
 
-  if (!isValidAuthChain(authChain)) {
-    return {
-      ok: false,
-      message: 'ERROR: Malformed authChain'
-    }
-  }
-
+  // Before isValidAuthChain, so a misplaced scoped link reports why.
   let scopedLinkIndex: number | undefined
   try {
     scopedLinkIndex = findScopedLink(authChain)
   } catch (e) {
     return { ok: false, message: `ERROR: ${e instanceof Error ? e.message : String(e)}` }
+  }
+
+  if (!isValidAuthChain(authChain)) {
+    return {
+      ok: false,
+      message: 'ERROR: Malformed authChain'
+    }
   }
   if (scopedLinkIndex !== undefined && (options.service === undefined || !SERVICE_FORMAT.test(options.service))) {
     return { ok: false, message: 'ERROR: Scoped logins are not accepted without a service identifier' }
@@ -176,7 +177,19 @@ export async function authorizeSignature(
   return { ok: false, message: 'ERROR: The scoped login does not grant this operation on this resource' }
 }
 
+const DELEGATION_LINK_TYPES: ReadonlySet<string> = new Set([
+  AuthLinkType.ECDSA_PERSONAL_EPHEMERAL,
+  AuthLinkType.ECDSA_EIP_1654_EPHEMERAL,
+  ScopedAuthLinkType.ECDSA_PERSONAL_SCOPED_EPHEMERAL,
+  ScopedAuthLinkType.ECDSA_EIP_1654_SCOPED_EPHEMERAL
+])
+
+/**
+ * Checks the shape of a chain: a single SIGNER first, only delegation links between it and the last
+ * link, and a scoped link only where `findScopedLink` allows one. A signed-entity link can only be last.
+ */
 export function isValidAuthChain(authChain: AuthChain): boolean {
+  const last = authChain.length - 1
   for (const [index, authLink] of authChain.entries()) {
     // SIGNER should be the first one
     if (index === 0 && authLink.type !== AuthLinkType.SIGNER) {
@@ -187,6 +200,16 @@ export function isValidAuthChain(authChain: AuthChain): boolean {
     if (authLink.type === AuthLinkType.SIGNER && index !== 0) {
       return false
     }
+
+    if (index > 0 && index < last && !DELEGATION_LINK_TYPES.has(authLink.type)) {
+      return false
+    }
+  }
+
+  try {
+    findScopedLink(authChain)
+  } catch {
+    return false
   }
 
   return true

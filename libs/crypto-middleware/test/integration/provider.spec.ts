@@ -349,11 +349,16 @@ describe('when verifying contract signatures with a supplied provider', () => {
 
   describe('and every RPC call of a long EIP-1654 chain needs the prefixed fallback', () => {
     beforeEach(async () => {
-      const contractLinks = Array.from({ length: 8 }, (_, index) => ({
-        type: AuthLinkType.ECDSA_EIP_1654_SIGNED_ENTITY,
-        payload: index === 7 ? payload : '0x' + String(index + 1).repeat(40),
-        signature: '0x' + 'ab'.repeat(65)
-      }))
+      const expiration = new Date(timestamp + 60 * 60 * 1000)
+      const contractLinks = Array.from({ length: 8 }, (_, index) =>
+        index === 7
+          ? { type: AuthLinkType.ECDSA_EIP_1654_SIGNED_ENTITY, payload, signature: '0x' + 'ab'.repeat(65) }
+          : {
+              type: AuthLinkType.ECDSA_EIP_1654_EPHEMERAL,
+              payload: Authenticator.getEphemeralMessage('0x' + String(index + 1).repeat(40), expiration),
+              signature: '0x' + 'ab'.repeat(65)
+            }
+      )
       chain = [...contractIdentity.authChain, ...contractLinks]
       headers = createAuthChainHeaders(chain, timestamp, metadata)
       sendAsync.mockImplementation(
