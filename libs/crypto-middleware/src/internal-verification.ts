@@ -261,7 +261,8 @@ export async function verifySign(
 export function verifyTimestamp(value?: string | string[]): number {
   const raw = firstOf(value)
   const timestamp = Number(raw || '0')
-  if (raw && !Number.isFinite(timestamp)) {
+  // Unix millis as plain decimal digits; Number() alone also takes signs, decimals, exponents and hex.
+  if (raw && (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(timestamp))) {
     throw new RequestError(`Invalid chain timestamp: ${safe(raw)}`, 400)
   }
 

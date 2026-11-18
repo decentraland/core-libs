@@ -182,6 +182,35 @@ describe('verifyTimestamp', () => {
       expect(verifyTimestamp(['1', '2'])).toBe(1)
     })
   })
+
+  describe('when the value is an empty string', () => {
+    it('should return 0', () => {
+      expect(verifyTimestamp('')).toBe(0)
+    })
+  })
+
+  describe.each([
+    ['a decimal', '1700000000000.5'],
+    ['a trailing decimal point', '1700000000000.'],
+    ['an exponent', '1.7e12'],
+    ['a hex literal', '0x18bcfe56800'],
+    ['a binary literal', '0b101'],
+    ['a leading plus sign', '+1700000000000'],
+    ['a negative sign', '-1700000000000'],
+    ['surrounding whitespace', ' 1700000000000 '],
+    ['a trailing newline', '1700000000000\n'],
+    ['digits beyond the safe integer range', '9'.repeat(400)]
+  ])('when the value is %s', (_, value) => {
+    let raw: string
+
+    beforeEach(() => {
+      raw = value
+    })
+
+    it('should throw an Invalid chain timestamp error', () => {
+      expect(() => verifyTimestamp(raw)).toThrow('Invalid chain timestamp')
+    })
+  })
 })
 
 describe('verifyMetadata', () => {
