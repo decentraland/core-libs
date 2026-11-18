@@ -18,10 +18,13 @@ export function recoverPublicKey(signature: Uint8Array, hash: Uint8Array): Uint8
 
   const sigOnly = signature.slice(0, signature.length - 1)
   const recoveryNumber = v === 0x1c ? 1 : 0
-  const pubKey = secp256k1.Signature.fromCompact(sigOnly)
-    .addRecoveryBit(recoveryNumber)
-    .recoverPublicKey(hash)
-    .toRawBytes(false)
+  // fromCompact already refuses r or s outside 1..n-1.
+  const parsed = secp256k1.Signature.fromCompact(sigOnly)
+  // EIP-2: only the low-s form of a signature is canonical.
+  if (parsed.hasHighS()) {
+    throw new Error('Invalid signature: s must not exceed half the curve order')
+  }
+  const pubKey = parsed.addRecoveryBit(recoveryNumber).recoverPublicKey(hash).toRawBytes(false)
   // remove leading 0x04
   return pubKey.slice(1)
 }
