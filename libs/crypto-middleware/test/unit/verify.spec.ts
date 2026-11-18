@@ -332,6 +332,34 @@ describe('verifyAuthChainHeaders', () => {
     })
   })
 
+  describe('when the timestamp header is a signed decimal number', () => {
+    let method: string
+    let path: string
+    let headers: Record<string, string>
+    let error: unknown
+
+    beforeEach(async () => {
+      const timestamp = `${Date.now()}.0`
+      const metadata = '{}'
+      method = 'get'
+      path = '/path/to/resource'
+      const chain = Authenticator.signPayload(identity, signedPayload(method, path, timestamp, metadata))
+      headers = {
+        ...createAuthChainHeaders(chain, 0, {}),
+        [AUTH_TIMESTAMP_HEADER]: timestamp,
+        [AUTH_METADATA_HEADER]: metadata
+      }
+      error = await verifyAuthChainHeaders(method, path, headers, { fetcher }).then(
+        () => undefined,
+        (err: unknown) => err
+      )
+    })
+
+    it('should reject with a 400 Invalid chain timestamp error', () => {
+      expect(error).toMatchObject({ statusCode: 400, message: expect.stringContaining('Invalid chain timestamp:') })
+    })
+  })
+
   describe('when the signature is expired', () => {
     it('should reject with an Expired signature error', async () => {
       const timestamp = 0
