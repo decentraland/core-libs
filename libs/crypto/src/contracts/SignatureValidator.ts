@@ -4,6 +4,7 @@ import type { AbiItem, Contract } from 'eth-connect'
 import type RequestManager from 'eth-connect'
 
 export type SignatureValidator = Contract & {
+  /** Resolves to the whole 32-byte return word, so callers can check its padding. */
   isValidSignature(hash: Uint8Array, signature: Uint8Array, block?: string | number): Promise<Uint8Array>
 }
 
@@ -25,7 +26,7 @@ export async function SignatureValidator(requestManager: RequestManager, address
       outputs: [
         {
           name: 'magicValue',
-          type: 'bytes4'
+          type: 'bytes32'
         }
       ],
       payable: false,

@@ -22,7 +22,7 @@ jest.mock('../../src/contracts/SignatureValidator', () => ({
   SignatureValidator: jest.fn()
 }))
 
-const ERC1654_MAGIC_VALUE_BYTES = new Uint8Array([0x16, 0x26, 0xba, 0x7e])
+const ERC1654_MAGIC_VALUE_BYTES = new Uint8Array([0x16, 0x26, 0xba, 0x7e, ...new Array(28).fill(0)])
 const EPHEMERAL = '0x1111111111111111111111111111111111111111'
 const EXPIRATION = new Date('2030-01-01T00:00:00.000Z')
 const PAYLOAD = 'get:/v1/logs:1:{}'
