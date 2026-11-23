@@ -74,6 +74,14 @@ export const ADR_290_REJECTED_TIMESTAMP = parseTimestamp(
 export const PROFILE_IDENTITY_TIMESTAMP = parseTimestamp(process.env.PROFILE_IDENTITY_TIMESTAMP, 1786579200000)
 
 /**
+ * Profile and outfit third-party items must name their linked NFT from this timestamp on.
+ * Deployments before it keep validating.
+ * 1796083200000 = 2026-12-01T00:00:00Z
+ * @public
+ */
+export const THIRD_PARTY_ITEM_URN_TIMESTAMP = parseTimestamp(process.env.THIRD_PARTY_ITEM_URN_TIMESTAMP, 1796083200000)
+
+/**
  * DCL Launch Day
  * @public
  */
