@@ -2,7 +2,6 @@ import { keccak256Hash } from '@dcl/hashing'
 import type { ThirdPartyProps } from '@dcl/schemas'
 import { isThirdParty } from '@dcl/schemas'
 import { OK, validationFailed } from '../../types'
-import { THIRD_PARTY_FULL_COMMIT_TIMESTAMP } from '../timestamps'
 import type { DeploymentToValidate, ValidationResponse } from '../../types'
 
 // Shared third-party item binding for wearables and emotes. Binds the deployment to its approved merkle
@@ -32,11 +31,9 @@ export async function thirdPartyMerkleProofContentValidateFn(
     return validationFailed(`The third-party ${itemLabel} merkle proof must commit the '${missingKey}' field`)
   }
 
-  if (entity.timestamp >= THIRD_PARTY_FULL_COMMIT_TIMESTAMP) {
-    const fullCommitError = validateFullCommit(metadata, itemLabel)
-    if (fullCommitError) {
-      return validationFailed(fullCommitError)
-    }
+  const fullCommitError = validateFullCommit(metadata, itemLabel)
+  if (fullCommitError) {
+    return validationFailed(fullCommitError)
   }
 
   // Check the content files declared inside the metadata is exactly the same as the files uploaded with the entity

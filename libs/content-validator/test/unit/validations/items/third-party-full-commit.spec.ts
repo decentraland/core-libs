@@ -2,7 +2,6 @@ import { EntityType } from '@dcl/schemas'
 import type { Entity, ThirdPartyProps } from '@dcl/schemas'
 import { thirdPartyEmoteMerkleProofContentValidateFn } from '../../../../src/validations/items/emotes'
 import { thirdPartyWearableMerkleProofContentValidateFn } from '../../../../src/validations/items/wearables'
-import { THIRD_PARTY_FULL_COMMIT_TIMESTAMP } from '../../../../src/validations/timestamps'
 import { buildDeployment } from '../../../setup/deployments'
 import { VALID_THIRD_PARTY_EMOTE_METADATA_WITH_MERKLE_ROOT } from '../../../setup/emotes'
 import { buildEntity } from '../../../setup/entity'
@@ -26,13 +25,12 @@ const itemCases = [
   }
 ]
 
-function buildThirdPartyEntity(type: EntityType, metadata: ThirdPartyMetadata, timestamp: number): Entity {
+function buildThirdPartyEntity(type: EntityType, metadata: ThirdPartyMetadata): Entity {
   return buildEntity({
     type,
     pointers: [metadata.id],
     metadata,
-    content: Object.keys(metadata.content).map((file) => ({ file, hash: metadata.content[file] })),
-    timestamp
+    content: Object.keys(metadata.content).map((file) => ({ file, hash: metadata.content[file] }))
   })
 }
 
@@ -48,9 +46,7 @@ describe.each(itemCases)(
 
     describe('and the proof commits every metadata field', () => {
       beforeEach(async () => {
-        deployment = buildDeployment({
-          entity: buildThirdPartyEntity(type, metadata, THIRD_PARTY_FULL_COMMIT_TIMESTAMP)
-        })
+        deployment = buildDeployment({ entity: buildThirdPartyEntity(type, metadata) })
         result = await validateFn(deployment)
       })
 
@@ -60,80 +56,35 @@ describe.each(itemCases)(
     })
 
     describe('and the metadata has a field the proof does not commit', () => {
-      let metadataWithExtraField: ThirdPartyMetadata
-
-      beforeEach(() => {
-        metadataWithExtraField = { ...metadata, extraField: 'some value' }
+      beforeEach(async () => {
+        deployment = buildDeployment({
+          entity: buildThirdPartyEntity(type, { ...metadata, extraField: 'some value' })
+        })
+        result = await validateFn(deployment)
       })
 
-      describe('and the entity was deployed before the full-commit cutoff', () => {
-        beforeEach(async () => {
-          deployment = buildDeployment({
-            entity: buildThirdPartyEntity(type, metadataWithExtraField, THIRD_PARTY_FULL_COMMIT_TIMESTAMP - 1)
-          })
-          result = await validateFn(deployment)
-        })
-
-        it('should accept the item', () => {
-          expect(result.ok).toBe(true)
-        })
-      })
-
-      describe.each([
-        ['at', 0],
-        ['after', 1]
-      ])('and the entity was deployed %s the full-commit cutoff', (_, offset) => {
-        beforeEach(async () => {
-          deployment = buildDeployment({
-            entity: buildThirdPartyEntity(type, metadataWithExtraField, THIRD_PARTY_FULL_COMMIT_TIMESTAMP + offset)
-          })
-          result = await validateFn(deployment)
-        })
-
-        it('should reject the item naming the uncommitted field', () => {
-          expect(result).toEqual({
-            ok: false,
-            errors: [
-              `The third-party ${itemLabel} merkle proof must commit every metadata field; 'extraField' is not in hashingKeys`
-            ]
-          })
+      it('should reject the item naming the uncommitted field', () => {
+        expect(result).toEqual({
+          ok: false,
+          errors: [
+            `The third-party ${itemLabel} merkle proof must commit every metadata field; 'extraField' is not in hashingKeys`
+          ]
         })
       })
     })
 
     describe('and the proof lists a hashing key more than once', () => {
-      let metadataWithDuplicateKey: ThirdPartyMetadata
-
-      beforeEach(() => {
-        metadataWithDuplicateKey = withHashingKeys(metadata, [...metadata.merkleProof.hashingKeys, 'name'])
+      beforeEach(async () => {
+        deployment = buildDeployment({
+          entity: buildThirdPartyEntity(type, withHashingKeys(metadata, [...metadata.merkleProof.hashingKeys, 'name']))
+        })
+        result = await validateFn(deployment)
       })
 
-      describe('and the entity was deployed before the full-commit cutoff', () => {
-        beforeEach(async () => {
-          deployment = buildDeployment({
-            entity: buildThirdPartyEntity(type, metadataWithDuplicateKey, THIRD_PARTY_FULL_COMMIT_TIMESTAMP - 1)
-          })
-          result = await validateFn(deployment)
-        })
-
-        it('should accept the item', () => {
-          expect(result.ok).toBe(true)
-        })
-      })
-
-      describe('and the entity was deployed at the full-commit cutoff', () => {
-        beforeEach(async () => {
-          deployment = buildDeployment({
-            entity: buildThirdPartyEntity(type, metadataWithDuplicateKey, THIRD_PARTY_FULL_COMMIT_TIMESTAMP)
-          })
-          result = await validateFn(deployment)
-        })
-
-        it('should reject the item naming the repeated hashing key', () => {
-          expect(result).toEqual({
-            ok: false,
-            errors: [`The third-party ${itemLabel} merkle proof lists 'name' more than once in hashingKeys`]
-          })
+      it('should reject the item naming the repeated hashing key', () => {
+        expect(result).toEqual({
+          ok: false,
+          errors: [`The third-party ${itemLabel} merkle proof lists 'name' more than once in hashingKeys`]
         })
       })
     })
@@ -143,8 +94,7 @@ describe.each(itemCases)(
         deployment = buildDeployment({
           entity: buildThirdPartyEntity(
             type,
-            withHashingKeys(metadata, [...metadata.merkleProof.hashingKeys, 'merkleProof']),
-            THIRD_PARTY_FULL_COMMIT_TIMESTAMP
+            withHashingKeys(metadata, [...metadata.merkleProof.hashingKeys, 'merkleProof'])
           )
         })
         result = await validateFn(deployment)
