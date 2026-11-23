@@ -1,6 +1,6 @@
 import type { Avatar, Profile } from '@dcl/schemas'
 import { EntityType } from '@dcl/schemas'
-import { ADR_158_TIMESTAMP, ADR_244_TIMESTAMP, ADR_45_TIMESTAMP } from './timestamps'
+import { ADR_158_TIMESTAMP, ADR_244_TIMESTAMP, ADR_45_TIMESTAMP, THIRD_PARTY_ITEM_URN_TIMESTAMP } from './timestamps'
 import {
   validateAfterADR232,
   validateAfterADR290RejectedTimestamp,
@@ -12,7 +12,7 @@ import {
 } from './validations'
 import { readImageMetadata } from '../image-metadata'
 import { OK, fromErrors, validationFailed } from '../types'
-import { safeParseUrn } from '../utils'
+import { isThirdPartyUrnWithoutNft, safeParseUrn } from '../utils'
 import type { ContentValidatorComponents, DeploymentToValidate, ValidateFn, ValidationResponse } from '../types'
 
 /** Validate that given profile deployment includes a face256 thumbnail with valid size */
@@ -83,6 +83,11 @@ export async function wearableUrnsValidateFn(deployment: DeploymentToValidate): 
             )
           }
         }
+        if (deployment.entity.timestamp >= THIRD_PARTY_ITEM_URN_TIMESTAMP && isThirdPartyUrnWithoutNft(parsed.type)) {
+          return validationFailed(
+            `Wearable pointer ${pointer} should be a third-party item linked to an NFT. The URN must include the NFT network, contract and tokenId.`
+          )
+        }
       }
     }
     return OK
@@ -108,6 +113,11 @@ export async function emoteUrnsValidateFn(deployment: DeploymentToValidate): Pro
               `Emote pointer ${urn} should be an item, not an asset. The URN must include the tokenId.`
             )
           }
+        }
+        if (deployment.entity.timestamp >= THIRD_PARTY_ITEM_URN_TIMESTAMP && isThirdPartyUrnWithoutNft(parsed.type)) {
+          return validationFailed(
+            `Emote pointer ${urn} should be a third-party item linked to an NFT. The URN must include the NFT network, contract and tokenId.`
+          )
         }
         if (slot < 0 || slot > 9) {
           return validationFailed(`The slot ${slot} of the emote ${urn} must be a number between 0 and 9 (inclusive).`)

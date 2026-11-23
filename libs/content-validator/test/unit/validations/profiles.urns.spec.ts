@@ -1,5 +1,10 @@
 import { emoteUrnsValidateFn, isOldEmote, wearableUrnsValidateFn } from '../../../src/validations/profile'
-import { ADR_244_TIMESTAMP, ADR_74_TIMESTAMP, ADR_75_TIMESTAMP } from '../../../src/validations/timestamps'
+import {
+  ADR_244_TIMESTAMP,
+  ADR_74_TIMESTAMP,
+  ADR_75_TIMESTAMP,
+  THIRD_PARTY_ITEM_URN_TIMESTAMP
+} from '../../../src/validations/timestamps'
 import { validateAfterADR74, validateAfterADR75 } from '../../../src/validations/validations'
 import { buildDeployment } from '../../setup/deployments'
 import { buildProfileEntity } from '../../setup/entity'
@@ -155,6 +160,59 @@ describe('when validating wearable URNs', () => {
       })
     })
   })
+  describe('and the deployment is after the third-party item URN timestamp', () => {
+    beforeEach(() => {
+      deployment.entity.timestamp = THIRD_PARTY_ITEM_URN_TIMESTAMP
+    })
+
+    describe.each([
+      ['a third-party item without its NFT', 'urn:decentraland:matic:collections-thirdparty:tp:collection:item'],
+      ['a third-party collection', 'urn:decentraland:matic:collections-thirdparty:tp:collection'],
+      ['a third-party provider', 'urn:decentraland:matic:collections-thirdparty:tp']
+    ])('and a wearable is %s', (_, urn) => {
+      beforeEach(() => {
+        deployment.entity.metadata.avatars[0].avatar.wearables = [urn]
+      })
+
+      it('should return an error indicating that the item must be linked to an NFT', async () => {
+        const result: ValidationResponse = await wearableUrnsValidateFn(deployment)
+        expect(result.ok).toBe(false)
+        expect(result.errors).toContain(
+          `Wearable pointer ${urn} should be a third-party item linked to an NFT. The URN must include the NFT network, contract and tokenId.`
+        )
+      })
+    })
+
+    describe('and a wearable is a third-party item linked to an NFT', () => {
+      let urn: string
+
+      beforeEach(() => {
+        urn =
+          'urn:decentraland:matic:collections-thirdparty:tp:collection:item:mainnet:0xf6f601efee04e74cecac02c8c5bdc8cc0fc1c721:1'
+        deployment.entity.metadata.avatars[0].avatar.wearables = [urn]
+      })
+
+      it('should return ok', async () => {
+        const result: ValidationResponse = await wearableUrnsValidateFn(deployment)
+        expect(result.ok).toBe(true)
+      })
+    })
+  })
+
+  describe('and the deployment is before the third-party item URN timestamp', () => {
+    let urn: string
+
+    beforeEach(() => {
+      deployment.entity.timestamp = THIRD_PARTY_ITEM_URN_TIMESTAMP - 1
+      urn = 'urn:decentraland:matic:collections-thirdparty:tp:collection:item'
+      deployment.entity.metadata.avatars[0].avatar.wearables = [urn]
+    })
+
+    it('should return ok', async () => {
+      const result: ValidationResponse = await wearableUrnsValidateFn(deployment)
+      expect(result.ok).toBe(true)
+    })
+  })
 })
 
 describe('when validating emote URNs', () => {
@@ -276,6 +334,60 @@ describe('when validating emote URNs', () => {
         const result: ValidationResponse = await emoteUrnsValidateFn(deployment)
         expect(result.ok).toBe(true)
       })
+    })
+  })
+
+  describe('and the deployment is after the third-party item URN timestamp', () => {
+    beforeEach(() => {
+      deployment.entity.timestamp = THIRD_PARTY_ITEM_URN_TIMESTAMP
+    })
+
+    describe.each([
+      ['a third-party item without its NFT', 'urn:decentraland:matic:collections-thirdparty:tp:collection:item'],
+      ['a third-party collection', 'urn:decentraland:matic:collections-thirdparty:tp:collection'],
+      ['a third-party provider', 'urn:decentraland:matic:collections-thirdparty:tp']
+    ])('and an emote is %s', (_, urn) => {
+      beforeEach(() => {
+        deployment.entity.metadata.avatars[0].avatar.emotes = [{ slot: 0, urn }]
+      })
+
+      it('should return an error indicating that the item must be linked to an NFT', async () => {
+        const result: ValidationResponse = await emoteUrnsValidateFn(deployment)
+        expect(result.ok).toBe(false)
+        expect(result.errors).toContain(
+          `Emote pointer ${urn} should be a third-party item linked to an NFT. The URN must include the NFT network, contract and tokenId.`
+        )
+      })
+    })
+
+    describe('and an emote is a third-party item linked to an NFT', () => {
+      let urn: string
+
+      beforeEach(() => {
+        urn =
+          'urn:decentraland:matic:collections-thirdparty:tp:collection:item:mainnet:0xf6f601efee04e74cecac02c8c5bdc8cc0fc1c721:1'
+        deployment.entity.metadata.avatars[0].avatar.emotes = [{ slot: 0, urn }]
+      })
+
+      it('should return ok', async () => {
+        const result: ValidationResponse = await emoteUrnsValidateFn(deployment)
+        expect(result.ok).toBe(true)
+      })
+    })
+  })
+
+  describe('and the deployment is before the third-party item URN timestamp', () => {
+    let urn: string
+
+    beforeEach(() => {
+      deployment.entity.timestamp = THIRD_PARTY_ITEM_URN_TIMESTAMP - 1
+      urn = 'urn:decentraland:matic:collections-thirdparty:tp:collection:item'
+      deployment.entity.metadata.avatars[0].avatar.emotes = [{ slot: 0, urn }]
+    })
+
+    it('should return ok', async () => {
+      const result: ValidationResponse = await emoteUrnsValidateFn(deployment)
+      expect(result.ok).toBe(true)
     })
   })
 

@@ -5,12 +5,14 @@ import {
   createOutfitsValidateFn,
   outfitSlotsAreBetween0and9inclusiveValidateFn,
   outfitSlotsAreNotRepeatedValidateFn,
-  outfitsNumberOfNamesForExtraSlotsIsCorrectValidateFn
+  outfitsNumberOfNamesForExtraSlotsIsCorrectValidateFn,
+  outfitsWearableUrnsIncludeTokenIdFn
 } from '../../../src/validations/outfits'
+import { THIRD_PARTY_ITEM_URN_TIMESTAMP } from '../../../src/validations/timestamps'
 import { buildDeployment } from '../../setup/deployments'
 import { buildComponents, buildExternalCalls } from '../../setup/mock'
 import { VALID_OUTFITS_METADATA } from '../../setup/outfits'
-import type { ValidationResponse } from '../../../src/types'
+import type { DeploymentToValidate, ValidationResponse } from '../../../src/types'
 
 type TypedEntity<T> = Entity & {
   metadata: T
@@ -304,6 +306,66 @@ describe('when validating outfits through the full chain', () => {
     })
 
     it('should accept the deployment', () => {
+      expect(result.ok).toBe(true)
+    })
+  })
+})
+
+describe('when validating that outfit wearables are items', () => {
+  let deployment: DeploymentToValidate
+  let urn: string
+
+  beforeEach(() => {
+    const entity = buildOutfitsEntity(`${OWNER_ADDRESS}:outfits`, {
+      outfits: [{ slot: 0, outfit: { ...BASE_OUTFIT } }],
+      namesForExtraSlots: []
+    })
+    deployment = buildDeployment({ entity })
+  })
+
+  describe('and the deployment is after the third-party item URN timestamp', () => {
+    beforeEach(() => {
+      deployment.entity.timestamp = THIRD_PARTY_ITEM_URN_TIMESTAMP
+    })
+
+    describe('and a wearable is a third-party item without its NFT', () => {
+      beforeEach(() => {
+        urn = 'urn:decentraland:matic:collections-thirdparty:tp:collection:item'
+        deployment.entity.metadata.outfits[0].outfit.wearables = [urn]
+      })
+
+      it('should return an error indicating that the item must be linked to an NFT', async () => {
+        const result = await outfitsWearableUrnsIncludeTokenIdFn(deployment)
+        expect(result.ok).toBe(false)
+        expect(result.errors).toContain(
+          `Wearable pointers ${urn} should be third-party items linked to an NFT. The URNs must include the NFT network, contract and tokenId.`
+        )
+      })
+    })
+
+    describe('and a wearable is a third-party item linked to an NFT', () => {
+      beforeEach(() => {
+        urn =
+          'urn:decentraland:matic:collections-thirdparty:tp:collection:item:mainnet:0xf6f601efee04e74cecac02c8c5bdc8cc0fc1c721:1'
+        deployment.entity.metadata.outfits[0].outfit.wearables = [urn]
+      })
+
+      it('should return ok', async () => {
+        const result = await outfitsWearableUrnsIncludeTokenIdFn(deployment)
+        expect(result.ok).toBe(true)
+      })
+    })
+  })
+
+  describe('and the deployment is before the third-party item URN timestamp', () => {
+    beforeEach(() => {
+      deployment.entity.timestamp = THIRD_PARTY_ITEM_URN_TIMESTAMP - 1
+      urn = 'urn:decentraland:matic:collections-thirdparty:tp:collection:item'
+      deployment.entity.metadata.outfits[0].outfit.wearables = [urn]
+    })
+
+    it('should return ok', async () => {
+      const result = await outfitsWearableUrnsIncludeTokenIdFn(deployment)
       expect(result.ok).toBe(true)
     })
   })

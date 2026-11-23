@@ -73,6 +73,19 @@ export async function splitItemsURNsByTypeAndNetwork(urnsToSplit: string[]): Pro
   }
 }
 
+const THIRD_PARTY_TYPES_WITHOUT_NFT = [
+  'blockchain-collection-third-party-name',
+  'blockchain-collection-third-party-collection',
+  'blockchain-collection-third-party'
+]
+
+/**
+ * Whether a parsed URN type is a third-party URN that names no NFT, so its ownership cannot be checked.
+ */
+export function isThirdPartyUrnWithoutNft(type: string): boolean {
+  return THIRD_PARTY_TYPES_WITHOUT_NFT.includes(type)
+}
+
 export function getThirdPartyId(asset: BlockchainCollectionThirdParty): string {
   return `urn:decentraland:${asset.network}:collections-thirdparty:${asset.thirdPartyName}`
 }

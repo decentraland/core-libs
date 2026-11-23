@@ -1,8 +1,9 @@
 import type { Outfits } from '@dcl/schemas'
 import { EntityType, EthAddress } from '@dcl/schemas'
+import { THIRD_PARTY_ITEM_URN_TIMESTAMP } from './timestamps'
 import { validateAfterADR244, validateAll, validateIfTypeMatches } from './validations'
 import { OK, validationFailed } from '../types'
-import { safeParseUrn } from '../utils'
+import { isThirdPartyUrnWithoutNft, safeParseUrn } from '../utils'
 import type { ContentValidatorComponents, DeploymentToValidate, ValidateFn, ValidationResponse } from '../types'
 
 export function createOutfitsPointerValidateFn(
@@ -79,12 +80,18 @@ export const outfitsWearableUrnsIncludeTokenIdFn = validateAfterADR244(async fun
 
   const invalidUrns: string[] = []
   const nonItemUrns: string[] = []
+  const unlinkedThirdPartyUrns: string[] = []
   for (const wearableUrn of [...new Set(allWearables)]) {
     const parsed = await safeParseUrn(wearableUrn)
     if (!parsed) {
       invalidUrns.push(wearableUrn)
     } else if (parsed.type === 'blockchain-collection-v1-asset' || parsed.type === 'blockchain-collection-v2-asset') {
       nonItemUrns.push(wearableUrn)
+    } else if (
+      deployment.entity.timestamp >= THIRD_PARTY_ITEM_URN_TIMESTAMP &&
+      isThirdPartyUrnWithoutNft(parsed.type)
+    ) {
+      unlinkedThirdPartyUrns.push(wearableUrn)
     }
   }
 
@@ -94,6 +101,11 @@ export const outfitsWearableUrnsIncludeTokenIdFn = validateAfterADR244(async fun
   if (nonItemUrns.length > 0) {
     return validationFailed(
       `Wearable pointers ${nonItemUrns.join(', ')} should be items, not assets. The URNs must include the tokenId.`
+    )
+  }
+  if (unlinkedThirdPartyUrns.length > 0) {
+    return validationFailed(
+      `Wearable pointers ${unlinkedThirdPartyUrns.join(', ')} should be third-party items linked to an NFT. The URNs must include the NFT network, contract and tokenId.`
     )
   }
 
