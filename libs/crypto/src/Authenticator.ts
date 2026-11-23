@@ -36,6 +36,10 @@ import type {
 export const VALID_SIGNATURE = 'VALID_SIGNATURE'
 // bytes4(keccak256("isValidSignature(bytes32,bytes)")
 export const ERC1654_MAGIC_VALUE = '1626ba7e'
+// The magic value as the full ABI-encoded return word: bytes4 left-aligned, zero-padded to 32 bytes.
+const ERC1654_MAGIC_WORD = ERC1654_MAGIC_VALUE + '0'.repeat(56)
+// 0x00…00 to 0x00…ff: the zero address and the precompile range.
+const RESERVED_ADDRESS = /^(?:0x)?0{38}[0-9a-f]{2}$/i
 
 const PERSONAL_SIGNATURE_LENGTH = 132
 
@@ -344,6 +348,7 @@ export const Authenticator = {
   validateSignature,
   authorizeSignature,
   isValidAuthChain,
+  isReservedAddress,
   createEIP1271MessageHash,
   createSimpleAuthChain,
   createAuthChain,
@@ -606,7 +611,7 @@ export async function isValidEIP1271Signature(
     // Can revert if the signature is not valid
   }
 
-  if (result === ERC1654_MAGIC_VALUE) {
+  if (result === ERC1654_MAGIC_WORD) {
     return true
   }
 
@@ -617,7 +622,15 @@ export async function isValidEIP1271Signature(
     // Can revert if the signature is not valid
   }
 
-  return result === ERC1654_MAGIC_VALUE
+  return result === ERC1654_MAGIC_WORD
+}
+
+/**
+ * Whether an address is the zero address or in the precompile range (0x00…00 to 0x00…ff). These
+ * addresses are not contract wallets, so they never validate an EIP-1654 signature.
+ */
+export function isReservedAddress(address: string): boolean {
+  return RESERVED_ADDRESS.test(address)
 }
 
 async function isValidEIP1654Message(
@@ -627,6 +640,9 @@ async function isValidEIP1654Message(
   signature: string,
   dateToValidateExpirationInMillis: number
 ): Promise<boolean> {
+  if (isReservedAddress(contractAddress)) {
+    throw new Error(`Invalid validation. ${contractAddress} is not a contract wallet`)
+  }
   if (!provider) {
     throw new Error('Missing provider')
   }
@@ -654,7 +670,7 @@ async function isValidEIP1654Message(
     throw new Error(`Invalid validation. Error: ${message}`)
   }
 
-  throw new Error(`Invalid validation. Expected: ${ERC1654_MAGIC_VALUE}. Actual: ${result}`)
+  throw new Error(`Invalid validation. Expected: ${ERC1654_MAGIC_WORD}. Actual: ${result}`)
 }
 
 function getValidatorByType(type: AuthLinkType): ValidatorType {

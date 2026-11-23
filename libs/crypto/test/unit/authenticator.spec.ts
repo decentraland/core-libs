@@ -18,9 +18,9 @@ jest.mock('../../src/contracts/SignatureValidator', () => ({
 
 jest.setTimeout(999999)
 
-// ERC1654 isValidSignature magic value: bytes4(keccak256("isValidSignature(bytes32,bytes)")).
+// ERC1654 isValidSignature magic value, bytes4(keccak256("isValidSignature(bytes32,bytes)")), as its 32-byte ABI word.
 // Returned by a contract wallet to indicate that a signature is valid.
-const ERC1654_MAGIC_VALUE_BYTES = new Uint8Array([0x16, 0x26, 0xba, 0x7e])
+const ERC1654_MAGIC_VALUE_BYTES = new Uint8Array([0x16, 0x26, 0xba, 0x7e, ...new Array(28).fill(0)])
 
 describe('Authenticator', () => {
   let mainnetProvider: HTTPProvider
