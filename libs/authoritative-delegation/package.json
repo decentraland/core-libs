@@ -1,0 +1,41 @@
+{
+  "name": "@dcl/authoritative-delegation",
+  "version": "0.0.0",
+  "description": "Mint-side payload builder and verify-side checker for the authoritative-server scope delegation claim",
+  "author": "Decentraland",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/decentraland/core-libs.git",
+    "directory": "libs/authoritative-delegation"
+  },
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'"
+  },
+  "keywords": [
+    "decentraland",
+    "authoritative-server",
+    "delegation"
+  ],
+  "dependencies": {
+    "@dcl/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@dcl/eslint-config": "^2.4.3",
+    "eslint": "^8.57.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
