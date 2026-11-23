@@ -31,6 +31,11 @@ export async function thirdPartyMerkleProofContentValidateFn(
     return validationFailed(`The third-party ${itemLabel} merkle proof must commit the '${missingKey}' field`)
   }
 
+  const fullCommitError = validateFullCommit(metadata, itemLabel)
+  if (fullCommitError) {
+    return validationFailed(fullCommitError)
+  }
+
   // Check the content files declared inside the metadata is exactly the same as the files uploaded with the entity
   const allContentInFiles = Object.keys(metadata.content).every((content) => {
     const contentFile = entity.content.find((file) => file.file === content)
@@ -54,4 +59,27 @@ export async function thirdPartyMerkleProofContentValidateFn(
   }
 
   return OK
+}
+
+// The hashing keys must be exactly the metadata's top-level fields (except the proof itself), each listed once,
+// so every field served with the item is committed by its merkle leaf.
+function validateFullCommit(metadata: ThirdPartyProps, itemLabel: string): string | undefined {
+  const { hashingKeys } = metadata.merkleProof
+  const duplicateKey = hashingKeys.find((key, index) => hashingKeys.indexOf(key) !== index)
+  if (duplicateKey !== undefined) {
+    return `The third-party ${itemLabel} merkle proof lists '${duplicateKey}' more than once in hashingKeys`
+  }
+
+  const metadataKeys = Object.keys(metadata).filter((key) => key !== 'merkleProof')
+  const uncommittedKey = metadataKeys.find((key) => !hashingKeys.includes(key))
+  if (uncommittedKey !== undefined) {
+    return `The third-party ${itemLabel} merkle proof must commit every metadata field; '${uncommittedKey}' is not in hashingKeys`
+  }
+
+  const unknownKey = hashingKeys.find((key) => !metadataKeys.includes(key))
+  if (unknownKey !== undefined) {
+    return `The third-party ${itemLabel} merkle proof commits '${unknownKey}', which is not a metadata field`
+  }
+
+  return undefined
 }
