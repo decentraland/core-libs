@@ -74,6 +74,17 @@ export const ADR_290_REJECTED_TIMESTAMP = parseTimestamp(
 export const PROFILE_IDENTITY_TIMESTAMP = parseTimestamp(process.env.PROFILE_IDENTITY_TIMESTAMP, 1786579200000)
 
 /**
+ * Third-party wearable and emote merkle proofs must list every top-level metadata field (other than
+ * `merkleProof`) in `hashingKeys`, once each, from this timestamp on. Items deployed before it keep validating.
+ * 1797292800000 = 2026-12-15T00:00:00Z
+ * @public
+ */
+export const THIRD_PARTY_FULL_COMMIT_TIMESTAMP = parseTimestamp(
+  process.env.THIRD_PARTY_FULL_COMMIT_TIMESTAMP,
+  1797292800000
+)
+
+/**
  * DCL Launch Day
  * @public
  */
